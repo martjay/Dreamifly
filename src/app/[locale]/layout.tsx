@@ -6,7 +6,6 @@ import { getTranslations } from 'next-intl/server'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import '@/app/globals.css'
-import UmamiProvider from 'next-umami'
 import { AvatarProvider } from '@/contexts/AvatarContext'
 import { PointsProvider } from '@/contexts/PointsContext'
 import VersionDisplay from '@/components/VersionDisplay'
@@ -18,9 +17,6 @@ import { eq, sql } from 'drizzle-orm'
 import { locales, defaultLocale } from '@/config'
 
 const inter = Inter({ subsets: ['latin'] })
-const umamiWebsiteId = "7fd99628-3822-4bae-a794-b2d1d8926678"
-const umamiSrc = "https://umami.suanleme.cn:3000/script.js"
-
 // 可以选择性地设置缓存时间
 async function getMessages(locale: string) {
   // 验证 locale 是否有效
@@ -124,10 +120,6 @@ export default async function LocaleLayout({
   return (
     <html lang={locale}>
       <head>
-      <UmamiProvider 
-          websiteId={umamiWebsiteId} // 替换为你的实际 ID
-          src={umamiSrc}
-        />
         <meta name="google-site-verification" content="F_mzKY9JDvflHFEEsBGIiItkpIhVwc0sBPqo_UI5VtQ" />
         <meta name="baidu-site-verification" content="codeva-KBWW4lhtr9" />
       </head>

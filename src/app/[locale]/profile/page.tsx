@@ -260,7 +260,7 @@ export default function ProfilePage() {
       try {
         // 加载CDK配置
         const token = await generateDynamicTokenWithServerTime()
-        const configResponse = await fetch('/api/admin/cdk/config', {
+        const configResponse = await fetch('/api/cdk/config', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
