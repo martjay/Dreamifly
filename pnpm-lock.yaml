@@ -68,9 +68,6 @@ importers:
       next-intl:
         specifier: ^4.0.2
         version: 4.3.12(next@15.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
-      next-umami:
-        specifier: ^1.0.0
-        version: 1.0.0(next@15.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       openai:
         specifier: ^6.8.1
         version: 6.9.0(zod@4.1.12)
@@ -2868,14 +2865,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  next-umami@1.0.0:
-    resolution: {integrity: sha512-bwq2nuH1vE0zBRkT/6pKznlKsDv6BwTWGfOFcSf0hLT3ua3OJHMVpB3Ws3GiCKl69Exan++PX05wNvfrDvfTmQ==}
-    engines: {node: '>=16.0.0'}
-    peerDependencies:
-      next: '>=13.0.0'
-      react: '>=18.0.0'
-      react-dom: '>=18.0.0'
 
   next@15.2.6:
     resolution: {integrity: sha512-DIKFctUpZoCq5ok2ztVU+PqhWsbiqM9xNP7rHL2cAp29NQcmDp7Y6JnBBhHRbFt4bCsCZigj6uh+/Gwh2158Wg==}
@@ -6746,12 +6735,6 @@ snapshots:
       use-intl: 4.3.12(react@19.2.3)
     optionalDependencies:
       typescript: 5.9.3
-
-  next-umami@1.0.0(next@15.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
-    dependencies:
-      next: 15.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
 
   next@15.2.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
