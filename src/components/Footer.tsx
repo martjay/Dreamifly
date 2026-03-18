@@ -12,6 +12,16 @@ export default function Footer() {
         <div className="text-center text-gray-700">
           {webVersion && <p className="mb-2">{webVersion}</p>}
           <p>{t('copyright')}</p>
+          <p className="mt-2">
+            <a
+              href="https://beian.miit.gov.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              京ICP备2023013220号-40
+            </a>
+          </p>
         </div>
       </div>
     </footer>
