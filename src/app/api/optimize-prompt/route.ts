@@ -11,6 +11,8 @@ interface ChatCompletionRequest {
   messages: ChatMessage[];
   temperature?: number;
   max_tokens?: number;
+  stream?: boolean;
+  chat_template_kwargs?: { enable_thinking?: boolean };
 }
 
 interface ChatCompletionResponse {
@@ -195,7 +197,9 @@ You are now ready to optimize the user's text-to-image prompt.`;
       temperature: 0.7,
       max_tokens: process.env.PROMPT_OPTIMIZATION_MAX_TOKENS 
         ? parseInt(process.env.PROMPT_OPTIMIZATION_MAX_TOKENS) 
-        : (process.env.MAX_TOKENS ? parseInt(process.env.MAX_TOKENS) : 1000)
+        : (process.env.MAX_TOKENS ? parseInt(process.env.MAX_TOKENS) : 1000),
+      stream: false, // 禁用流式输出，一次性返回完整结果
+      chat_template_kwargs: { enable_thinking: false } // 禁用思考模式（Qwen3.5 等推理模型）
     };
 
 

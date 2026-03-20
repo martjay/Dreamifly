@@ -43,7 +43,8 @@ export async function moderatePrompt(
     // 构建审核消息，将用户提示词插入到审核模板中
     const fullPrompt = moderationPrompt.replace('{prompt}', promptText)
 
-    // 调用API进行审核
+    // 调用API进行审核（禁用流式输出和思考模式）
+    // chat_template_kwargs 为 Qwen 等模型专用参数，OpenAI SDK 类型未包含
     const response = await client.chat.completions.create({
       model: model,
       messages: [
@@ -52,7 +53,9 @@ export async function moderatePrompt(
           content: fullPrompt,
         },
       ],
-    })
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
     // 解析返回结果
     const rawResult = response.choices[0]?.message?.content?.trim()
