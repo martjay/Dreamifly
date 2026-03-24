@@ -38,27 +38,6 @@ body:has(.admin-page) footer {
   --input: #e5e7eb;
 }
 
-/* ===== 春节主题 ===== */
-.new-year-theme {
-  --primary: #C53030;
-  --primary-foreground: #ffffff;
-  --secondary: #B7791F;
-  --secondary-foreground: #ffffff;
-  --accent: #D69E2E;
-  --accent-foreground: #ffffff;
-  --destructive: #E53E3E;
-  --destructive-foreground: #ffffff;
-  --ring: #C53030;
-  --background: #FFFAF0;
-  --foreground: #1C1917;
-  --card: #ffffff;
-  --card-foreground: #292524;
-  --muted: #FEF3C7;
-  --muted-foreground: #78716C;
-  --border: #FCA5A5;
-  --input: #FECACA;
-}
-
 @layer base {
   body {
     @apply min-h-screen bg-gradient-to-b from-gray-50 via-gray-100 to-gray-50 text-gray-900;

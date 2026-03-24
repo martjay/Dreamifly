@@ -286,9 +286,17 @@ export default function HomeClient() {
       >
         {/* Hero Section - 改进响应式设计 */}
         <section className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 lg:px-40 overflow-hidden lg:pt-24">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 z-0"></div>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(249,115,22,0.05),rgba(249,115,22,0))] z-0"></div>
-          <div className="absolute inset-0 bg-[url('/images/bg.png')] bg-cover bg-center opacity-20 z-0" style={{ position: 'fixed' }}></div>
+          <video
+            className="absolute inset-0 h-full w-full object-cover z-0"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+          >
+            <source src="/images/bg.mp4" type="video/mp4" />
+          </video>
 
           <div className="w-full max-w-[1400px] mx-auto relative px-6 sm:px-8 z-10">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-6 xl:gap-8 items-center">
@@ -433,8 +441,9 @@ export default function HomeClient() {
         </section>
 
         {/* AI Plaza Section - 统一的AI广场 */}
-        <section id="ai-plaza" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 bg-gray-50/90 backdrop-blur-md relative">
-          <div className="w-full max-w-[1260px] mx-auto relative px-4 sm:px-6">
+        <section id="ai-plaza" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('/images/bg.png')] bg-cover bg-center opacity-35 pointer-events-none"></div>
+          <div className="w-full max-w-[1260px] mx-auto relative z-10 px-4 sm:px-6">
             <div className="text-center mb-12">
               <div className="flex items-center justify-center gap-5 mb-7">
                 <svg className="w-10 h-10" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" fill="#FED7AA">

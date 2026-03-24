@@ -1,20 +1,42 @@
 import type { MetadataRoute } from 'next'
 
-const pages = [
-  { path: '', priority: 1.0, changeFrequency: 'daily' as const },
-  { path: '/create', priority: 0.9, changeFrequency: 'weekly' as const },
-  { path: '/workflows', priority: 0.8, changeFrequency: 'weekly' as const },
-  { path: '/pricing', priority: 0.7, changeFrequency: 'monthly' as const },
-  { path: '/new-year-wish', priority: 0.5, changeFrequency: 'monthly' as const },
+export const revalidate = 3600
+
+const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://dreamifly.com').replace(/\/+$/, '')
+
+const publicRoutes: Array<{
+  path: string
+  changeFrequency: NonNullable<MetadataRoute.Sitemap[number]['changeFrequency']>
+  priority: number
+}> = [
+  {
+    path: '/',
+    changeFrequency: 'daily',
+    priority: 1,
+  },
+  {
+    path: '/create',
+    changeFrequency: 'daily',
+    priority: 0.9,
+  },
+  {
+    path: '/pricing',
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  },
+  {
+    path: '/workflows',
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  },
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dreamifly.com'
-  const now = new Date()
+  const lastModified = new Date()
 
-  return pages.map(({ path, priority, changeFrequency }) => ({
-    url: `${baseUrl}${path || '/'}`,
-    lastModified: now,
+  return publicRoutes.map(({ path, changeFrequency, priority }) => ({
+    url: `${baseUrl}${path}`,
+    lastModified,
     changeFrequency,
     priority,
   }))
