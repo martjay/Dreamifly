@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
 import Image from 'next/image'
 import { useSession } from '@/lib/auth-client'
@@ -11,15 +11,13 @@ import { useState } from 'react'
 import AvatarWithFrame from './AvatarWithFrame'
 
 export default function AdminSidebar() {
-  const params = useParams()
-  const locale = params?.locale as string || 'zh'
   const pathname = usePathname()
   const { data: session } = useSession()
   const { avatar: globalAvatar, avatarFrameId } = useAvatar()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const isActive = (path: string) => {
-    const fullPath = transferUrl(path, locale)
+    const fullPath = transferUrl(path)
     if (path === '/admin') {
       // 精确匹配 /admin，不包括 /admin/analytics
       return pathname === fullPath || pathname === fullPath + '/'
@@ -89,7 +87,7 @@ export default function AdminSidebar() {
         {/* Logo 部分 - 在移动端隐藏，因为已经在顶部栏显示 */}
         <div className="hidden lg:flex flex-col items-center mb-12 px-4">
           <Link 
-            href={transferUrl('/', locale)} 
+            href={transferUrl('/')} 
             className="relative transform transition-all duration-300 hover:scale-110 mb-3"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl blur-xl opacity-50 animate-pulse"></div>
@@ -109,7 +107,7 @@ export default function AdminSidebar() {
         {/* 导航菜单 */}
         <div className="flex-1 flex flex-col items-center space-y-4 w-full px-4 pt-8 lg:pt-0">
           <Link
-            href={transferUrl('/admin', locale)}
+            href={transferUrl('/admin')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin') && !isActive('/admin/analytics')
@@ -132,7 +130,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/analytics', locale)}
+            href={transferUrl('/admin/analytics')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/analytics')
@@ -155,7 +153,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/points', locale)}
+            href={transferUrl('/admin/points')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/points')
@@ -192,7 +190,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/cdk', locale)}
+            href={transferUrl('/admin/cdk')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/cdk')
@@ -229,7 +227,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/subscriptions', locale)}
+            href={transferUrl('/admin/subscriptions')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/subscriptions')
@@ -266,7 +264,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/crawler-analysis', locale)}
+            href={transferUrl('/admin/crawler-analysis')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/crawler-analysis')
@@ -289,7 +287,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/blacklist', locale)}
+            href={transferUrl('/admin/blacklist')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/blacklist')
@@ -312,7 +310,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/decorations', locale)}
+            href={transferUrl('/admin/decorations')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/decorations')
@@ -335,7 +333,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/email-domains', locale)}
+            href={transferUrl('/admin/email-domains')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/email-domains')
@@ -358,7 +356,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/god-eye', locale)}
+            href={transferUrl('/admin/god-eye')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/god-eye')
@@ -382,7 +380,7 @@ export default function AdminSidebar() {
           </Link>
 
           <Link
-            href={transferUrl('/admin/settings', locale)}
+            href={transferUrl('/admin/settings')}
             onClick={handleNavClick}
             className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
               isActive('/admin/settings')

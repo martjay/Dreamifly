@@ -241,11 +241,11 @@
       "questions": [
         {
           "q": "什么是Dreamifly？",
-          "a": "Dreamifly是一个完全免费、基于多种AI绘画模型的在线文生图（text to image）、图生图（image to image）服务网站，优秀的AI设计绘图工具，支持现实、动漫、插画、3D等多风格的作品，请在此自由地发挥你的创意！"
+          "a": "Dreamifly 是一个基于多种 AI 绘画与视觉模型的在线文生图（text to image）、图生图（image to image）服务网站，也是优秀的 AI 设计绘图工具，支持现实、动漫、插画、3D 等多风格作品，可在此自由发挥创意。平台提供免费额度与基础体验，需要更高用量时可选购订阅套餐获取额外额度。"
         },
         {
-          "q": "Dreamifly是完全免费的吗？",
-          "a": "没错，我们提供完全免费的生图服务。"
+          "q": "Dreamifly 是免费的吗？",
+          "a": "可以免费使用：我们提供一定的免费生图额度，满足日常体验与创作。若你需要更多生成次数或更高配额，可通过订阅套餐购买额外额度。"
         },
         {
           "q": "Dreamifly能创作什么样的图像？",
@@ -257,7 +257,7 @@
         },
         {
           "q": "Dreamifly提供哪些模型？",
-          "a": "HiDream-I1满血版、Flux.1-Dev以及未来更多开源模型。"
+          "a": "当前接入的模型包括但不限于 Z-Image、Nano Banana2、Grok、wan2.2，以及 HiDream-I1 满血版、Flux.1-Dev 等，并会持续扩展与更新。"
         },
         {
           "q": "我需要创建一个帐户并登录才能使用 Dreamifly 吗？",
@@ -452,10 +452,10 @@
     "title": "友链",
     "subtitle": "发现精彩的AI工具和平台",
     "description": "我们与优秀的AI工具平台合作，为您提供更多创作可能",
-    "anycomfy": {
-      "name": "AnyComfy",
-      "url": "anycomfy.com",
-      "description": "一个免费无限制的在线ComfyUI平台，轻松运行任何AI绘画工作流"
+    "loongxia": {
+      "name": "LoongXia",
+      "url": "loongxia.cn",
+      "description": "一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的QQ/微信/飞书专属机器人吧~"
     },
     "manbo": {
       "name": "曼波配音生成器",

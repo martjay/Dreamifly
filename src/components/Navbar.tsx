@@ -1,14 +1,14 @@
 'use client'
 
+
+import { createScopedT } from '@/lib/strings'
 import Link from 'next/link'
 import Image from 'next/image'
-import LanguageSwitch from './LanguageSwitch'
 import WeChatIcon from './WeChatIcon'
 import GitHubIcon from './GitHubIcon'
 import AuthModal from './AuthModal'
-import { useParams, usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
-import { useTranslations } from 'next-intl'
 import { useState, useEffect } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useSession, signOut } from '@/lib/auth-client'
@@ -18,9 +18,8 @@ import AvatarWithFrame from './AvatarWithFrame'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 
 export default function Navbar() {
-  const { locale } = useParams()
-  const t = useTranslations('nav')
-  const tAuth = useTranslations('auth')
+  const t = createScopedT('nav')
+  const tAuth = createScopedT('auth')
   const { data: session } = useSession()
   const { avatar: globalAvatar, nickname: globalNickname, avatarFrameId } = useAvatar()
   const { pointsBalance } = usePoints()
@@ -30,7 +29,7 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const pricingPath = transferUrl('/pricing', locale)
+  const pricingPath = transferUrl('/pricing')
   const isPricingActive = pathname === pricingPath || pathname?.startsWith(`${pricingPath}/`)
 
   // 检查管理员和优质用户状态
@@ -74,7 +73,7 @@ export default function Navbar() {
 
   const handleQuickGenerateClick = () => {
     setIsMobileMenuOpen(false)
-    router.push(transferUrl('/create', locale))
+    router.push(transferUrl('/create'))
   }
 
   const scrollToTop = () => {
@@ -86,8 +85,8 @@ export default function Navbar() {
   const handleLogoClick = (event?: ReactMouseEvent<HTMLAnchorElement | HTMLDivElement>) => {
     event?.preventDefault()
     setIsMobileMenuOpen(false)
-    const homePath = transferUrl('/', locale)
-    const isHome = pathname === `/${locale}` || pathname === `/${locale}/`
+    const homePath = transferUrl('/')
+    const isHome = pathname === '/' || pathname === ''
 
     if (isHome) {
       scrollToTop()
@@ -102,10 +101,10 @@ export default function Navbar() {
 
   // 处理点击导航项
   const handleNavItemClick = (sectionId: string) => {
-    const isHome = pathname === `/${locale}` || pathname === `/${locale}/`
+    const isHome = pathname === '/' || pathname === ''
     setIsMobileMenuOpen(false)
     if (!isHome) {
-      router.push(transferUrl('/', locale))
+      router.push(transferUrl('/'))
     }
     scrollToSection(sectionId)
   }
@@ -183,7 +182,7 @@ export default function Navbar() {
                 {showUserMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
                     <Link
-                      href={transferUrl('/profile', locale)}
+                      href={transferUrl('/profile')}
                       onClick={() => setShowUserMenu(false)}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                     >
@@ -230,7 +229,7 @@ export default function Navbar() {
           {/* Logo 部分 - 在移动端隐藏，因为已经在顶部栏显示 */}
           <div className="hidden lg:flex flex-col items-center mb-12">
             <Link 
-              href={transferUrl('/', locale)} 
+              href={transferUrl('/')} 
               onClick={handleLogoClick}
               className="relative transform transition-all duration-300 hover:scale-110 mb-3"
             >
@@ -274,7 +273,7 @@ export default function Navbar() {
             {/* 新年许愿机 - 由 NEXT_PUBLIC_ENABLE_NEW_YEAR_WISH 控制，默认不展示 */}
             {process.env.NEXT_PUBLIC_ENABLE_NEW_YEAR_WISH === 'true' && (
               <Link
-                href={transferUrl('/new-year-wish', locale)}
+                href={transferUrl('/new-year-wish')}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-red-100/70 to-yellow-100/70 hover:from-red-200/70 hover:to-yellow-200/70 border border-red-200/60 transition-all duration-300 shadow-sm hover:shadow-md"
               >
@@ -285,7 +284,7 @@ export default function Navbar() {
 
             {/* 价格/会员菜单 */}
             <Link
-              href={transferUrl('/pricing', locale)}
+              href={transferUrl('/pricing')}
               onClick={() => setIsMobileMenuOpen(false)}
               className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 border ${
                 isPricingActive
@@ -311,7 +310,7 @@ export default function Navbar() {
             {/* 我的作品 - 仅登录用户可见 */}
             {session?.user && (
               <Link
-                href={transferUrl('/my-works', locale)}
+                href={transferUrl('/my-works')}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-gray-200/50 hover:bg-gray-300/50 transition-all duration-300"
               >
@@ -335,7 +334,7 @@ export default function Navbar() {
             {/* 管理员菜单 - 仅管理员可见 */}
             {session?.user && isAdmin && (
               <Link
-                href={transferUrl('/admin', locale)}
+                href={transferUrl('/admin')}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-orange-400/20 to-amber-400/20 hover:from-orange-400/30 hover:to-amber-400/30 border border-orange-400/40 transition-all duration-300"
               >
@@ -373,7 +372,7 @@ export default function Navbar() {
                     {showUserMenu && (
                       <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
                         <Link
-                          href={transferUrl('/profile', locale)}
+                          href={transferUrl('/profile')}
                           onClick={() => setShowUserMenu(false)}
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                         >
@@ -391,13 +390,9 @@ export default function Navbar() {
                 </div>
               )}
 
-              {/* 语言切换和积分显示 */}
+              {/* 积分显示 */}
               <div className="flex items-center justify-center gap-4 w-full">
-                {/* 语言切换图标（左侧） */}
-                <div className="relative">
-                  <LanguageSwitch />
-                </div>
-                {/* 积分显示（右侧，仅登录用户显示） */}
+                {/* 积分显示（仅登录用户显示） */}
                 {session?.user && pointsBalance !== null && (
                   <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-orange-400/10 to-amber-400/10 rounded-lg border border-orange-400/20">
                     <svg className="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 20 20">

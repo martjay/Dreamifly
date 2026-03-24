@@ -1,12 +1,11 @@
-import { useTranslations } from 'next-intl'
-
+import { createScopedT } from '@/lib/strings'
 interface TabNavigationProps {
   activeTab: 'generate' | 'video-generation';
   onTabChange: (tab: 'generate' | 'video-generation') => void;
 }
 
 const TabNavigation = ({ activeTab, onTabChange }: TabNavigationProps) => {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
 
   return (
     <div className="mb-7 animate-fadeInUp">

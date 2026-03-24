@@ -1,4 +1,4 @@
-import { useTranslations } from 'next-intl'
+import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { styleOptions } from './StyleTransferForm';
@@ -47,7 +47,7 @@ const PromptInput = ({
   extraCost = null,
   model
 }: PromptInputProps) => {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
   const [isStyleOpen, setIsStyleOpen] = useState(false);
   const [isNegativePromptEnabled, setIsNegativePromptEnabled] = useState(false);

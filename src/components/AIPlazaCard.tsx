@@ -2,7 +2,6 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
@@ -13,8 +12,6 @@ interface AIPlazaCardProps {
 }
 
 export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
 
   // 获取标签文本（仅用于模型）
   const getTagText = (tag: string) => {
@@ -75,7 +72,7 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
   return (
     <div className="relative group">
       <Link
-        href={transferUrl(route, locale)}
+        href={transferUrl(route)}
         className="block"
       >
         {/* 图片卡片 */}

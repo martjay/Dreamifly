@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
 
 interface GrokVideoPlazaCardProps {
@@ -19,8 +18,6 @@ export default function GrokVideoPlazaCard({
 }: GrokVideoPlazaCardProps) {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
 
   // 组件挂载时自动播放视频（静音循环预览）
   useEffect(() => {
@@ -34,7 +31,7 @@ export default function GrokVideoPlazaCard({
   return (
     <div className="relative group">
       <Link
-        href={transferUrl('/create?tab=video&model=grok-imagine-1.0-video', locale)}
+        href={transferUrl('/create?tab=video&model=grok-imagine-1.0-video')}
         className="block"
       >
         {/* 视频卡片 */}

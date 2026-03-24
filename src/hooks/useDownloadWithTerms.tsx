@@ -1,9 +1,10 @@
 'use client'
 
+
+import { createScopedT } from '@/lib/strings'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSession } from '@/lib/auth-client'
-import { useTranslations } from 'next-intl'
 import DownloadTermsModal from '@/components/DownloadTermsModal'
 
 interface UseDownloadWithTermsReturn {
@@ -16,7 +17,7 @@ interface UseDownloadWithTermsReturn {
 
 export function useDownloadWithTerms(): UseDownloadWithTermsReturn {
   const { data: session, isPending } = useSession()
-  const t = useTranslations('downloadTerms.toast')
+  const t = createScopedT('downloadTerms.toast')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [agreed, setAgreed] = useState(false)

@@ -1,6 +1,5 @@
+import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
-import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import GenerateForm from './GenerateForm'
 import GeneratePreview from './GeneratePreview'
@@ -38,12 +37,10 @@ const formatTime = (seconds: number): string => {
 }
 
 const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
-  const t = useTranslations('home.generate')
-  const tHome = useTranslations('home')
+  const t = createScopedT('home.generate')
+  const tHome = createScopedT('home')
   const { data: session, isPending } = useSession()
   const { refreshPoints } = usePoints()
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [width, setWidth] = useState(1024);
@@ -1245,7 +1242,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             {errorType === 'insufficient_points' ? (
               <div className="flex flex-col gap-3">
                 <Link
-                  href={transferUrl('/pricing', locale)}
+                  href={transferUrl('/pricing')}
                   onClick={closeErrorModal}
                   className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
                 >

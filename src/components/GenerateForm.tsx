@@ -1,5 +1,5 @@
+import { createScopedT } from '@/lib/strings'
 import { useState, useEffect, useRef } from 'react'
-import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import { getAvailableModels, filterModelsByImageCount, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification } from '@/utils/modelConfig'
 import Toast from './Toast'
@@ -67,7 +67,7 @@ export default function GenerateForm({
   aspectRatio,
   setAspectRatio
 }: GenerateFormProps) {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
   const [progress, setProgress] = useState(0)
   const [estimatedTime, setEstimatedTime] = useState(0)
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)

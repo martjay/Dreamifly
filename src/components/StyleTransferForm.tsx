@@ -1,5 +1,5 @@
+import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 
 interface StyleTransferFormProps {
@@ -95,7 +95,7 @@ export default function StyleTransferForm({
   authStatus,
   setIsQueuing: setIsQueuingProp
 }: StyleTransferFormProps) {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
   const [selectedStyle, setSelectedStyle] = useState<string>('')
   const [isDragging, setIsDragging] = useState(false)
   const [progress, setProgress] = useState(0)

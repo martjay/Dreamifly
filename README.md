@@ -449,8 +449,8 @@ MIT License | © 2025 Dreamify Project
 
 我们与以下优秀 AI 工具平台合作，共同推动 AI 艺术生态发展：
 
-- **[AnyComfy](https://anycomfy.com)**  
-  一个免费、无限使用的在线 ComfyUI 平台，轻松运行任意 AI 绘画工作流。
+- **[LoongXia](https://loongxia.cn)**  
+  一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的 QQ/微信/飞书专属机器人吧~
 
 ---
 

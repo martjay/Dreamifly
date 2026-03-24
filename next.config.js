@@ -1,5 +1,3 @@
-const withNextIntl = require('next-intl/plugin')('./src/i18n.ts');
-
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -13,7 +11,6 @@ const nextConfig = {
   // 根据资源类型设置合适的缓存策略，避免页面/JS 长时间不更新
   async headers() {
     return [
-      // 页面与 API，禁止中长期缓存
       {
         source: '/:path*',
         headers: [
@@ -22,7 +19,6 @@ const nextConfig = {
           { key: 'X-Powered-By', value: '' },
         ],
       },
-      // Next.js 构建产物可长时间缓存
       {
         source: '/_next/static/:path*',
         headers: [
@@ -33,16 +29,12 @@ const nextConfig = {
     ];
   },
 
-  // 实验性配置：确保构建稳定性
   experimental: {
-    // 禁用一些可能导致构建问题的特性
     serverActions: {
       bodySizeLimit: '2mb',
     },
   },
 
-  // 修复构建时的 .nft.json 和 trace 文件错误
-  // 优化输出文件跟踪，排除可能导致权限问题的目录
   outputFileTracingExcludes: {
     '*': [
       '**/.git/**',
@@ -53,7 +45,17 @@ const nextConfig = {
       '**/trace/**',
     ],
   },
+
+  async redirects() {
+    return [
+      { source: '/zh', destination: '/', permanent: true },
+      { source: '/zh/:path*', destination: '/:path*', permanent: true },
+      { source: '/en', destination: '/', permanent: true },
+      { source: '/en/:path*', destination: '/:path*', permanent: true },
+      { source: '/zh-TW', destination: '/', permanent: true },
+      { source: '/zh-TW/:path*', destination: '/:path*', permanent: true },
+    ];
+  },
 };
 
-// 最后应用 next-intl 插件
-module.exports = withNextIntl(nextConfig);
+module.exports = nextConfig;

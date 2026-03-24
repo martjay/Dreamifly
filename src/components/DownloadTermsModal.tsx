@@ -1,6 +1,7 @@
 'use client'
 
-import { useTranslations } from 'next-intl'
+
+import { createScopedT } from '@/lib/strings'
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -17,7 +18,7 @@ interface DownloadTermsModalProps {
 type ViewMode = 'confirm' | 'full'
 
 export default function DownloadTermsModal({ isOpen, onClose, onAgree, isLoading = false, agreed, onAgreedChange }: DownloadTermsModalProps) {
-  const t = useTranslations('downloadTerms.modal')
+  const t = createScopedT('downloadTerms.modal')
   const [viewMode, setViewMode] = useState<ViewMode>('confirm')
   const [markdownContent, setMarkdownContent] = useState<string>('')
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false)

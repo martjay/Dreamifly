@@ -6,7 +6,6 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { Sparkles, Palette } from 'lucide-react'
 import { transferUrl } from '@/utils/locale'
 
@@ -15,8 +14,6 @@ interface NewYearHeaderProps {
 }
 
 export default function NewYearHeader({ onShowDesignSystem }: NewYearHeaderProps) {
-  const { locale } = useParams()
-
   return (
     <header
       className="w-full rounded-[20px] px-5 py-3 flex items-center justify-between transition-all duration-200"
@@ -28,7 +25,7 @@ export default function NewYearHeader({ onShowDesignSystem }: NewYearHeaderProps
     >
       {/* 左侧品牌 */}
       <Link
-        href={transferUrl('/', locale)}
+        href={transferUrl('/')}
         className="flex items-center gap-2 group transition-all duration-200 hover:scale-[1.02] active:scale-[0.97]"
       >
         <div
@@ -62,7 +59,7 @@ export default function NewYearHeader({ onShowDesignSystem }: NewYearHeaderProps
           </button>
         )}
         <Link
-          href={transferUrl('/new-year-wish', locale)}
+          href={transferUrl('/new-year-wish')}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.97]"
           style={{
             background: 'linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 80%, black) 100%)',

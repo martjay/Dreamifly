@@ -1,7 +1,8 @@
 'use client'
 
+
+import { createScopedT } from '@/lib/strings'
 import { useState, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
 import { signIn, sendVerificationEmail, forgetPassword } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import TermsModal from './TermsModal'
@@ -13,7 +14,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalProps) {
-  const t = useTranslations('auth')
+  const t = createScopedT('auth')
   const [mode, setMode] = useState<'login' | 'register' | 'reset' | 'verify'>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

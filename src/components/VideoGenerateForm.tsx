@@ -1,7 +1,8 @@
 'use client'
 
+
+import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { useTranslations } from 'next-intl'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { useSession } from '@/lib/auth-client'
 import { usePoints } from '@/contexts/PointsContext'
@@ -59,8 +60,8 @@ const VideoGenerateForm = ({
   onGenerate,
   setErrorModal,
 }: VideoGenerateFormProps) => {
-  const t = useTranslations('home.generate')
-  const tVideo = useTranslations('home.generate.form.videoGeneration')
+  const t = createScopedT('home.generate')
+  const tVideo = createScopedT('home.generate.form.videoGeneration')
   const { data: session, isPending } = useSession()
   const { refreshPoints } = usePoints()
 

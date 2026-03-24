@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
 import { WorkflowConfig } from '@/utils/workflowConfig'
 
@@ -14,8 +13,6 @@ interface HomepageWorkflowCardProps {
 export default function HomepageWorkflowCard({ workflow }: HomepageWorkflowCardProps) {
   const [showNameModal, setShowNameModal] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
 
   // 点击外部关闭模态框
   useEffect(() => {
@@ -42,7 +39,7 @@ export default function HomepageWorkflowCard({ workflow }: HomepageWorkflowCardP
   return (
     <div className="relative group">
       <Link
-        href={transferUrl(route, locale)}
+        href={transferUrl(route)}
         className="block relative aspect-[3/4] rounded-2xl overflow-hidden shadow-xl border border-orange-400/30 transform hover:scale-[1.02] transition-transform duration-300"
       >
         <Image

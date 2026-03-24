@@ -1,6 +1,7 @@
 'use client'
 
-import { useTranslations } from 'next-intl'
+
+import { createScopedT } from '@/lib/strings'
 import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
 
 interface GeneratePreviewProps {
@@ -25,7 +26,7 @@ export default function GeneratePreview({
   onSetAsReference,
   onDownloadImage
 }: GeneratePreviewProps) {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
   const { checkAndDownload, DownloadTermsModalWrapper } = useDownloadWithTerms()
 
   const handleDownloadImage = async (image: string, index: number) => {

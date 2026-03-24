@@ -1,9 +1,9 @@
 'use client'
 
-import { useTranslations } from 'next-intl'
 
+import { createScopedT } from '@/lib/strings'
 export default function Footer() {
-  const t = useTranslations('footer')
+  const t = createScopedT('footer')
   const webVersion = process.env.NEXT_PUBLIC_NEXT_PUBLIC_WEB_VERSION || ''
 
   return (
