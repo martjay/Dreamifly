@@ -25,7 +25,7 @@ interface FAQItem {
 }
 
 export default function HomeClient() {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [currentShowcaseIndex, setCurrentShowcaseIndex] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const t = createScopedT('home')
   const tFriends = createScopedT('friends')
@@ -63,27 +63,37 @@ export default function HomeClient() {
   }, [])
 
 
-  // 示例图片数组
-  const images = [
-    '/images/demo-6.png',
-    '/images/demo-12.png',
-    '/images/demo-3.png',
-    '/images/demo-1.png',
-    '/images/demo-10.png',
-    '/images/demo-8.png',
+  const showcaseItems = [
+    {
+      type: 'video' as const,
+      src: '/images/bg.mp4',
+      poster: '/images/bg.png',
+    },
+    {
+      type: 'image' as const,
+      src: '/images/demo-12.png',
+    },
+    {
+      type: 'image' as const,
+      src: '/images/demo-1.png',
+    },
+    {
+      type: 'image' as const,
+      src: '/images/demo-8.png',
+    },
   ]
 
-  // 自动轮播
+  // 自动切换展示内容
   useEffect(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
     }
 
     const timer = setInterval(() => {
-      setCurrentImageIndex((prevIndex) =>
-        prevIndex === images.length - 1 ? 0 : prevIndex + 1
+      setCurrentShowcaseIndex((prevIndex) =>
+        prevIndex === showcaseItems.length - 1 ? 0 : prevIndex + 1
       )
-    }, 5000)
+    }, 6000)
 
     timerRef.current = timer
 
@@ -92,21 +102,20 @@ export default function HomeClient() {
         clearInterval(timerRef.current)
       }
     }
-  }, [images.length])
+  }, [showcaseItems.length])
 
-  // 手动切换图片时重置计时器
-  const handleImageChange = (index: number) => {
-    
+  // 手动切换展示内容时重置计时器
+  const handleShowcaseChange = (index: number) => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
     }
-    setCurrentImageIndex(index)
+    setCurrentShowcaseIndex(index)
 
     const timer = setInterval(() => {
-      setCurrentImageIndex((prevIndex) =>
-        prevIndex === images.length - 1 ? 0 : prevIndex + 1
+      setCurrentShowcaseIndex((prevIndex) =>
+        prevIndex === showcaseItems.length - 1 ? 0 : prevIndex + 1
       )
-    }, 5000)
+    }, 6000)
 
     timerRef.current = timer
   }
@@ -116,21 +125,8 @@ export default function HomeClient() {
     community as unknown as CommunityWork[]
   )
 
-  // 加载社区作品图片
+  // 加载社区作品图片，游客也展示真实社区图片
   useEffect(() => {
-    // 未登录用户直接使用默认图片，不请求API
-    if (!session?.user) {
-      setCommunityWorks(community.map((work: any) => ({
-        ...work,
-        model: '默认',
-        userAvatar: '/images/default-avatar.svg',
-        userNickname: '默认',
-        avatarFrameId: null,
-      })))
-      return
-    }
-
-    // 已登录用户才请求API
     const fetchCommunityImages = async () => {
       try {
         const response = await fetch('/api/community/images')
@@ -234,7 +230,10 @@ export default function HomeClient() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 overflow-x-hidden">
+    <div className="relative min-h-screen overflow-x-hidden bg-gray-950">
+      <div className="fixed inset-0 z-0 bg-white">
+        <div className="absolute inset-0 bg-[url('/images/bg.png')] bg-cover bg-center bg-no-repeat opacity-40" />
+      </div>
 
       {/* 图片放大模态框 - 改进响应式设计 */}
       {zoomedImage && (
@@ -282,23 +281,11 @@ export default function HomeClient() {
 
       {/* 主要内容区域 - 使用 Tailwind CSS 控制布局 */}
       <main 
-        className="transition-all duration-300 mx-auto lg:pl-40 pt-24 lg:pt-0 pt-4"
+        className="relative z-10 transition-all duration-300 mx-auto lg:pl-40 pt-24 lg:pt-0 pt-4"
       >
         {/* Hero Section - 改进响应式设计 */}
         <section className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 lg:px-40 overflow-hidden lg:pt-24">
-          <video
-            className="absolute inset-0 h-full w-full object-cover z-0"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            aria-hidden="true"
-          >
-            <source src="/images/bg.mp4" type="video/mp4" />
-          </video>
-
-          <div className="w-full max-w-[1400px] mx-auto relative px-6 sm:px-8 z-10">
+          <div className="w-full max-w-[1400px] mx-auto relative px-6 sm:px-8 z-10 rounded-[2rem] border border-white/70 bg-white/40 backdrop-blur-sm py-8 sm:py-10 lg:py-12">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-6 xl:gap-8 items-center">
               {/* 左侧文字内容 - 改进移动端间距 */}
               <div className="text-left">
@@ -308,8 +295,8 @@ export default function HomeClient() {
                     <Image
                       src="/images/dreamifly-logo.jpg"
                       alt="Dreamifly Logo"
-                      width={58}
-                      height={58}
+                      width={68}
+                      height={68}
                       className="rounded-2xl shadow-xl border border-orange-400/30 relative z-10"
                       priority={true}
                     />
@@ -324,35 +311,14 @@ export default function HomeClient() {
                   </div>
                 </div>
                 <h1 className="mb-7 sm:mb-9 md:mt-0 mt-0">
-                  <span className="block text-2xl sm:text-3xl lg:text-5xl font-bold text-gray-800 mb-2 sm:mb-3 animate-fadeInUp">
+                  <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-2 sm:mb-3 animate-fadeInUp">
                     {t('hero.titlePrefix')}
                   </span>
-                  <span className="block text-2xl sm:text-3xl lg:text-5xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent animate-fadeInUp animation-delay-200">
+                  <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent animate-fadeInUp animation-delay-200">
                     {t('hero.titleHighlight')}
                   </span>
                 </h1>
-                <div className="flex flex-wrap gap-2 sm:gap-4 mb-7 sm:mb-9 animate-fadeInUp animation-delay-300">
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-400/75 to-amber-400/75 text-gray-900 shadow-lg">
-                    {t('hero.tags.fastGeneration')}
-                  </span>
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-400/75 to-yellow-400/75 text-gray-900 shadow-lg">
-                    {t('hero.tags.multipleModels')}
-                  </span>
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-500/75 to-amber-500/75 text-gray-900 shadow-lg">
-                    {t('hero.tags.noLogin')}
-                  </span>
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-yellow-400/75 to-amber-400/75 text-gray-900 shadow-lg">
-                    {t('hero.tags.chineseSupport')}
-                  </span>
-                </div>
-                <p className="text-base sm:text-lg text-gray-800 mb-7 sm:mb-9 animate-fadeInUp animation-delay-400">
-                  {t('hero.subtitle.prefix')}
-                  <span className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent px-1.5">
-                    {t('hero.subtitle.highlight')}
-                  </span>
-                  {t('hero.subtitle.suffix')}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 animate-fadeInUp animation-delay-600">
+                <div className="flex flex-row flex-nowrap justify-center sm:justify-start gap-3 sm:gap-4 animate-fadeInUp animation-delay-500">
                   <button
                     onClick={() => {
                       const aiPlazaSection = document.getElementById('ai-plaza')
@@ -360,7 +326,7 @@ export default function HomeClient() {
                         aiPlazaSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
                       }
                     }}
-                    className="group px-6 py-2.5 sm:px-9 sm:py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl hover:from-orange-400 hover:to-amber-400 transition-all duration-300 shadow-xl shadow-orange-500/20 hover:shadow-2xl hover:shadow-orange-500/30 hover:-translate-y-0.5 text-sm sm:text-base font-medium relative overflow-hidden"
+                    className="group whitespace-nowrap px-7 py-3 sm:px-9 sm:py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl hover:from-orange-400 hover:to-amber-400 transition-all duration-300 shadow-xl shadow-orange-500/20 hover:shadow-2xl hover:shadow-orange-500/30 hover:-translate-y-0.5 text-base sm:text-base font-medium relative overflow-hidden"
                   >
                     <span className="relative z-10">{t('hero.startButton')}</span>
                     <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -369,7 +335,7 @@ export default function HomeClient() {
                     onClick={() => {
                       document.getElementById('site-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }}
-                    className="group px-6 py-2.5 sm:px-9 sm:py-3.5 border-2 border-orange-500 text-orange-500 rounded-2xl hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 transition-all duration-300 text-sm sm:text-base font-medium relative overflow-hidden"
+                    className="group whitespace-nowrap px-7 py-3 sm:px-9 sm:py-3.5 border-2 border-orange-500 text-orange-600 rounded-2xl hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 transition-all duration-300 text-base sm:text-base font-medium relative overflow-hidden"
                   >
                     <span className="relative z-10">{t('hero.contactButton')}</span>
                     <div className="absolute inset-0 bg-orange-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -377,58 +343,65 @@ export default function HomeClient() {
                 </div>
               </div>
 
-              {/* 右侧图片展示 - 改进响应式显示和尺寸控制 */}
+              {/* 右侧视频展示 */}
               <div className="relative flex justify-end">
                 <div className="relative w-full max-w-[350px] lg:max-w-[400px] xl:max-w-[450px]">
-                  <div className="aspect-square rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl sm:shadow-2xl bg-gray-100/50 border border-orange-400/30 transform hover:scale-[1.02] transition-transform duration-500">
-                    {images.map((src, index) => (
+                  <div className="relative aspect-square rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl sm:shadow-2xl bg-white/50 border border-orange-400/30 backdrop-blur-sm transform hover:scale-[1.02] transition-transform duration-500">
+                    {showcaseItems.map((item, index) => (
                       <div
-                        key={src}
-                        className={`absolute inset-0 transition-all duration-1000 ease-in-out transform ${
-                          currentImageIndex === index
-                            ? 'opacity-100 scale-100'
-                            : 'opacity-0 scale-105'
+                        key={item.src}
+                        className={`absolute inset-0 transition-opacity duration-500 ${
+                          currentShowcaseIndex === index
+                            ? 'opacity-100 pointer-events-auto'
+                            : 'opacity-0 pointer-events-none'
                         }`}
+                        aria-hidden={currentShowcaseIndex !== index}
                       >
-                        <Image
-                          src={src}
-                          alt={`AI生成的图像示例 ${index + 1}`}
-                          fill
-                          className="object-cover"
-                          priority={index === 0}
-                          sizes="(max-width: 768px) 350px, (max-width: 1024px) 400px, 450px"
-                        />
+                        {item.type === 'video' ? (
+                          <video
+                            className="h-full w-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            poster={item.poster}
+                          >
+                            <source src={item.src} type="video/mp4" />
+                          </video>
+                        ) : (
+                          <Image
+                            src={item.src}
+                            alt={`AI生成示例 ${index + 1}`}
+                            fill
+                            className="object-cover"
+                            priority={index === 0}
+                            sizes="(max-width: 768px) 350px, (max-width: 1024px) 400px, 450px"
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
-                  {/* 最终优化的轮播图控件 - 精致的小圆点设计 */}
                   <div className="absolute -bottom-8 sm:-bottom-10 left-1/2 transform -translate-x-1/2">
-                    <div className="flex items-center gap-2 sm:gap-3 bg-gray-50/80 backdrop-blur-md px-4 sm:px-5 py-2.5 sm:py-3 rounded-full shadow-2xl border border-orange-400/20">
-                      {images.map((_, index) => (
+                    <div className="flex items-center gap-2 sm:gap-3 bg-white/80 backdrop-blur-md px-4 sm:px-5 py-2.5 sm:py-3 rounded-full shadow-2xl border border-orange-400/20">
+                      {showcaseItems.map((_, index) => (
                         <button
                           key={index}
-                          onClick={() => handleImageChange(index)}
+                          onClick={() => handleShowcaseChange(index)}
                           className={`relative transition-all duration-300 ease-out group w-10 h-1.5 overflow-hidden`}
-                          aria-label={`切换到图片 ${index + 1}`}
+                          aria-label={`切换到展示内容 ${index + 1}`}
                         >
-                          {/* 背景轨道 */}
                           <span className="absolute inset-0 rounded-full bg-slate-700/50" />
-                          
-                          {/* 激活状态指示器 */}
                           <span className={`absolute inset-0 transition-all duration-500 ${
-                            currentImageIndex === index
+                            currentShowcaseIndex === index
                               ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 shadow-lg shadow-orange-400/50'
                               : 'bg-orange-400/40 hover:bg-orange-400/60'
                           }`} />
-                          
-                          {/* 脉冲动画效果 */}
-                          {currentImageIndex === index && (
+                          {currentShowcaseIndex === index && (
                             <span className="absolute inset-0 bg-orange-400 animate-ping opacity-20" />
                           )}
-                          
-                          {/* 悬停光晕效果 */}
                           <span className={`absolute -inset-1 rounded-full bg-gradient-to-r from-orange-300 to-amber-300 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300 ${
-                            currentImageIndex === index ? 'opacity-40' : ''
+                            currentShowcaseIndex === index ? 'opacity-40' : ''
                           }`} />
                         </button>
                       ))}
@@ -442,7 +415,6 @@ export default function HomeClient() {
 
         {/* AI Plaza Section - 统一的AI广场 */}
         <section id="ai-plaza" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('/images/bg.png')] bg-cover bg-center opacity-35 pointer-events-none"></div>
           <div className="w-full max-w-[1260px] mx-auto relative z-10 px-4 sm:px-6">
             <div className="text-center mb-12">
               <div className="flex items-center justify-center gap-5 mb-7">
@@ -506,8 +478,7 @@ export default function HomeClient() {
         </section>
 
         {/* Community Showcase Section - 改进响应式设计 */}
-        <section id="community-showcase" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 bg-gray-50/90 backdrop-blur-md relative">
-            
+        <section id="community-showcase" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 relative overflow-hidden">
           <div className="w-full max-w-[1260px] mx-auto relative px-4 sm:px-6">
             <div className="text-center mb-12 sm:mb-15">
               <div className="flex items-center justify-center gap-5 mb-7">

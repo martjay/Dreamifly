@@ -1,18 +1,13 @@
 {
   "site": {
-    "title": "Dreamifly - 免费 AI 绘画/视频在线生成工具 | 一键生成动漫、插画、艺术图，多样化视频创作",
+    "title": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
     "description": "Dreamifly 提供免费在线 AI 绘画与视频生成服务，支持文生图、图生图、图生视频等多种创作方式，涵盖动漫、插画、写实等风格，无需注册即可快速体验，适合灵感探索、内容制作与创作爱好者使用。"
   },
   "home": {
     "hero": {
-      "titlePrefix": "简单易上手的",
+      "titlePrefix": "简单且免费的",
       "titleHighlight": "AI图像视频创作工具",
-      "subtitle": {
-        "prefix": "由多台家用电脑的闲置4090显卡，",
-        "highlight": "免费",
-        "suffix": "提供分布式算力支持。"
-      },
-      "description": "Dreamifly - 免费 AI 绘画/视频在线生成工具 | 一键生成动漫、插画、艺术图，多样化视频创作",
+      "description": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
       "startButton": "开始创作",
       "contactButton": "联系我们",
       "imageCaption": "AI艺术",

@@ -59,7 +59,6 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     startTime?: number;
     endTime?: number;
   }>>([]);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -871,6 +870,39 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   isQueuing={isQueuing}
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
+                  extraContent={
+                    <div className="lg:hidden border-t border-orange-400/40 pt-5 mt-1">
+                      <GenerateForm
+                        width={width}
+                        setWidth={setWidth}
+                        height={height}
+                        setHeight={setHeight}
+                        steps={steps}
+                        setSteps={setSteps}
+                        batch_size={batch_size}
+                        setBatchSize={setBatchSize}
+                        model={model}
+                        setModel={setModel}
+                        status={authStatus}
+                        promptRef={promptRef}
+                        communityWorks={communityWorks}
+                        isGenerating={isGenerating}
+                        uploadedImages={uploadedImages}
+                        setUploadedImages={setUploadedImages}
+                        stepsError={stepsError}
+                        batchSizeError={batchSizeError}
+                        imageCountError={imageCountError}
+                        batchSizeRef={batchSizeRef}
+                        generatedImageToSetAsReference={generatedImageToSetAsReference}
+                        setIsQueuing={setIsQueuing}
+                        isHighResolution={isHighResolution}
+                        setIsHighResolution={setIsHighResolution}
+                        aspectRatio={aspectRatio}
+                        setAspectRatio={setAspectRatio}
+                        embedded
+                      />
+                    </div>
+                  }
                 />
               </div>
             </div>
@@ -881,7 +913,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         {activeTab === 'generate' ? (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* 左侧表单区域 */}
-            <div className="order-1 lg:order-1 lg:col-span-2 animate-fadeInUp h-fit z-10">
+            <div className="hidden lg:block order-1 lg:order-1 lg:col-span-2 animate-fadeInUp h-fit z-10">
               <div className="transition-all duration-500 ease-in-out">
                 <div className="animate-fadeInUp">
                   <GenerateForm
@@ -896,9 +928,6 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     model={model}
                     setModel={setModel}
                     status={authStatus}
-                    onGenerate={handleGenerate}
-                    isAdvancedOpen={isAdvancedOpen}
-                    setIsAdvancedOpen={setIsAdvancedOpen}
                     promptRef={promptRef}
                     communityWorks={communityWorks}
                     isGenerating={isGenerating}

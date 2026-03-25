@@ -14,8 +14,8 @@ import { headers } from 'next/headers'
  * 根据屏蔽词列表过滤提示词中包含屏蔽词的图片
  *
  * 访问控制：
- * - 如果环境变量 COMMUNITY_IMAGES_PUBLIC 为 true，则对所有用户开放
- * - 如果环境变量 COMMUNITY_IMAGES_PUBLIC 为 false（默认），则只对管理员开放
+ * - 如果环境变量 COMMUNITY_IMAGES_PUBLIC 为 false，则只对管理员开放
+ * - 未设置或为其他值时，对所有用户开放
  *
  * 屏蔽词配置：
  * - 直接在代码中配置 JSON 数组
@@ -62,27 +62,24 @@ function containsCommunityBlockWords(text: string, words: string[]): boolean {
 }
 export async function GET() {
   try {
-    // 检查环境变量，默认为 false（只对管理员开放）
-    const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC === 'true'
-    
-    // 获取用户会话
-    const session = await auth.api.getSession({
-      headers: await headers()
-    })
+    // 默认公开，只有显式配置为 false 时才限制为管理员可见
+    const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC !== 'false'
 
-    // 所有用户都需要登录才能访问社区图片
-    if (!session?.user) {
-      return NextResponse.json(
-        { 
-          success: false,
-          error: '未授权，请先登录' 
-        },
-        { status: 401 }
-      )
-    }
-    
-    // 如果环境变量为 false，还需要验证管理员权限
     if (!isPublic) {
+      const session = await auth.api.getSession({
+        headers: await headers()
+      })
+
+      if (!session?.user) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: '未授权，请先登录'
+          },
+          { status: 401 }
+        )
+      }
+
       const currentUser = await db.select()
         .from(user)
         .where(eq(user.id, session.user.id))

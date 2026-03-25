@@ -1,5 +1,5 @@
 import { createScopedT } from '@/lib/strings'
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import Image from 'next/image';
 import { styleOptions } from './StyleTransferForm';
 import LoginHint from './LoginHint';
@@ -25,6 +25,7 @@ interface PromptInputProps {
   estimatedCost?: number | null;
   extraCost?: number | null;
   model?: string;
+  extraContent?: ReactNode;
 }
 
 const PromptInput = ({
@@ -45,7 +46,8 @@ const PromptInput = ({
   isQueuing = false,
   estimatedCost = null,
   extraCost = null,
-  model
+  model,
+  extraContent
 }: PromptInputProps) => {
   const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
@@ -131,12 +133,43 @@ const PromptInput = ({
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row md:justify-between gap-3 items-stretch md:items-center">
-          <div className="flex gap-2 md:gap-3">
+        <div className="grid grid-cols-2 gap-3 md:hidden">
+          <button
+            type="button"
+            onClick={onRandomPrompt}
+            className="min-h-11 px-4 py-2.5 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 flex items-center justify-center"
+            disabled={isGenerating}
+          >
+            <svg className="w-4 h-4 mr-1.5 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            {t('form.randomPrompt')}
+          </button>
+          <button
+            type="button"
+            onClick={onOptimizePrompt}
+            className="min-h-11 px-4 py-2.5 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 flex items-center justify-center"
+            disabled={isGenerating || isOptimizing || !prompt.trim()}
+          >
+            <svg className="w-4 h-4 mr-1.5 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+            </svg>
+            {isOptimizing ? t('form.optimizingPrompt') || 'Optimizing...' : t('form.optimizePrompt')}
+          </button>
+        </div>
+
+        {extraContent && (
+          <div className="pt-1">
+            {extraContent}
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row md:justify-between gap-4 items-stretch md:items-center">
+          <div className="flex gap-3 md:gap-3 flex-wrap justify-center md:justify-start">
             <button
               type="button"
               onClick={onRandomPrompt}
-              className="px-2 py-1 text-xs md:px-3 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
+              className="hidden md:flex px-3 py-2 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap items-center"
               disabled={isGenerating}
             >
               <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -147,10 +180,10 @@ const PromptInput = ({
             <button
               type="button"
               onClick={() => setIsStyleOpen(!isStyleOpen)}
-              className="px-3 py-1 text-xs md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative"
+              className="w-[calc(50%-0.375rem)] min-h-11 px-4 py-2.5 text-sm md:w-auto md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative"
               disabled={isGenerating}
             >
-              <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-4 h-4 mr-1.5 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
               </svg>
               {selectedStyle || t('form.styleButton')}
@@ -191,12 +224,12 @@ const PromptInput = ({
             </button>
             <div
               onClick={() => setIsRatioOpen(!isRatioOpen)}
-              className="px-3 py-1 text-xs md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative cursor-pointer"
+              className="w-[calc(50%-0.375rem)] min-h-11 px-4 py-2.5 text-sm md:w-auto md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative cursor-pointer"
               tabIndex={0}
               role="button"
               aria-disabled={isGenerating}
             >
-              <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-4 h-4 mr-1.5 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
               </svg>
               {aspectRatio}
@@ -225,7 +258,7 @@ const PromptInput = ({
             <button
               type="button"
               onClick={onOptimizePrompt}
-              className="px-2 py-1 text-xs md:px-3 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
+              className="hidden md:flex px-3 py-2 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap items-center"
               disabled={isGenerating || isOptimizing || !prompt.trim()}
             >
               <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

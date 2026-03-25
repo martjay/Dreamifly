@@ -18,9 +18,6 @@ interface GenerateFormProps {
   model: string;
   setModel: (value: string) => void;
   status: 'loading' | 'authenticated' | 'unauthenticated';
-  onGenerate: () => void;
-  isAdvancedOpen: boolean;
-  setIsAdvancedOpen: (value: boolean) => void;
   promptRef: React.RefObject<HTMLTextAreaElement | null>;
   communityWorks: { prompt: string }[];
   isGenerating: boolean;
@@ -36,6 +33,7 @@ interface GenerateFormProps {
   setIsHighResolution: (value: boolean) => void;
   aspectRatio: string;
   setAspectRatio: (value: string) => void;
+  embedded?: boolean;
 }
 
 export default function GenerateForm({
@@ -50,9 +48,6 @@ export default function GenerateForm({
   model,
   setModel,
   status,
-  onGenerate,
-  isAdvancedOpen,
-  setIsAdvancedOpen,
   isGenerating,
   uploadedImages,
   setUploadedImages,
@@ -65,7 +60,8 @@ export default function GenerateForm({
   isHighResolution,
   setIsHighResolution,
   aspectRatio,
-  setAspectRatio
+  setAspectRatio,
+  embedded = false
 }: GenerateFormProps) {
   const t = createScopedT('home.generate')
   const [progress, setProgress] = useState(0)
@@ -360,14 +356,6 @@ export default function GenerateForm({
     }
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (isGenerating) return
-    
-    setProgress(0)
-    onGenerate()
-  }
-
   // 获取当前模型信息
   const currentModel = availableModels.find(m => m.id === model);
   const maxImages = currentModel?.maxImages || 1;
@@ -382,9 +370,9 @@ export default function GenerateForm({
           {t('form.upload.label')}
         </label>
         <div className="relative">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             {uploadedImages.map((image, index) => (
-              <div key={index} className="group relative aspect-[4/3] rounded-2xl overflow-hidden border border-orange-400/40 bg-white/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-orange-400/50">
+              <div key={index} className="group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl overflow-hidden border border-orange-400/40 bg-white/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-orange-400/50">
                 <Image
                   src={`data:image/jpeg;base64,${image}`}
                   alt={`Uploaded reference ${index + 1}`}
@@ -413,7 +401,7 @@ export default function GenerateForm({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`group relative aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-4 ${
+              className={`group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 ${
                 canUploadMore 
                   ? (isDragging 
                       ? 'border-orange-500 bg-gradient-to-br from-orange-100/20 to-amber-100/20 shadow-lg shadow-orange-400/20' 
@@ -431,7 +419,7 @@ export default function GenerateForm({
               />
               <div className={`flex flex-col items-center justify-center h-full space-y-2 ${canUploadMore ? 'group-hover:scale-105 transition-transform duration-300' : ''}`}>
                 <div className={`relative ${canUploadMore ? 'group-hover:animate-pulse' : ''}`}>
-                  <svg className={`w-6 h-6 ${canUploadMore ? 'text-orange-500/70 group-hover:text-orange-400' : 'text-orange-300/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-5 h-5 ${canUploadMore ? 'text-orange-500/70 group-hover:text-orange-400' : 'text-orange-300/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   {canUploadMore && (
@@ -441,16 +429,16 @@ export default function GenerateForm({
                 <div className="text-center">
                   {canUploadMore ? (
                     <div className="space-y-1">
-                      <p className="text-gray-900/90 font-medium text-sm group-hover:text-gray-900 transition-colors leading-tight">
+                      <p className="text-gray-900/90 font-medium text-xs sm:text-sm group-hover:text-gray-900 transition-colors leading-tight">
                         {t('form.upload.clickOrDrag')}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <p className="text-orange-400/80 font-medium text-sm leading-tight">
+                      <p className="text-orange-400/80 font-medium text-xs sm:text-sm leading-tight">
                         {t('form.upload.limitReached')}
                       </p>
-                      <p className="text-orange-500/60 text-xs leading-tight">
+                      <p className="text-orange-500/60 text-[11px] sm:text-xs leading-tight">
                         {t('form.upload.maxImages', { maxImages })}
                       </p>
                     </div>
@@ -460,7 +448,7 @@ export default function GenerateForm({
               {/* 拖拽时的视觉反馈 */}
               {isDragging && canUploadMore && (
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-100/30 to-amber-100/30 rounded-2xl flex items-center justify-center">
-                  <div className="text-gray-900 font-semibold text-lg">{t('form.upload.dropToUpload')}</div>
+                  <div className="px-2 text-center text-gray-900 font-semibold text-xs sm:text-sm">{t('form.upload.dropToUpload')}</div>
                 </div>
               )}
             </div>
@@ -608,6 +596,35 @@ export default function GenerateForm({
 
   // 根据上传图片数量过滤可用模型
   const filteredModels: ModelWithAvailability[] = filterModelsByImageCount(uploadedImages.length, availableModels);
+  const qualityThresholds = getModelThresholds(model)
+  const supportsHighSteps = supportsStepsModification(model)
+  const supportsHighResolutionOption = supportsResolutionModification(model)
+  const normalSteps = qualityThresholds.normalSteps || 10
+  const highSteps = qualityThresholds.highSteps || 20
+  const normalPixels = qualityThresholds.normalResolutionPixels || 1024 * 1024
+  const highPixels = qualityThresholds.highResolutionPixels || 1416 * 1416
+  const isHighStepsEnabled = supportsHighSteps ? steps >= highSteps : false
+  const isHighQualityEnabled =
+    (supportsHighSteps ? isHighStepsEnabled : true) &&
+    (supportsHighResolutionOption ? isHighResolution : true) &&
+    (supportsHighSteps || supportsHighResolutionOption)
+
+  const handleHighQualityToggle = () => {
+    const enableHighQuality = !isHighQualityEnabled
+
+    if (supportsHighSteps) {
+      setSteps(enableHighQuality ? highSteps : normalSteps)
+    }
+
+    if (supportsHighResolutionOption) {
+      setIsHighResolution(enableHighQuality)
+
+      const targetArea = enableHighQuality ? highPixels : normalPixels
+      const { width: newWidth, height: newHeight } = getDimensionsByPixels(targetArea, aspectRatio)
+      setWidth(newWidth)
+      setHeight(newHeight)
+    }
+  }
 
   // 跟踪初始模型（用于判断是否是从URL传入的）
   const initialModelRef = useRef<string | null>(null)
@@ -739,16 +756,20 @@ export default function GenerateForm({
   }, [generatedImageToSetAsReference, setWidth, setHeight, setUploadedImages]);
 
   return (
-    <div className="relative bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl lg:p-6 p-3 border border-orange-400/40 flex flex-col">
-      <div className="absolute inset-0 bg-gradient-to-br from-orange-100/10 to-amber-100/10 rounded-3xl"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(249,115,22,0.1),rgba(255,255,255,0))] shadow-orange-400/20 rounded-3xl"></div>
-      <form onSubmit={handleSubmit} className="space-y-8 relative flex flex-col">
-        <div className="space-y-8">
+    <div className={embedded ? 'space-y-6' : 'relative bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl lg:p-6 p-3 border border-orange-400/40 flex flex-col'}>
+      {!embedded && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-100/10 to-amber-100/10 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(249,115,22,0.1),rgba(255,255,255,0))] shadow-orange-400/20 rounded-3xl"></div>
+        </>
+      )}
+      <div className={`${embedded ? '' : 'relative '}space-y-6 flex flex-col`}>
+        <div className="space-y-6">
           {/* 上传图片区域（仅支持图生图模型时显示） */}
           {renderImageUploadSection()}
 
           {/* 模型选择区域 */}
-          <div className="border-t border-orange-400/40 pt-8">
+          <div className="pt-1">
             <div>
               <label htmlFor="model" className="flex items-center text-sm font-medium text-gray-900 mb-3">
                 <img src="/form/models.svg" alt="Model" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
@@ -762,43 +783,21 @@ export default function GenerateForm({
                       setIsModelDropdownOpen(!isModelDropdownOpen)
                     }
                   }}
-                  className={`w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-3 text-left text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 flex items-center justify-between ${
+                  className={`w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-2.5 text-left text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 flex items-center justify-between ${
                     !filteredModels.find(m => m.id === model)?.isAvailable || isGenerating ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   disabled={status === 'loading' || isGenerating}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="w-12 h-6 rounded overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-6 rounded overflow-hidden flex-shrink-0">
                       <img 
                         src={filteredModels.find(m => m.id === model)?.image} 
                         alt={model} 
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex flex-col">
-                      <span>{model}</span>
-                      {(() => {
-                        const currentModel = filteredModels.find(m => m.id === model);
-                        return (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {currentModel?.use_t2i && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-600/40 to-cyan-600/40 text-cyan-900 border border-cyan-500/50">
-                                {t('form.model.tags.textToImage')}
-                              </span>
-                            )}
-                            {currentModel?.use_i2i && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600/40 to-pink-600/40 text-pink-900 border border-pink-500/50">
-                                {t('form.model.tags.imageToImage')}
-                              </span>
-                            )}
-                            {currentModel?.tags && currentModel.tags.map((tag: string) => (
-                              <span key={tag} className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getTagStyle(tag)}`}>
-                                {t(`form.model.tags.${tag}`)}
-                              </span>
-                            ))}
-                          </div>
-                        );
-                      })()}
+                    <div className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{model}</span>
                     </div>
                   </div>
                   <svg
@@ -912,183 +911,95 @@ export default function GenerateForm({
                   </div>
                 )}
               </div>
-              <p className="mt-2 text-sm text-gray-600/80">{t('form.model.hint')}</p>
             </div>
           </div>
 
           {/* 高级设置区域 */}
-          <div className="border-t border-orange-400/40 pt-8">
-            <button
-              type="button"
-              onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              {isAdvancedOpen ? t('form.advanced.collapse') : t('form.advanced.expand')}
-              <svg
-                className={`ml-2 h-5 w-5 transform transition-transform duration-300 ${isAdvancedOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {isAdvancedOpen && (
-              <div className="mt-6 space-y-6">
-                {/* 宽高输入表单已隐藏，宽高由比例决定 */}
-
-
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* 步数开关 - 根据模型配置显示/隐藏 */}
-                  {supportsStepsModification(model) && (() => {
-                    const thresholds = getModelThresholds(model);
-                    const isHighSteps = steps >= (thresholds.highSteps || 20);
-                    const normalSteps = thresholds.normalSteps || 10;
-                    const highSteps = thresholds.highSteps || 20;
-                    
-                    return (
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="flex items-center text-sm font-medium text-gray-900">
-                            <img src="/form/steps.svg" alt="Steps" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
-                            启用高步数
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSteps(isHighSteps ? normalSteps : highSteps);
-                            }}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 ${
-                              isHighSteps ? 'bg-amber-500' : 'bg-gray-300'
-                            }`}
-                            disabled={status === 'loading' || isGenerating}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                isHighSteps ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-sm text-gray-600/80">
-                          {isHighSteps ? '使用高步数生成，质量更高但消耗更多积分' : '使用普通步数生成，平衡速度与质量'}
-                        </p>
-                        {stepsError && (
-                          <p className="mt-1 text-sm text-red-400">{stepsError}</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* 分辨率开关 - 根据模型配置显示/隐藏 */}
-                  {supportsResolutionModification(model) && (() => {
-                    const thresholds = getModelThresholds(model);
-                    const normalPixels = thresholds.normalResolutionPixels || 1024 * 1024;
-                    const highPixels = thresholds.highResolutionPixels || 1416 * 1416;
-                    const normalSize = Math.sqrt(normalPixels);
-                    const highSize = Math.sqrt(highPixels);
-                    
-                    return (
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="flex items-center text-sm font-medium text-gray-900">
-                            <img src="/form/steps.svg" alt="Resolution" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
-                            启用高分辨率
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // 切换高分辨率开关状态
-                              const newIsHighResolution = !isHighResolution;
-                              setIsHighResolution(newIsHighResolution);
-                              
-                              const targetArea = newIsHighResolution ? highPixels : normalPixels;
-                              const { width: newWidth, height: newHeight } = getDimensionsByPixels(targetArea, aspectRatio);
-
-                              setWidth(newWidth);
-                              setHeight(newHeight);
-                            }}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 ${
-                              isHighResolution ? 'bg-amber-500' : 'bg-gray-300'
-                            }`}
-                            disabled={status === 'loading' || isGenerating}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                isHighResolution ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-sm text-gray-600/80">
-                          {isHighResolution 
-                            ? `高分辨率 ${Math.round(highSize)}×${Math.round(highSize)} 像素，画质更精细但消耗更多积分`
-                            : `普通分辨率 ${Math.round(normalSize)}×${Math.round(normalSize)} 像素，平衡速度与画质`}
-                        </p>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 生成数量调节 - 仅登录用户可见 */}
-                  {status === 'authenticated' && (
-                    <div>
-                      <label htmlFor="batch_size" className="flex items-center text-sm font-medium text-gray-900 mb-3">
-                        <img src="/form/generation-number.svg" alt="Batch Size" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
-                        {t('form.batch_size.label')}
+          <div className="pt-1">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {(supportsHighSteps || supportsHighResolutionOption) && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="flex items-center text-sm font-medium text-gray-900">
+                        <img src="/form/steps.svg" alt="Quality" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
+                        启用高质量
                       </label>
-                      <div className="relative flex items-center bg-white/50 backdrop-blur-sm border border-amber-400/40 rounded-xl focus-within:ring-2 focus-within:ring-amber-400/50 focus-within:border-amber-400/50 shadow-inner transition-all duration-300">
-                        <input
-                          type="number"
-                          id="batch_size"
-                          value={batch_size}
-                          onChange={(e) => setBatchSize(Number(e.target.value))}
-                          className="w-full bg-transparent text-center text-gray-900 border-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          min="1"
-                          max="2"
-                          disabled={isGenerating}
-                          ref={batchSizeRef}
+                      <button
+                        type="button"
+                        onClick={handleHighQualityToggle}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 ${
+                          isHighQualityEnabled ? 'bg-amber-500' : 'bg-gray-300'
+                        }`}
+                        disabled={status === 'loading' || isGenerating}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isHighQualityEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`}
                         />
-                        <div className="flex items-center border-l border-orange-400/30">
-                          <button
-                            type="button"
-                            onClick={() => setBatchSize(Math.max(1, batch_size - 1))}
-                            className="px-3 text-gray-700 hover:text-gray-900 disabled:opacity-50 h-full flex items-center justify-center transition-colors"
-                            disabled={isGenerating || batch_size <= 1}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBatchSize(Math.min(2, batch_size + 1))}
-                            className="px-3 text-gray-700 hover:text-gray-900 disabled:opacity-50 h-full flex items-center justify-center transition-colors"
-                            disabled={isGenerating || batch_size >= 2}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-sm text-gray-600/80">{t('form.batch_size.hint')}</p>
-                      {batchSizeError && (
-                        <p className="mt-1 text-sm text-red-400">{batchSizeError}</p>
-                      )}
+                      </button>
                     </div>
-                  )}
-                </div>
+                    <p className="text-sm text-gray-600/80">
+                      提供更高的生成质量，但也会花费少许积分
+                    </p>
+                    {stepsError && (
+                      <p className="mt-1 text-sm text-red-400">{stepsError}</p>
+                    )}
+                  </div>
+                )}
 
-                {/* Denoising strength input removed as requested */}
+                {/* 生成数量调节 - 仅登录用户可见 */}
+                {status === 'authenticated' && (
+                  <div>
+                    <label htmlFor="batch_size" className="flex items-center text-sm font-medium text-gray-900 mb-3">
+                      <img src="/form/generation-number.svg" alt="Batch Size" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
+                      {t('form.batch_size.label')}
+                    </label>
+                    <div className="relative flex items-center bg-white/50 backdrop-blur-sm border border-amber-400/40 rounded-xl focus-within:ring-2 focus-within:ring-amber-400/50 focus-within:border-amber-400/50 shadow-inner transition-all duration-300">
+                      <input
+                        type="number"
+                        id="batch_size"
+                        value={batch_size}
+                        onChange={(e) => setBatchSize(Number(e.target.value))}
+                        className="w-full bg-transparent text-center text-gray-900 border-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        min="1"
+                        max="2"
+                        disabled={isGenerating}
+                        ref={batchSizeRef}
+                      />
+                      <div className="flex items-center border-l border-orange-400/30">
+                        <button
+                          type="button"
+                          onClick={() => setBatchSize(Math.max(1, batch_size - 1))}
+                          className="px-3 text-gray-700 hover:text-gray-900 disabled:opacity-50 h-full flex items-center justify-center transition-colors"
+                          disabled={isGenerating || batch_size <= 1}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchSize(Math.min(2, batch_size + 1))}
+                          className="px-3 text-gray-700 hover:text-gray-900 disabled:opacity-50 h-full flex items-center justify-center transition-colors"
+                          disabled={isGenerating || batch_size >= 2}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600/80">{t('form.batch_size.hint')}</p>
+                    {batchSizeError && (
+                      <p className="mt-1 text-sm text-red-400">{batchSizeError}</p>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
-
-        <div className="flex justify-between items-center">
-          {/* Generate button removed for external placement */}
         </div>
 
         {isGenerating && !isQueuing && (
@@ -1112,7 +1023,7 @@ export default function GenerateForm({
             </div>
           </div>
         )}
-      </form>
+      </div>
       {toast && (
         <Toast
           message={toast.message}

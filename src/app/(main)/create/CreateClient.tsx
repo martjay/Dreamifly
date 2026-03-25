@@ -62,19 +62,7 @@ export default function CreateClient() {
       return
     }
     
-    // 未登录用户直接使用默认图片，不请求API
-    if (!session?.user) {
-      setCommunityWorks((community as any[]).map((work: any) => ({
-        ...work,
-        model: '默认',
-        userAvatar: '/images/default-avatar.svg',
-        userNickname: '默认',
-        avatarFrameId: null,
-      })))
-      return
-    }
-
-    // 已登录用户才请求API
+    // 游客也展示真实社区图片
     const fetchCommunityImages = async () => {
       try {
         const response = await fetch('/api/community/images')
