@@ -42,40 +42,10 @@ export default function PricingPage() {
   const [, setSelectedPackage] = useState<number | null>(null)
   const [payingPlanId, setPayingPlanId] = useState<number | null>(null)
   const [payingPackageId, setPayingPackageId] = useState<number | null>(null)
-  const comparisonRef = useRef<HTMLDivElement | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isCreatingOrder = payingPlanId !== null || payingPackageId !== null
-
-  const highlightPills = [
-    {
-      title: t('highlights.instant'),
-      desc: t('highlights.instantDesc'),
-      accent: 'from-orange-400/90 to-amber-400/90',
-    },
-    {
-      title: t('highlights.flexible'),
-      desc: t('highlights.flexibleDesc'),
-      accent: 'from-amber-400/90 to-yellow-400/90',
-    },
-    {
-      title: t('highlights.aesthetic'),
-      desc: t('highlights.aestheticDesc'),
-      accent: 'from-orange-500/80 to-pink-500/80',
-    },
-    {
-      title: t('highlights.commercialSafe'),
-      desc: t('highlights.commercialSafeDesc'),
-      accent: 'from-emerald-400/80 to-teal-400/80',
-    },
-  ]
-
-  const statBlocks = [
-    { value: t('stats.value1.value'), label: t('stats.value1.label') },
-    { value: t('stats.value2.value'), label: t('stats.value2.label') },
-    { value: t('stats.value3.value'), label: t('stats.value3.label') },
-  ]
 
   const comparisonFeatures = [
     {
@@ -271,17 +241,6 @@ export default function PricingPage() {
     }
   }
 
-  const scrollToTabs = (tab: 'subscription' | 'points') => {
-    setActiveTab(tab)
-    requestAnimationFrame(() => {
-      tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
-
-  const scrollToComparison = () => {
-    scrollToTabs('subscription')
-  }
-
   const getBillingLabel = (planType: string) => {
     if (planType === 'monthly') return t('perMonth')
     if (planType === 'yearly') return t('perYear')
@@ -326,118 +285,9 @@ export default function PricingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,183,94,0.15),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(253,164,175,0.12),transparent_30%)]" />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 lg:px-8 py-12 lg:py-16 space-y-12">
-        <section className="relative overflow-hidden rounded-[32px] border border-orange-100/80 bg-white/80 shadow-[0_30px_80px_-40px_rgba(255,115,29,0.35)] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-50/90 via-white to-amber-50/70" />
-          <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-orange-300/30 to-amber-200/30 blur-3xl" />
-          <div className="absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-orange-400/15 blur-3xl" />
-
-          <div className="relative grid gap-10 items-center p-8 lg:p-12 lg:grid-cols-[1.1fr,0.9fr]">
-            <div className="space-y-7">
-              <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-orange-50/90 px-4 py-2 text-sm font-medium text-orange-700 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-orange-500" />
-                {t('heroLabel')}
-              </div>
-
-              <div className="space-y-4">
-                <h1 className="text-4xl md:text-5xl font-bold leading-tight text-gray-900 tracking-tight">
-                  {t('heroTitle')}
-                </h1>
-                <p className="text-lg text-gray-600 max-w-2xl leading-relaxed">
-                  {t('heroSubtitle')}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={scrollToComparison}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 via-orange-400 to-amber-400 px-6 py-3 text-white font-semibold shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:shadow-xl"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2.003 5.884 10 1l7.997 4.884v8.232L10 19l-7.997-4.884V5.884z" />
-                  </svg>
-                  {t('heroCtaSubscribe')}
-                </button>
-                <button
-                  onClick={() => scrollToTabs('points')}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/80 px-6 py-3 text-orange-700 font-semibold shadow-sm backdrop-blur transition hover:border-orange-300 hover:-translate-y-0.5"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm.75 4a.75.75 0 10-1.5 0v2.25H7a.75.75 0 100 1.5h2.25V12a.75.75 0 101.5 0V9.75H13a.75.75 0 100-1.5h-2.25V6z" />
-                  </svg>
-                  {t('heroCtaPoints')}
-                </button>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {highlightPills.map((item) => (
-                  <div
-                    key={item.title}
-                    className="group relative overflow-hidden rounded-2xl border border-orange-100/70 bg-white/80 p-4 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-xl"
-                  >
-                    <div className={`absolute inset-0 bg-gradient-to-r ${item.accent} opacity-10`} />
-                    <div className="relative space-y-2">
-                      <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700">
-                        <span className="h-2 w-2 rounded-full bg-orange-400" />
-                        {item.title}
-                      </div>
-                      <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-orange-100/60 via-white to-amber-100/50 blur-xl" />
-              <div className="relative space-y-5 rounded-3xl border border-orange-100/80 bg-white/80 p-6 shadow-lg backdrop-blur-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-orange-600 uppercase tracking-wide">{t('title')}</span>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                    <span className="h-2 w-2 rounded-full bg-orange-400" />
-                    {t('viewBenefits')}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {statBlocks.map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="flex items-center justify-between rounded-2xl border border-orange-100/80 bg-white/70 px-4 py-3 shadow-sm"
-                    >
-                      <div className="text-sm text-gray-500">{stat.label}</div>
-                      <div className="text-xl font-bold text-gray-900">{stat.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/80 p-4 shadow-inner space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className="h-10 w-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-white flex items-center justify-center shadow-md">
-                      <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M2.003 5.884 10 1l7.997 4.884v8.232L10 19l-7.997-4.884V5.884z" />
-                      </svg>
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{t('heroCtaSubscribe')}</p>
-                      <p className="text-xs text-gray-500">{t('subtitle')}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
-                    {highlightPills.map((pill) => (
-                      <div key={pill.title} className="flex items-center gap-1 rounded-lg bg-white/70 px-2 py-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
-                        <span className="truncate">{pill.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div ref={tabsRef} className="flex justify-center">
+      <div className="relative z-10 w-full lg:pl-40">
+        <div className="mx-auto max-w-6xl px-4 lg:px-8 py-12 lg:py-16 space-y-10">
+          <div ref={tabsRef} className="mt-4 md:mt-0 flex justify-center">
           <div className="inline-flex rounded-full border border-orange-100 bg-white/90 p-1 shadow-sm backdrop-blur">
             <button
               onClick={() => setActiveTab('subscription')}
@@ -460,11 +310,11 @@ export default function PricingPage() {
               {t('pointsTab')}
             </button>
           </div>
-        </div>
+          </div>
 
-        {activeTab === 'subscription' && (
-          <div className="space-y-10" id="subscription">
-            <div className="grid gap-6 sm:grid-cols-2">
+          {activeTab === 'subscription' && (
+            <div className="space-y-10" id="subscription">
+            <div className="mx-auto grid max-w-4xl gap-6 sm:grid-cols-2">
               {subscriptionPlans.length === 0 && (
                 <div className="sm:col-span-2 rounded-2xl border border-dashed border-gray-200 bg-white/80 p-10 text-center shadow-sm">
                   <p className="text-lg font-semibold text-gray-900">{t('subscriptionEmptyTitle')}</p>
@@ -599,9 +449,8 @@ export default function PricingPage() {
             </div>
 
             <div
-              ref={comparisonRef}
               id="membership-comparison"
-              className="space-y-5 rounded-3xl border border-orange-100/80 bg-white/80 p-6 shadow-lg backdrop-blur"
+              className="mx-auto max-w-4xl space-y-5 rounded-3xl border border-orange-100/80 bg-white/80 p-6 shadow-lg backdrop-blur"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -643,11 +492,11 @@ export default function PricingPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        {activeTab === 'points' && (
-          <div className="space-y-8">
+          {activeTab === 'points' && (
+            <div className="space-y-8">
             <div className="overflow-hidden rounded-2xl border border-orange-100/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6 shadow-lg">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -746,11 +595,12 @@ export default function PricingPage() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        <div className="pt-4 text-center text-sm text-gray-500">
-          {t('notice')}
+          <div className="pt-4 text-center text-sm text-gray-500">
+            {t('notice')}
+          </div>
         </div>
       </div>
     </div>
