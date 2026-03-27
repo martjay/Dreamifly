@@ -30,5 +30,10 @@ type AuthWithPasswordReset = typeof authClient & {
 }
 
 const withPasswordReset = authClient as AuthWithPasswordReset
-export const forgetPassword = withPasswordReset.forgetPassword.bind(withPasswordReset)
-export const resetPassword = withPasswordReset.resetPassword.bind(withPasswordReset)
+
+// 避免直接 bind Proxy 上的动态属性，防止触发异常的 fetch method 解析
+export const forgetPassword = (input: { email: string; redirectTo?: string }) =>
+  withPasswordReset.forgetPassword(input)
+
+export const resetPassword = (input: { token: string; newPassword: string }) =>
+  withPasswordReset.resetPassword(input)
