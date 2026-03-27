@@ -17,7 +17,6 @@ import GrokVideoPlazaCard from '@/components/GrokVideoPlazaCard'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
-import { useSession } from '@/lib/auth-client'
 
 interface FAQItem {
   q: string;
@@ -32,7 +31,6 @@ export default function HomeClient() {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const router = useRouter()
   const faqQuestions = msg<FAQItem[]>('home.faq.questions')
-  const { data: session } = useSession()
   // 先使用所有模型和工作流，然后异步更新为可用的
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([])
   const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowConfig[]>([])
@@ -210,7 +208,7 @@ export default function HomeClient() {
     }
 
     fetchCommunityImages()
-  }, [session?.user])
+  }, [])
 
   const navigateToCreate = (promptText?: string, modelId?: string) => {
     const params = new URLSearchParams()
