@@ -30,6 +30,15 @@ interface PointsPackage {
   isActive: boolean
 }
 
+type PricingTab = 'subscription' | 'points'
+
+type SubscriptionPlanGroup = {
+  key: string
+  displayName: string
+  monthlyPlan?: SubscriptionPlan
+  quarterlyPlan?: SubscriptionPlan
+}
+
 export default function PricingPage() {
   const t = createScopedT('pricing')
   const { data: session } = useSession()
@@ -37,60 +46,15 @@ export default function PricingPage() {
   const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([])
   const [pointsPackages, setPointsPackages] = useState<PointsPackage[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'subscription' | 'points'>('subscription')
+  const [activeTab, setActiveTab] = useState<PricingTab>('subscription')
+  const [expandedPlans, setExpandedPlans] = useState<Record<number, boolean>>({})
   const [, setSelectedPlan] = useState<number | null>(null)
   const [, setSelectedPackage] = useState<number | null>(null)
   const [payingPlanId, setPayingPlanId] = useState<number | null>(null)
   const [payingPackageId, setPayingPackageId] = useState<number | null>(null)
-  const tabsRef = useRef<HTMLDivElement | null>(null)
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isCreatingOrder = payingPlanId !== null || payingPackageId !== null
-
-  const comparisonFeatures = [
-    {
-      key: 'bonusPoints',
-      name: t('comparison.features.bonusPoints.name'),
-      member: t('comparison.features.bonusPoints.member'),
-      registered: t('comparison.features.bonusPoints.registered'),
-      guest: t('comparison.features.bonusPoints.guest'),
-    },
-    {
-      key: 'dailyPoints',
-      name: t('comparison.features.dailyPoints.name'),
-      member: t('comparison.features.dailyPoints.member'),
-      registered: t('comparison.features.dailyPoints.registered'),
-      guest: t('comparison.features.dailyPoints.guest'),
-    },
-    {
-      key: 'watermark',
-      name: t('comparison.features.watermark.name'),
-      member: t('comparison.features.watermark.member'),
-      registered: t('comparison.features.watermark.registered'),
-      guest: t('comparison.features.watermark.guest'),
-    },
-    {
-      key: 'adFree',
-      name: t('comparison.features.adFree.name'),
-      member: t('comparison.features.adFree.member'),
-      registered: t('comparison.features.adFree.registered'),
-      guest: t('comparison.features.adFree.guest'),
-    },
-    {
-      key: 'speed',
-      name: t('comparison.features.speed.name'),
-      member: t('comparison.features.speed.member'),
-      registered: t('comparison.features.speed.registered'),
-      guest: t('comparison.features.speed.guest'),
-    },
-    {
-      key: 'privacy',
-      name: t('comparison.features.privacy.name'),
-      member: t('comparison.features.privacy.member'),
-      registered: t('comparison.features.privacy.registered'),
-      guest: t('comparison.features.privacy.guest'),
-    },
-  ]
 
   // 获取套餐数据
   useEffect(() => {
@@ -248,6 +212,70 @@ export default function PricingPage() {
     return ''
   }
 
+  const getPlanFeatures = (plan: SubscriptionPlan) => {
+    if (plan.features && plan.features.length > 0) {
+      return plan.features
+    }
+
+    if (plan.type === 'yearly') {
+      return ['无生成水印', '高峰期优先队列', '每日签到高倍积分']
+    }
+
+    if (plan.type === 'monthly' || plan.type === 'quarterly') {
+      return ['无生成水印', '极速生成', '创作权益升级']
+    }
+
+    return []
+  }
+
+  const getNormalizedPlanGroupName = (name: string) => {
+    const normalized = name
+      .replace(/\s+/g, '')
+      .replace(/月度|季度|年度|月付|季付|年付|月卡|季卡|年卡|月版|季版|年版/g, '')
+      .trim()
+
+    return normalized || name
+  }
+
+  const getCombinedPlanFeatures = (
+    monthlyPlan?: SubscriptionPlan,
+    quarterlyPlan?: SubscriptionPlan
+  ) => {
+    const availablePlans = [monthlyPlan, quarterlyPlan].filter(
+      (plan): plan is SubscriptionPlan => Boolean(plan)
+    )
+
+    if (availablePlans.length === 0) {
+      return []
+    }
+
+    const featureSource = [...availablePlans].sort(
+      (a, b) => getPlanFeatures(b).length - getPlanFeatures(a).length
+    )[0]
+
+    const combinedPointsText = `立即获得积分（${availablePlans
+      .map((plan) => `${plan.type === 'monthly' ? '月度' : '季度'}${plan.bonusPoints}积分`)
+      .join('/')}）`
+
+    const features = getPlanFeatures(featureSource)
+    const bonusFeatureIndex = features.findIndex(
+      (feature) => feature.includes('积分') && (feature.includes('立即') || feature.includes('赠送'))
+    )
+
+    if (bonusFeatureIndex === -1) {
+      return [combinedPointsText, ...features]
+    }
+
+    return features.map((feature, index) => (index === bonusFeatureIndex ? combinedPointsText : feature))
+  }
+
+  const togglePlanFeatures = (planId: number) => {
+    setExpandedPlans((prev) => ({
+      ...prev,
+      [planId]: !prev[planId],
+    }))
+  }
+
   const handleSubscribe = async (planId: number) => {
     if (!session?.user) {
       // 提示登录
@@ -269,340 +297,452 @@ export default function PricingPage() {
     await startPayment({ orderType: 'points', productId: packageId })
   }
 
+  const subscriptionPlanGroupsMap = new Map<string, SubscriptionPlanGroup>()
+  const standaloneSubscriptionPlans: SubscriptionPlan[] = []
+
+  subscriptionPlans.forEach((plan) => {
+    if (plan.type === 'monthly' || plan.type === 'quarterly') {
+      const groupKey = getNormalizedPlanGroupName(plan.name)
+      const group = subscriptionPlanGroupsMap.get(groupKey) ?? {
+        key: groupKey,
+        displayName: getNormalizedPlanGroupName(plan.name),
+      }
+
+      if (plan.type === 'monthly') {
+        group.monthlyPlan = plan
+      } else {
+        group.quarterlyPlan = plan
+      }
+
+      subscriptionPlanGroupsMap.set(groupKey, group)
+      return
+    }
+
+    standaloneSubscriptionPlans.push(plan)
+  })
+
+  const subscriptionPlanGroups = Array.from(subscriptionPlanGroupsMap.values())
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-400"></div>
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-orange-100 border-t-orange-400" />
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#fff7ed] via-white to-orange-50/60">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -left-32 -top-10 h-80 w-80 rounded-full bg-orange-200/30 blur-3xl" />
-        <div className="absolute right-0 top-20 h-72 w-72 rounded-full bg-amber-100/50 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,183,94,0.15),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(253,164,175,0.12),transparent_30%)]" />
-      </div>
-
-      <div className="relative z-10 w-full lg:pl-40">
-        <div className="mx-auto max-w-6xl px-4 lg:px-8 py-12 lg:py-16 space-y-10">
-          <div ref={tabsRef} className="mt-4 md:mt-0 flex justify-center">
-          <div className="inline-flex rounded-full border border-orange-100 bg-white/90 p-1 shadow-sm backdrop-blur">
+    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <section className="bg-[#f5f5f7]">
+        <div className="mx-auto max-w-[1200px] px-4 pb-12 pt-20 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
+          <div className="mb-8 flex justify-center">
+            <div className="inline-flex rounded-full bg-white p-1 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
             <button
               onClick={() => setActiveTab('subscription')}
-              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition ${
+              className={`rounded-full px-4 py-2 text-sm transition sm:px-5 ${
                 activeTab === 'subscription'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-md'
-                  : 'text-gray-700 hover:text-orange-600'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-[#424245] hover:text-[#1d1d1f]'
               }`}
             >
               {t('subscriptionTab')}
             </button>
             <button
               onClick={() => setActiveTab('points')}
-              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition ${
+              className={`rounded-full px-4 py-2 text-sm transition sm:px-5 ${
                 activeTab === 'points'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-md'
-                  : 'text-gray-700 hover:text-orange-600'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-[#424245] hover:text-[#1d1d1f]'
               }`}
             >
               {t('pointsTab')}
             </button>
-          </div>
+            </div>
           </div>
 
           {activeTab === 'subscription' && (
             <div className="space-y-10" id="subscription">
-            <div className="mx-auto grid max-w-4xl gap-6 sm:grid-cols-2">
-              {subscriptionPlans.length === 0 && (
-                <div className="sm:col-span-2 rounded-2xl border border-dashed border-gray-200 bg-white/80 p-10 text-center shadow-sm">
-                  <p className="text-lg font-semibold text-gray-900">{t('subscriptionEmptyTitle')}</p>
-                  <p className="mt-2 text-sm text-gray-500">{t('subscriptionEmptyDesc')}</p>
-                </div>
-              )}
-
-              {subscriptionPlans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className={`relative overflow-hidden rounded-2xl border transition-all shadow-md hover:-translate-y-1 hover:shadow-2xl ${
-                    plan.type === 'yearly'
-                      ? 'border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50'
-                      : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  {plan.type === 'yearly' && (
-                    <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-orange-700 shadow">
-                      <span className="h-2 w-2 rounded-full bg-orange-500" />
-                      {t('recommended')}
-                    </div>
-                  )}
-
-                  <div className="p-6 space-y-5">
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
-                      <p className="text-sm text-gray-500">{plan.description}</p>
-                    </div>
-
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-4xl font-bold text-gray-900">¥{plan.price}</span>
-                      {plan.originalPrice && (
-                        <span className="text-sm text-gray-400 line-through">¥{plan.originalPrice}</span>
-                      )}
-                      <span className="text-sm text-gray-500">{getBillingLabel(plan.type)}</span>
-                    </div>
-
-                    <div className="rounded-xl bg-white/85 p-4 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-inner">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                        <div>
-                          {(() => {
-                            // 计算30天签到积分：基础积分20 * 倍数 * 30天
-                            const baseDailyPoints = 20; // 基础每日积分
-                            const dailyCheckinPoints = Math.round(baseDailyPoints * plan.dailyPointsMultiplier * 30);
-                            const totalPoints = plan.bonusPoints + dailyCheckinPoints;
-                            
-                            // 获取倍数文本
-                            let multiplierText = '';
-                            if (plan.dailyPointsMultiplier === 5) {
-                              multiplierText = t('multiplierFive');
-                            } else if (plan.dailyPointsMultiplier === 2) {
-                              multiplierText = t('multiplierDouble');
-                            } else {
-                              multiplierText = t('multiplierN', { n: plan.dailyPointsMultiplier });
-                            }
-                            
-                            return (
-                              <>
-                                <p className="font-semibold text-orange-700">
-                                  {t('bonusPoints', { points: plan.bonusPoints })}
-                                  {t('totalPoints', { total: totalPoints })}
-                                </p>
-                                <p className="text-sm text-orange-600">
-                                  {t('dailyMultiplier', { multiplier: multiplierText })}
-                                </p>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-
-                    <ul className="space-y-3">
-                      {(plan.features && plan.features.length > 0
-                        ? plan.features
-                        : plan.type === 'monthly' || plan.type === 'quarterly'
-                          ? ['无生成水印', '极速生成']
-                          : []
-                      ).map((feature, index) => (
-                        <li key={index} className="flex items-center gap-3 text-sm text-gray-700">
-                          <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <button
-                      onClick={() => handleSubscribe(plan.id)}
-                      disabled={isCreatingOrder}
-                      aria-busy={payingPlanId === plan.id}
-                      className={`w-full rounded-xl py-3 text-sm font-semibold transition ${
-                        plan.type === 'yearly'
-                          ? 'bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-lg hover:shadow-xl'
-                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      } ${isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''}`}
-                    >
-                      {payingPlanId === plan.id ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          请稍后…
-                        </span>
-                      ) : (
-                        t('subscribe')
-                      )}
-                    </button>
+              <div className="grid gap-5 lg:grid-cols-2">
+                {subscriptionPlanGroups.length === 0 && standaloneSubscriptionPlans.length === 0 && (
+                  <div className="rounded-[32px] bg-white p-10 text-center shadow-[0_10px_30px_rgba(0,0,0,0.06)] lg:col-span-3">
+                    <p className="text-xl font-semibold text-[#1d1d1f]">{t('subscriptionEmptyTitle')}</p>
+                    <p className="mt-2 text-sm text-[#6e6e73]">{t('subscriptionEmptyDesc')}</p>
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
 
-            <div
-              id="membership-comparison"
-              className="mx-auto max-w-4xl space-y-5 rounded-3xl border border-orange-100/80 bg-white/80 p-6 shadow-lg backdrop-blur"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-lg font-bold text-gray-900">{t('comparison.title')}</p>
-                  <p className="text-sm text-gray-600">{t('comparison.subtitle')}</p>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-50 to-amber-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                  <span className="h-2 w-2 rounded-full bg-orange-400" />
-                  {t('heroCtaSubscribe')}
-                </div>
-              </div>
+                {subscriptionPlanGroups.map((group) => {
+                  const features = getCombinedPlanFeatures(group.monthlyPlan, group.quarterlyPlan)
+                  const expandedKey = group.monthlyPlan?.id ?? group.quarterlyPlan?.id ?? 0
+                  const isExpanded = Boolean(expandedPlans[expandedKey])
+                  const visibleFeatures = isExpanded ? features : features.slice(0, 2)
+                  const hiddenFeatures = isExpanded ? [] : features.slice(2)
 
-              <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white/80 shadow-inner">
-                <div className="grid grid-cols-4 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-orange-700">
-                  <div>{t('comparison.feature')}</div>
-                  <div className="text-center">{t('comparison.member')}</div>
-                  <div className="text-center">{t('comparison.registered')}</div>
-                  <div className="text-center">{t('comparison.guest')}</div>
-                </div>
+                  return (
+                    <div
+                      key={group.key}
+                      className="relative overflow-hidden rounded-[32px] bg-white p-6 text-[#1d1d1f] shadow-[0_10px_30px_rgba(0,0,0,0.06)] sm:p-7"
+                    >
+                      <div className="flex min-h-full flex-col">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.03em] text-[#1d1d1f]">
+                              {group.displayName}
+                            </h3>
+                          </div>
+                        </div>
 
-                <div className="divide-y divide-orange-50">
-                  {comparisonFeatures.map((feature) => (
-                    <div key={feature.key} className="grid grid-cols-4 items-center px-4 py-3 text-sm text-gray-700">
-                      <div className="font-semibold text-gray-900">{feature.name}</div>
-                      <div className="flex items-center justify-center gap-2 rounded-xl bg-orange-50/60 px-3 py-2 text-orange-700">
-                        <span className="h-2 w-2 rounded-full bg-orange-400" />
-                        <span className="text-center">{feature.member}</span>
-                      </div>
-                      <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-gray-700">
-                        <span className="h-2 w-2 rounded-full bg-gray-400" />
-                        <span className="text-center">{feature.registered}</span>
-                      </div>
-                      <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-gray-500">
-                        <span className="h-2 w-2 rounded-full bg-gray-300" />
-                        <span className="text-center">{feature.guest}</span>
+                        <div className="mt-6 rounded-[24px] bg-[#f5f5f7] p-4">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-[#86868b]">订阅价格</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 sm:gap-3">
+                            {group.monthlyPlan && (
+                              <div className="min-w-0 rounded-[18px] bg-white px-3 py-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-end gap-1 whitespace-nowrap">
+                                    <span className="text-[1.55rem] font-semibold leading-none tracking-[-0.05em] text-[#1d1d1f] sm:text-[1.8rem]">
+                                      ¥{group.monthlyPlan.price}
+                                    </span>
+                                    <span className="pb-0.5 text-[10px] text-[#86868b]">{getBillingLabel(group.monthlyPlan.type)}</span>
+                                  </div>
+                                  {group.monthlyPlan.originalPrice && (
+                                    <div className="mt-1 text-[10px] text-[#86868b] line-through">
+                                      ¥{group.monthlyPlan.originalPrice}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-3">
+                                  <button
+                                    onClick={() => handleSubscribe(group.monthlyPlan!.id)}
+                                    disabled={isCreatingOrder}
+                                    aria-busy={payingPlanId === group.monthlyPlan.id}
+                                    className={`h-9 w-full rounded-full border border-orange-200 bg-white px-3 text-xs font-medium text-orange-700 transition hover:bg-orange-50 ${
+                                      isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''
+                                    }`}
+                                  >
+                                    {payingPlanId === group.monthlyPlan.id ? '处理中' : '订阅'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {group.quarterlyPlan && (
+                              <div className="min-w-0 rounded-[18px] bg-white px-3 py-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-end gap-1 whitespace-nowrap">
+                                    <span className="text-[1.55rem] font-semibold leading-none tracking-[-0.05em] text-[#1d1d1f] sm:text-[1.8rem]">
+                                      ¥{group.quarterlyPlan.price}
+                                    </span>
+                                    <span className="pb-0.5 text-[10px] text-[#86868b]">{getBillingLabel(group.quarterlyPlan.type)}</span>
+                                  </div>
+                                  {group.quarterlyPlan.originalPrice && (
+                                    <div className="mt-1 text-[10px] text-[#86868b] line-through">
+                                      ¥{group.quarterlyPlan.originalPrice}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-3">
+                                  <button
+                                    onClick={() => handleSubscribe(group.quarterlyPlan!.id)}
+                                    disabled={isCreatingOrder}
+                                    aria-busy={payingPlanId === group.quarterlyPlan.id}
+                                    className={`h-9 w-full rounded-full border border-orange-200 bg-white px-3 text-xs font-medium text-orange-700 transition hover:bg-orange-50 ${
+                                      isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''
+                                    }`}
+                                  >
+                                    {payingPlanId === group.quarterlyPlan.id ? '处理中' : '订阅'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-7 rounded-[24px] bg-[#fafafc] p-4">
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#86868b]">核心权益</p>
+                          <ul className="mt-3 space-y-3">
+                            {visibleFeatures.map((feature, index) => (
+                              <li
+                                key={`${group.key}-${index}`}
+                                className="flex items-start gap-3 text-sm leading-6 text-[#424245]"
+                              >
+                                <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-orange-300" />
+                                <span className={index === 0 ? 'font-medium text-[#1d1d1f]' : ''}>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+
+                          {hiddenFeatures.length > 0 && (
+                            <div className="relative mt-3 h-16 overflow-hidden">
+                              <ul className="space-y-3">
+                                {hiddenFeatures.map((feature, index) => (
+                                  <li
+                                    key={`${group.key}-hidden-${index}`}
+                                    className="flex items-start gap-3 text-sm leading-6 text-[#424245]"
+                                  >
+                                    <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-orange-300" />
+                                    <span>{feature}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-white/75 to-white" />
+                            </div>
+                          )}
+                        </div>
+
+                        {features.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => togglePlanFeatures(expandedKey)}
+                            className="mt-4 inline-flex items-center text-sm font-medium text-orange-600 hover:text-orange-500"
+                          >
+                            {isExpanded ? '收起权益' : '展开全部权益'}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
+
+                {standaloneSubscriptionPlans.map((plan) => {
+                  const isFeatured = plan.isPopular || plan.type === 'yearly'
+                  const features = getPlanFeatures(plan)
+                  const isExpanded = Boolean(expandedPlans[plan.id])
+                  const visibleFeatures = isExpanded ? features : features.slice(0, 2)
+                  const hiddenFeatures = isExpanded ? [] : features.slice(2)
+
+                  return (
+                    <div
+                      key={plan.id}
+                      className={`relative overflow-hidden rounded-[32px] p-6 sm:p-7 ${
+                        isFeatured
+                          ? 'bg-[#fff7ed] text-[#1d1d1f] shadow-[0_20px_50px_rgba(249,115,22,0.14)] ring-1 ring-orange-200'
+                          : 'bg-white text-[#1d1d1f] shadow-[0_10px_30px_rgba(0,0,0,0.06)]'
+                      }`}
+                    >
+                      <div className="flex min-h-full flex-col">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-[11px] font-medium ${
+                                isFeatured
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : 'bg-[#f5f5f7] text-[#6e6e73]'
+                              }`}
+                            >
+                              {getBillingLabel(plan.type).replace('/', '') || t('subscriptionTab')}
+                            </span>
+                            <h3 className="mt-3 text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.03em] text-[#1d1d1f]">
+                              {plan.name}
+                            </h3>
+                          </div>
+                          {isFeatured && (
+                            <span className="rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-xs text-orange-700">
+                              {t('recommended')}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={`mt-6 rounded-[24px] p-4 ${isFeatured ? 'bg-white/80' : 'bg-[#f5f5f7]'}`}>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#86868b]">订阅价格</p>
+                          <div className="mt-2 flex items-end gap-3">
+                            <span className={`text-[3rem] font-semibold leading-none tracking-[-0.05em] ${isFeatured ? 'text-orange-600' : 'text-[#1d1d1f]'}`}>
+                              ¥{plan.price}
+                            </span>
+                            <div className={`pb-1 text-sm ${isFeatured ? 'text-[#a16a2a]' : 'text-[#86868b]'}`}>
+                              <div>{getBillingLabel(plan.type)}</div>
+                              {plan.originalPrice && <div className="line-through">¥{plan.originalPrice}</div>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={`mt-7 rounded-[24px] p-4 ${isFeatured ? 'bg-white/70' : 'bg-[#fafafc]'}`}>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#86868b]">核心权益</p>
+                          <ul className="mt-3 space-y-3">
+                            {visibleFeatures.map((feature, index) => (
+                              <li
+                                key={`${plan.id}-${index}`}
+                                className="flex items-start gap-3 text-sm leading-6 text-[#424245]"
+                              >
+                                <span
+                                  className={`mt-1.5 h-2.5 w-2.5 rounded-full ${
+                                    isFeatured ? 'bg-orange-400' : 'bg-orange-300'
+                                  }`}
+                                />
+                                <span className={index === 0 ? 'font-medium text-[#1d1d1f]' : ''}>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+
+                          {hiddenFeatures.length > 0 && (
+                            <div className="relative mt-3 h-16 overflow-hidden">
+                              <ul className="space-y-3">
+                                {hiddenFeatures.map((feature, index) => (
+                                  <li
+                                    key={`${plan.id}-hidden-${index}`}
+                                    className="flex items-start gap-3 text-sm leading-6 text-[#424245]"
+                                  >
+                                    <span
+                                      className={`mt-1.5 h-2.5 w-2.5 rounded-full ${
+                                        isFeatured ? 'bg-orange-400' : 'bg-orange-300'
+                                      }`}
+                                    />
+                                    <span>{feature}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <div
+                                className={`pointer-events-none absolute inset-0 ${
+                                  isFeatured
+                                    ? 'bg-gradient-to-b from-[#fff7ed]/10 via-[#fff7ed]/75 to-[#fff7ed]'
+                                    : 'bg-gradient-to-b from-white/10 via-white/75 to-white'
+                                }`}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {features.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => togglePlanFeatures(plan.id)}
+                            className="mt-4 inline-flex items-center text-sm font-medium text-orange-600 hover:text-orange-500"
+                          >
+                            {isExpanded ? '收起权益' : '展开全部权益'}
+                          </button>
+                        )}
+
+                        <div className="mt-8 flex-1" />
+
+                        <button
+                          onClick={() => handleSubscribe(plan.id)}
+                          disabled={isCreatingOrder}
+                          aria-busy={payingPlanId === plan.id}
+                          className={`mt-8 min-h-[48px] w-full rounded-full px-5 py-3 text-sm font-medium transition ${
+                            isFeatured
+                              ? 'bg-orange-500 text-white hover:bg-orange-400'
+                              : 'border border-orange-200 bg-white text-orange-700 hover:bg-orange-50'
+                          } ${isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''}`}
+                        >
+                          {payingPlanId === plan.id ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                              </svg>
+                              请稍后…
+                            </span>
+                          ) : (
+                            t('subscribe')
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
             </div>
           )}
 
           {activeTab === 'points' && (
-            <div className="space-y-8">
-            <div className="overflow-hidden rounded-2xl border border-orange-100/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6 shadow-lg">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">{t('pointsTab')}</p>
-                  <p className="text-lg text-gray-800">
-                    {t('pointsExchange')} <span className="font-bold text-orange-600">100 {t('points')} = ¥1</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 rounded-full bg-white/85 px-4 py-2 text-sm text-gray-700 shadow-sm">
-                  <svg className="h-4 w-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7.414A2 2 0 0016.586 6L13 2.414A2 2 0 0011.586 2H5zm5 4a1 1 0 00-1 1v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8a1 1 0 00-1-1z" />
-                  </svg>
-                  <span className="font-semibold text-orange-700">{t('heroCtaPoints')}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {pointsPackages.length === 0 && (
-                <div className="sm:col-span-3 rounded-2xl border border-dashed border-gray-200 bg-white/80 p-10 text-center shadow-sm">
-                  <p className="text-lg font-semibold text-gray-900">{t('pointsEmptyTitle')}</p>
-                  <p className="mt-2 text-sm text-gray-500">{t('pointsEmptyDesc')}</p>
-                </div>
-              )}
-
-              {pointsPackages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className={`relative overflow-hidden rounded-2xl border transition-all shadow-md hover:-translate-y-1 hover:shadow-2xl ${
-                    pkg.isPopular
-                      ? 'border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50'
-                      : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  {pkg.isPopular && (
-                    <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-orange-700 shadow">
-                      <span className="h-2 w-2 rounded-full bg-orange-500" />
-                      {t('popular')}
-                    </div>
-                  )}
-
-                  <div className="p-6 space-y-5">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-bold text-gray-900">
-                        {pkg.name}
-                        {pkg.nameTag && <span className="ml-2 text-lg font-bold text-gray-900">{pkg.nameTag}</span>}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span className="text-2xl font-bold text-orange-600">{pkg.points}</span>
-                        <span className="text-sm text-gray-500">{t('points')}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-gray-900">¥{pkg.price}</span>
-                      {pkg.originalPrice && (
-                        <span className="text-sm text-gray-400 line-through">¥{pkg.originalPrice}</span>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => handleBuyPoints(pkg.id)}
-                      disabled={isCreatingOrder}
-                      aria-busy={payingPackageId === pkg.id}
-                      className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${
-                        pkg.isPopular
-                          ? 'bg-gradient-to-r from-orange-500 to-amber-400 text-white shadow-lg hover:shadow-xl'
-                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      } ${isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''}`}
-                    >
-                      {payingPackageId === pkg.id ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          请稍后…
-                        </span>
-                      ) : (
-                        t('buy')
-                      )}
-                    </button>
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+                {pointsPackages.length === 0 && (
+                  <div className="col-span-2 rounded-[32px] bg-white p-10 text-center shadow-[0_10px_30px_rgba(0,0,0,0.06)] lg:col-span-3">
+                    <p className="text-xl font-semibold text-[#1d1d1f]">{t('pointsEmptyTitle')}</p>
+                    <p className="mt-2 text-sm text-[#6e6e73]">{t('pointsEmptyDesc')}</p>
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
+
+                {pointsPackages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className={`relative overflow-hidden rounded-[20px] p-3 sm:rounded-[32px] sm:p-7 ${
+                      pkg.isPopular
+                        ? 'bg-[#fff7ed] text-[#1d1d1f] shadow-[0_20px_50px_rgba(249,115,22,0.14)] ring-1 ring-orange-200'
+                        : 'bg-white text-[#1d1d1f] shadow-[0_10px_30px_rgba(0,0,0,0.06)]'
+                    }`}
+                  >
+                    <div className="flex min-h-full flex-col">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-semibold leading-[1.15] tracking-[-0.02em] text-[#1d1d1f] sm:text-[1.7rem] sm:tracking-[-0.03em]">
+                            {pkg.name}
+                          </h3>
+                        </div>
+                        {pkg.isPopular && (
+                          <span className="rounded-full border border-orange-200 bg-white/80 px-2 py-0.5 text-[10px] text-orange-700 sm:px-3 sm:py-1 sm:text-xs">
+                            {t('popular')}
+                          </span>
+                        )}
+                      </div>
+
+                      {pkg.nameTag && (
+                        <p className={`mt-1.5 text-[11px] sm:mt-3 sm:text-sm ${pkg.isPopular ? 'text-orange-700' : 'text-orange-600'}`}>
+                          {pkg.nameTag}
+                        </p>
+                      )}
+
+                      <div className={`mt-3 rounded-[16px] p-3 sm:mt-6 sm:rounded-[24px] sm:p-4 ${pkg.isPopular ? 'bg-white/80' : 'bg-[#f5f5f7]'}`}>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-[#86868b]">可用额度</p>
+                        <div className="mt-1.5 flex items-end gap-1.5 sm:gap-2">
+                          <span className={`text-[1.55rem] font-semibold leading-none tracking-[-0.03em] sm:text-[2.4rem] sm:tracking-[-0.04em] ${pkg.isPopular ? 'text-orange-600' : 'text-[#1d1d1f]'}`}>
+                            {pkg.points.toLocaleString('zh-CN')}
+                          </span>
+                          <span className="pb-0.5 text-[11px] text-[#6e6e73] sm:pb-1 sm:text-sm">{t('points')}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex justify-end sm:mt-6">
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-[#86868b]">到手价格</p>
+                          <div className="mt-1 flex items-end gap-2 sm:gap-3">
+                            <span className="text-[1.4rem] font-semibold leading-none tracking-[-0.03em] text-[#1d1d1f] sm:text-[2.5rem] sm:tracking-[-0.05em]">
+                              ¥{pkg.price}
+                            </span>
+                            {pkg.originalPrice && (
+                              <span className={`pb-0.5 text-[11px] line-through sm:pb-1 sm:text-sm ${pkg.isPopular ? 'text-[#a16a2a]' : 'text-[#86868b]'}`}>
+                                ¥{pkg.originalPrice}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleBuyPoints(pkg.id)}
+                        disabled={isCreatingOrder}
+                        aria-busy={payingPackageId === pkg.id}
+                        className={`mt-4 min-h-[36px] w-full rounded-full px-3 py-1.5 text-[11px] font-medium transition sm:mt-8 sm:min-h-[48px] sm:px-5 sm:py-3 sm:text-sm ${
+                          pkg.isPopular
+                            ? 'bg-orange-500 text-white hover:bg-orange-400'
+                            : 'border border-orange-200 bg-white text-orange-700 hover:bg-orange-50'
+                        } ${isCreatingOrder ? 'cursor-not-allowed opacity-80' : ''}`}
+                      >
+                        {payingPackageId === pkg.id ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              />
+                            </svg>
+                            请稍后…
+                          </span>
+                        ) : (
+                          t('buy')
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
-
-          <div className="pt-4 text-center text-sm text-gray-500">
-            {t('notice')}
-          </div>
         </div>
-      </div>
+      </section>
     </div>
   )
 }

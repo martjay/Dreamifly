@@ -916,11 +916,11 @@ export default function GenerateForm({
 
           {/* 高级设置区域 */}
           <div className="pt-1">
-            <div className="space-y-6">
+            <div className="space-y-5 sm:space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {(supportsHighSteps || supportsHighResolutionOption) && (
                   <div>
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2.5 sm:mb-3">
                       <label className="flex items-center text-sm font-medium text-gray-900">
                         <img src="/form/steps.svg" alt="Quality" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
                         启用高质量
@@ -928,19 +928,19 @@ export default function GenerateForm({
                       <button
                         type="button"
                         onClick={handleHighQualityToggle}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 ${
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 sm:h-6 sm:w-11 ${
                           isHighQualityEnabled ? 'bg-amber-500' : 'bg-gray-300'
                         }`}
                         disabled={status === 'loading' || isGenerating}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isHighQualityEnabled ? 'translate-x-6' : 'translate-x-1'
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform sm:h-4 sm:w-4 ${
+                            isHighQualityEnabled ? 'translate-x-5 sm:translate-x-6' : 'translate-x-0.5 sm:translate-x-1'
                           }`}
                         />
                       </button>
                     </div>
-                    <p className="text-sm text-gray-600/80">
+                    <p className="text-xs sm:text-sm text-gray-600/80 leading-5">
                       提供更高的生成质量，但也会花费少许积分
                     </p>
                     {stepsError && (

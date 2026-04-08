@@ -871,7 +871,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
                   extraContent={
-                    <div className="lg:hidden border-t border-orange-400/40 pt-5 mt-1">
+                    <div className="lg:hidden pt-2">
                       <GenerateForm
                         width={width}
                         setWidth={setWidth}

@@ -536,8 +536,8 @@ const VideoGenerateForm = ({
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); handleGenerateVideo(); }} className="space-y-8 relative flex flex-col">
-      <div className="space-y-8">
+    <form onSubmit={(e) => { e.preventDefault(); handleGenerateVideo(); }} className="space-y-6 sm:space-y-8 relative flex flex-col">
+      <div className="space-y-6 sm:space-y-8">
         {/* 上传图片区域 */}
         <div className="pt-0">
           <div>
@@ -620,7 +620,7 @@ const VideoGenerateForm = ({
         </div>
 
         {/* 提示词区域 */}
-        <div className="border-t border-orange-400/40 pt-8">
+        <div className="pt-3 sm:pt-4">
           <div>
             <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
               <img src="/form/prompt.svg" alt="Prompt" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
@@ -636,16 +636,16 @@ const VideoGenerateForm = ({
             />
             
             {/* 宽高比选择按钮行 */}
-            <div className="flex flex-col md:flex-row md:justify-between gap-3 items-stretch md:items-center mt-4">
+            <div className="flex flex-col md:flex-row md:justify-between gap-2.5 md:gap-3 items-stretch md:items-center mt-3 sm:mt-4">
               <div className="flex gap-2 md:gap-3">
                 <div
                   onClick={() => !isGenerating && setIsRatioOpen(!isRatioOpen)}
-                  className="px-3 py-1 text-xs md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1.5 text-[13px] md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   tabIndex={0}
                   role="button"
                   aria-disabled={isGenerating}
                 >
-                  <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
                   </svg>
                   {getCurrentRatioLabel()}
@@ -703,10 +703,10 @@ const VideoGenerateForm = ({
                 <button
                   type="button"
                   onClick={handleOptimizePrompt}
-                  className="px-2 py-1 text-xs md:px-3 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
+                  className="px-2.5 py-1.5 text-[13px] md:px-3 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
                   disabled={isGenerating || isOptimizing || !uploadedImage}
                 >
-                  <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
                   </svg>
                   {isOptimizing ? t('form.optimizingPrompt') || 'Optimizing...' : t('form.optimizePrompt')}
@@ -717,9 +717,9 @@ const VideoGenerateForm = ({
         </div>
 
         {/* 负面提示词区域 */}
-        <div className="pt-4">
+        <div className="pt-3 sm:pt-4">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2.5 sm:mb-3">
               <label className="flex items-center text-sm font-medium text-gray-900">
                 <img src="/form/negative.svg" alt="Negative Prompt" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
                 {t('form.negativePrompt')}
@@ -734,14 +734,14 @@ const VideoGenerateForm = ({
                     setNegativePrompt('')
                   }
                 }}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:ring-offset-2 ${
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:ring-offset-2 sm:h-6 sm:w-11 ${
                   isNegativePromptEnabled ? 'bg-orange-500' : 'bg-gray-200'
                 }`}
                 disabled={isGenerating}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    isNegativePromptEnabled ? 'translate-x-6' : 'translate-x-1'
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform sm:h-4 sm:w-4 ${
+                    isNegativePromptEnabled ? 'translate-x-5 sm:translate-x-6' : 'translate-x-0.5 sm:translate-x-1'
                   }`}
                 />
               </button>
@@ -760,7 +760,7 @@ const VideoGenerateForm = ({
         </div>
 
         {/* 模型选择区域 */}
-        <div className="border-t border-orange-400/40 pt-8">
+        <div className="pt-3 sm:pt-4">
           <div>
             <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
               <img src="/form/models.svg" alt="Model" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
@@ -782,7 +782,7 @@ const VideoGenerateForm = ({
         </div>
 
         {/* 生成按钮 */}
-        <div className="border-t border-orange-400/40 pt-8">
+        <div className="pt-3 sm:pt-4">
           <div className="flex justify-center">
             <button
               type="submit"

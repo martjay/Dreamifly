@@ -18,8 +18,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: `${siteUrl}/images/dreamifly-logo.jpg`,
-        width: 600,
-        height: 600,
+        width: 256,
+        height: 256,
         alt: 'Dreamifly Logo',
       },
     ],
