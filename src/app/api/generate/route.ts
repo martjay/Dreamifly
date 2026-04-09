@@ -11,6 +11,8 @@ import { concurrencyManager } from '@/utils/concurrencyManager'
 import { ipConcurrencyManager } from '@/utils/ipConcurrencyManager'
 import { randomUUID, createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
+import { blurImageToDataUrl } from '@/utils/blurImage'
+import { moderateGeneratedOutput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isLoginRequiredModel } from '@/utils/modelConfig'
 
@@ -1012,21 +1014,74 @@ export async function POST(request: Request) {
       })
     }
 
-    // 如果用户未登录，检查是否需要添加水印
+    // --- 同步审核：先审核再决定是否返回原图 ---
+    // 1) 将 base64 转为 Buffer（用于审核/留档/模糊）
+    const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '')
+    const imageBuffer = Buffer.from(base64Data, 'base64')
+
+    const moderationDecision = await moderateGeneratedOutput({
+      imageBuffer,
+      prompt,
+      hasReferenceImages: Boolean(images && Array.isArray(images) && images.length > 0),
+    })
+
+    if (!moderationDecision.approved) {
+      // 留档未通过（原图入 rejected_images），并返回模糊图（非 2xx）
+      try {
+        const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
+
+        let referenceImageUrls: string[] = []
+        if (images && Array.isArray(images) && images.length > 0) {
+          try {
+            const { saveReferenceImages } = await import('@/utils/referenceImageStorage')
+            referenceImageUrls = await saveReferenceImages(images)
+          } catch (error) {
+            console.error('保存未通过审核图片的参考图失败:', error)
+          }
+        }
+
+        const rejectionReason =
+          moderationDecision.reason === 'prompt'
+            ? 'prompt'
+            : moderationDecision.reason === 'image'
+              ? 'image'
+              : 'both'
+
+        await saveRejectedImage(imageBuffer, {
+          userId: session?.user?.id || null,
+          ipAddress: clientIP || undefined,
+          prompt,
+          model,
+          width,
+          height,
+          rejectionReason,
+          referenceImages: referenceImageUrls,
+        })
+      } catch (error) {
+        console.error('保存未通过审核图片失败:', error)
+      }
+
+      const blurredImageUrl = await blurImageToDataUrl(imageUrl)
+      return NextResponse.json(
+        {
+          error: '内容未通过审核',
+          code: 'MODERATION_FAILED',
+          moderation: moderationDecision,
+          blurredImageUrl,
+        },
+        { status: 403 }
+      )
+    }
+
+    // 如果用户未登录，审核通过后再添加水印（保持原有逻辑）
     if (!session?.user) {
-      // 检查是否启用水印（默认启用）
       const enableWatermark = process.env.ENABLE_WATERMARK !== 'false'
-      
       if (enableWatermark) {
-        // 获取水印文本（默认为"Dreamifly"）
         const watermarkText = process.env.WATERMARK_TEXT || 'Dreamifly'
-        
         try {
-          // 添加水印
           imageUrl = await addWatermark(imageUrl, watermarkText)
         } catch (error) {
           console.error('添加水印失败，返回原图:', error)
-          // 如果添加水印失败，继续使用原图
         }
       }
     }
@@ -1074,37 +1129,26 @@ export async function POST(request: Request) {
       await ipConcurrencyManager.end(clientIP)
     }
 
-    // 如果用户已登录，异步保存生成的图片（不阻塞响应）
+    // 如果用户已登录，同步保存生成的图片（审核已通过，可跳过保存内二次审核）
     if (session?.user) {
-      // 使用 Fire and Forget 模式，不等待保存完成
-      // 注意：不要使用 await，让保存操作在后台执行
-      (async () => {
-        try {
-          const { saveUserGeneratedImage } = await import('@/utils/userImageStorage')
-          
-          // 直接传入参考图的base64数组，让 saveUserGeneratedImage 内部处理
-          // images 是 base64 数组（不包含 data:image 前缀）
-          await saveUserGeneratedImage(
-            session.user.id,
-            imageUrl, // base64格式的图片
-            {
-              prompt,
-              model,
-              width,
-              height,
-              ipAddress: clientIP || undefined,
-              referenceImages: images || [], // 传入参考图的base64数组
-            }
-          )
-          console.log('用户生成图片已保存')
-        } catch (error) {
-          console.error('保存用户生成图片失败:', error)
-          // 错误已记录，不影响主流程
-        }
-      })() // 立即执行，不等待
-    } else {
-      // 未登录用户：也需要尝试保存（虽然 saveUserGeneratedImage 需要 userId，但我们可以处理）
-      // 实际上未登录用户不会调用 saveUserGeneratedImage，所以这里不需要处理
+      try {
+        const { saveUserGeneratedImage } = await import('@/utils/userImageStorage')
+        await saveUserGeneratedImage(
+          session.user.id,
+          imageUrl,
+          {
+            prompt,
+            model,
+            width,
+            height,
+            ipAddress: clientIP || undefined,
+            referenceImages: images || [],
+          },
+          { skipModeration: true }
+        )
+      } catch (error) {
+        console.error('保存用户生成图片失败（不影响返回）:', error)
+      }
     }
 
     // 立即返回响应，不等待保存完成

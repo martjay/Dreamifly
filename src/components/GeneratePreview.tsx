@@ -7,8 +7,9 @@ import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
 interface GeneratePreviewProps {
   generatedImages: string[];
   imageStatuses: Array<{
-    status: 'pending' | 'success' | 'error';
+    status: 'pending' | 'success' | 'error' | 'warning';
     message: string;
+    moderationFailed?: boolean;
   }>;
   batch_size: number;
   isGenerating: boolean;
@@ -112,6 +113,8 @@ export default function GeneratePreview({
               )}
               <div className={`absolute bottom-0 left-0 right-0 p-4 text-center text-sm backdrop-blur-md ${imageStatuses[index]?.status === 'error'
                   ? 'bg-red-500/20 text-red-900'
+                  : imageStatuses[index]?.status === 'warning'
+                    ? 'bg-amber-500/20 text-amber-900'
                   : imageStatuses[index]?.status === 'success'
                     ? 'bg-white/40 text-gray-900'
                     : 'bg-green-500/20 text-green-900'
@@ -120,7 +123,17 @@ export default function GeneratePreview({
                   {imageStatuses[index]?.status === 'pending' && (
                     <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                   )}
-                  <span className={`font-medium ${imageStatuses[index]?.status === 'error' ? 'text-red-900' : imageStatuses[index]?.status === 'success' ? 'text-yellow-700' : 'text-green-900'}`}>
+                  <span
+                    className={`font-medium ${
+                      imageStatuses[index]?.status === 'error'
+                        ? 'text-red-900'
+                        : imageStatuses[index]?.status === 'warning'
+                          ? 'text-amber-900'
+                          : imageStatuses[index]?.status === 'success'
+                            ? 'text-yellow-700'
+                            : 'text-green-900'
+                    }`}
+                  >
                     {imageStatuses[index]?.message}
                   </span>
                 </div>
@@ -204,7 +217,7 @@ export default function GeneratePreview({
             {t('preview.status.success')}
           </span>
           <span className="text-red-900 font-medium mx-2">
-            {imageStatuses.filter(status => status.status === 'error').length}
+            {imageStatuses.filter(status => status.status === 'error' || status.status === 'warning').length}
           </span>
           <span className="text-gray-900">
             {t('preview.status.failed')}

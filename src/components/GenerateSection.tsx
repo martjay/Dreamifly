@@ -54,8 +54,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [imageStatuses, setImageStatuses] = useState<Array<{
-    status: 'pending' | 'success' | 'error';
+    status: 'pending' | 'success' | 'error' | 'warning';
     message: string;
+    moderationFailed?: boolean;
     startTime?: number;
     endTime?: number;
   }>>([]);
@@ -489,7 +490,36 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             throw new Error(isDailyLimit ? 'DAILY_LIMIT' : 'CONCURRENCY_LIMIT');
           }
 
-          if (res.status !== 200) {
+          // 审核未通过：非 2xx，但响应体包含 blurredImageUrl 供展示
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            if (errorData?.blurredImageUrl) {
+              const dataUrl = errorData.blurredImageUrl as string;
+              const imageLoadPromise = new Promise<void>((resolve) => {
+                const img = new window.Image();
+                img.onload = () => {
+                  const endTime = Date.now();
+                  const duration = ((endTime - startTime) / 1000).toFixed(1);
+                  images[index] = dataUrl;
+                  setGeneratedImages([...images]);
+                  setImageStatuses(prev => {
+                    const newStatuses = [...prev];
+                    newStatuses[index] = ({
+                      status: 'warning',
+                      message: `未通过审核（${duration}s）`,
+                      moderationFailed: true,
+                      startTime,
+                      endTime
+                    });
+                    return newStatuses;
+                  });
+                  resolve();
+                };
+                img.src = dataUrl;
+              });
+              await imageLoadPromise;
+              return;
+            }
             throw new Error(`HTTP error! status: ${res.status}`);
           }
 
