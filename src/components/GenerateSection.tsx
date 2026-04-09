@@ -79,6 +79,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [videoModel, setVideoModel] = useState('Wan2.2-I2V-Lightning');
   const [uploadedVideoImage, setUploadedVideoImage] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [videoRejectedPreviewImage, setVideoRejectedPreviewImage] = useState<string | null>(null);
   const [isVideoGenerating, setIsVideoGenerating] = useState(false);
   const [isVideoQueuing, setIsVideoQueuing] = useState(false);
   const [videoGenerationStartTime, setVideoGenerationStartTime] = useState<number | null>(null);
@@ -1017,6 +1018,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         setUploadedImage={setUploadedVideoImage}
                         generatedVideo={generatedVideo}
                         setGeneratedVideo={setGeneratedVideo}
+                        onModerationFailed={(blurredImageUrl) => {
+                          setVideoRejectedPreviewImage(blurredImageUrl)
+                          setGeneratedVideo(null)
+                        }}
                         isGenerating={isVideoGenerating}
                         setIsGenerating={setIsVideoGenerating}
                         isQueuing={isVideoQueuing}
@@ -1203,6 +1208,21 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                 </svg>
                               </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : videoRejectedPreviewImage ? (
+                      <div className="relative w-full h-full flex flex-col items-center justify-center p-6">
+                        <div className="relative">
+                          <img
+                            src={videoRejectedPreviewImage}
+                            alt="Blurred reference preview"
+                            className="max-w-full max-h-[360px] rounded-lg shadow-lg border border-amber-400/40 object-contain"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="px-5 py-3 rounded-xl bg-white/35 text-amber-900 text-lg font-semibold backdrop-blur-md border border-white/40 shadow-lg">
+                              未通过审核
                             </div>
                           </div>
                         </div>

@@ -10,6 +10,8 @@ import { siteStats, user } from '@/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { saveUserGeneratedVideo } from '@/utils/userVideoStorage'
 import { callGrokImagineVideo, downloadMp4AsDataUrl } from '@/utils/grokVideoApi'
+import { blurImageToDataUrl } from '@/utils/blurImage'
+import { moderateGeneratedVideoOutput } from '@/utils/videoModerationFlow'
 
 // 设置 API 路由最大执行时间为 25 分钟（1500 秒），确保比视频生成超时时间（20 分钟）更长
 // 这样即使需要轮询获取视频，也不会因为 Next.js 的路由超时而失败
@@ -354,55 +356,100 @@ export async function POST(request: Request) {
     // 先计算总响应时间（秒）
     const responseTime = (Date.now() - totalStartTime) / 1000;
 
-    // 先返回视频URL给用户，不等待保存和审核完成
-    // 保存和审核在后台异步进行，无论审核结果如何，用户都能看到视频
-    if (userId) {
-      // 异步保存视频到数据库，不阻塞响应
-      // 使用立即执行的异步函数，不等待完成
-      (async () => {
+    // --- 同步审核：先审文字再审视频（当前以参考图代表视频内容） ---
+    // 参考图一定存在（I2V）
+    let referenceImageBase64 = image || ''
+    if (referenceImageBase64.includes(',')) {
+      referenceImageBase64 = referenceImageBase64.split(',')[1]
+    }
+    const referenceImageDataUrl = referenceImageBase64.startsWith('data:')
+      ? referenceImageBase64
+      : `data:image/jpeg;base64,${referenceImageBase64}`
+
+    const moderationDecision = await moderateGeneratedVideoOutput({
+      prompt: String(prompt ?? ''),
+      referenceImageBase64OrDataUrl: referenceImageDataUrl,
+    })
+
+    if (!moderationDecision.approved) {
+      // 未通过：返回 422 + 模糊参考图 + videoUrl:null，占位供前端统一处理
+      const blurredImageUrl = await blurImageToDataUrl(referenceImageDataUrl)
+
+      // 留档：把原视频保存到 rejected_images（媒体类型 video），保留审计能力
+      try {
+        const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
+
+        // 保存参考图到 OSS（留原图，不用模糊图）
+        let referenceImageUrls: string[] = []
         try {
-          // 获取客户端IP地址
-          const headersList = await headers();
-          const ipAddress = headersList.get('x-forwarded-for') ||
-                          headersList.get('x-real-ip') ||
-                          'unknown';
-
-          // 提取参考图（输入图片，用于I2V）
-          let referenceImages: string[] | undefined = undefined
-          if (image) {
-            // 移除 data:image 前缀，只保留 base64 数据
-            let imageBase64 = image
-            if (imageBase64.includes(',')) {
-              imageBase64 = imageBase64.split(',')[1]
-            }
-            referenceImages = [imageBase64]
-          }
-
-          // 保存视频（包含审核流程）
-          // 即使审核失败也不会影响用户看到视频
-          await saveUserGeneratedVideo(
-            userId,
-            videoUrl, // base64格式的视频
-            {
-              prompt: prompt,
-              model: model,
-              width: finalWidth,
-              height: finalHeight,
-              duration: Math.round(videoDurationSeconds), // 视频时长（秒）
-              fps: videoFps,
-              frameCount: videoFrameCount, // 总帧数（Grok可能为空）
-              ipAddress: ipAddress,
-              referenceImages: referenceImages, // 参考图（输入图片，加密存储）
-            }
-          );
+          const { saveReferenceImages } = await import('@/utils/referenceImageStorage')
+          referenceImageUrls = await saveReferenceImages([referenceImageBase64])
         } catch (error) {
-          // 保存失败只记录错误，不影响用户
-          console.error(`[视频生成API] [${requestId}] 视频保存到数据库失败:`, error);
+          console.error('保存未通过审核视频的参考图失败:', error)
         }
-      })().catch(error => {
-        // 捕获异步任务中的未处理错误
-        console.error(`[视频生成API] [${requestId}] 后台保存任务失败:`, error);
-      });
+
+        const base64VideoData = videoUrl.replace(/^data:video\/\w+;base64,/, '')
+        const videoBuffer = Buffer.from(base64VideoData, 'base64')
+
+        const rejectionReason =
+          moderationDecision.reason === 'prompt'
+            ? 'prompt'
+            : moderationDecision.reason === 'video'
+              ? 'image'
+              : 'both'
+
+        await saveRejectedImage(videoBuffer, {
+          userId,
+          prompt: String(prompt ?? ''),
+          model,
+          width: finalWidth,
+          height: finalHeight,
+          mediaType: 'video',
+          duration: Math.round(videoDurationSeconds),
+          fps: videoFps,
+          frameCount: videoFrameCount,
+          rejectionReason,
+          referenceImages: referenceImageUrls,
+        })
+      } catch (error) {
+        console.error('保存未通过审核视频失败:', error)
+      }
+
+      return NextResponse.json(
+        {
+          error: '内容未通过审核',
+          code: 'VIDEO_MODERATION_FAILED',
+          moderation: moderationDecision,
+          blurredImageUrl,
+          videoUrl: null,
+        },
+        { status: 422 }
+      )
+    }
+
+    // 审核通过后，同步保存视频入库（跳过二次审核）
+    try {
+      const headersList = await headers()
+      const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown'
+
+      await saveUserGeneratedVideo(
+        userId,
+        videoUrl,
+        {
+          prompt: prompt,
+          model: model,
+          width: finalWidth,
+          height: finalHeight,
+          duration: Math.round(videoDurationSeconds),
+          fps: videoFps,
+          frameCount: videoFrameCount,
+          ipAddress: ipAddress,
+          referenceImages: [referenceImageBase64],
+        },
+        { skipModeration: true }
+      )
+    } catch (error) {
+      console.error(`[视频生成API] [${requestId}] 视频保存到数据库失败（不影响返回）:`, error)
     }
 
     // 更新统计数据（如果需要）
