@@ -1062,6 +1062,18 @@ export async function POST(request: Request) {
       }
 
       const blurredImageUrl = await blurImageToDataUrl(imageUrl)
+
+      // 审核未通过也属于“请求已结束”的一种，需要回收并发计数
+      if (generationId) {
+        concurrencyManager.end(generationId)
+      }
+      // 管理员和会员不受IP并发限制，不需要清理计数
+      if (clientIP && !isAdmin && !isSubscribed) {
+        await ipConcurrencyManager.end(clientIP).catch(err => {
+          console.error('Error decrementing IP concurrency after moderation failed:', err)
+        })
+      }
+
       return NextResponse.json(
         {
           error: '内容未通过审核',
