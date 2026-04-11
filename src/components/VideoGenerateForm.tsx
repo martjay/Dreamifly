@@ -9,6 +9,7 @@ import { usePoints } from '@/contexts/PointsContext'
 import { aspectRatioLabelToNumber, calculateVideoResolution, calculateVideoResolutionForModel, getVideoAspectRatioOptions, getVideoModelById, pickClosestAspectRatioLabel, type VideoAspectRatioLabel } from '@/utils/videoModelConfig'
 import { optimizeVideoPrompt } from '@/utils/videoPromptOptimizer'
 import Toast from '@/components/Toast'
+import type { VisualRiskLevel } from '@/utils/visualModeration'
 
 interface VideoGenerateFormProps {
   prompt: string;
@@ -27,7 +28,12 @@ interface VideoGenerateFormProps {
   setUploadedImage: (image: string | null) => void;
   generatedVideo: string | null;
   setGeneratedVideo: (video: string | null) => void;
-  onModerationFailed?: (blurredImageUrl: string) => void;
+  onModerationFailed?: (payload: {
+    imageUrl?: string | null
+    videoUrl?: string | null
+    moderation?: { visualRiskLevel?: Exclude<VisualRiskLevel, 'low'> }
+    mediaId?: string | null
+  }) => void;
   isGenerating: boolean;
   setIsGenerating: (generating: boolean) => void;
   isQueuing: boolean;
@@ -69,7 +75,7 @@ const VideoGenerateForm = ({
 
   const [availableModels, setAvailableModels] = useState<any[]>([])
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null)
-  const [moderationBlurredImageUrl, setModerationBlurredImageUrl] = useState<string | null>(null)
+  const [moderationPreviewImageUrl, setModerationPreviewImageUrl] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [isNegativePromptEnabled, setIsNegativePromptEnabled] = useState(false)
   const [isRatioOpen, setIsRatioOpen] = useState(false)
@@ -370,7 +376,7 @@ const VideoGenerateForm = ({
     setIsGenerating(true)
     setIsQueuing(false)
     setGeneratedVideo(null)
-    setModerationBlurredImageUrl(null)
+    setModerationPreviewImageUrl(null)
     setProgress(0)
     setEstimatedTime(280) // 重置预期时间为280秒
 
@@ -415,10 +421,24 @@ const VideoGenerateForm = ({
             return
           }
         } else if (response.status === 422) {
-          if (errorData.code === 'VIDEO_MODERATION_FAILED' && errorData.blurredImageUrl) {
-            setModerationBlurredImageUrl(errorData.blurredImageUrl)
-            onModerationFailed?.(errorData.blurredImageUrl)
-            setErrorModal(true, 'concurrency', errorData.error || '内容未通过审核')
+          if (errorData.code === 'VIDEO_MODERATION_FAILED' && errorData.imageUrl) {
+            if (!errorData.moderation?.visualRiskLevel) {
+              setModerationPreviewImageUrl(null)
+              if (errorData.videoUrl) {
+                setGeneratedVideo(errorData.videoUrl)
+                await refreshPoints()
+                onGenerate(errorData.videoUrl)
+                return
+              }
+              return
+            }
+            setModerationPreviewImageUrl(errorData.imageUrl)
+            onModerationFailed?.({
+              imageUrl: errorData.imageUrl || null,
+              videoUrl: errorData.videoUrl || null,
+              moderation: errorData.moderation,
+              mediaId: errorData.mediaId || null,
+            })
             return
           }
         } else if (response.status === 503) {
@@ -627,9 +647,9 @@ const VideoGenerateForm = ({
             {uploadError && (
               <p className="mt-2 text-sm text-red-600">{uploadError}</p>
             )}
-            {moderationBlurredImageUrl && (
+            {moderationPreviewImageUrl && (
               <div className="mt-3 text-sm text-amber-900">
-                未通过审核（预览区将显示模糊参考图）
+                未通过审核（预览区将显示蒙版参考图）
               </div>
             )}
           </div>

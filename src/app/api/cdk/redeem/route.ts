@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { redeemCDK } from '@/utils/cdkManager';
-import { getClientIP } from '@/app/api/generate/route';
+import { getClientIP } from '@/utils/clientIp';
 
 export async function POST(request: Request) {
   try {

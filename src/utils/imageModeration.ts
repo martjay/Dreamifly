@@ -1,5 +1,5 @@
-import { moderateAvatar } from './avatarModeration'
 import OpenAI from 'openai'
+import { parseVisualRiskLevel, type VisualRiskLevel } from './visualModeration'
 
 /**
  * 审核生成的图片
@@ -12,9 +12,42 @@ export async function moderateGeneratedImage(
   apiKey: string,
   model: string,
   prompt: string
-): Promise<boolean> {
-  // 复用头像审核函数
-  return await moderateAvatar(imageBuffer, fileName, baseUrl, apiKey, model, prompt)
+): Promise<VisualRiskLevel> {
+  const client = new OpenAI({
+    baseURL: baseUrl,
+    apiKey: apiKey || 'dummy-key',
+  })
+
+  const mimeType = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+  const base64Media = imageBuffer.toString('base64')
+  const response = await client.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType};base64,${base64Media}`,
+            },
+          },
+        ],
+      },
+    ],
+    stream: false,
+    chat_template_kwargs: { enable_thinking: false },
+  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
+
+  const rawResult = response.choices[0]?.message?.content?.trim()
+  const level = parseVisualRiskLevel(rawResult)
+  if (!level) {
+    console.warn('图片视觉审核结果不明确:', rawResult)
+    throw new Error('图片视觉审核结果不明确')
+  }
+
+  return level
 }
 
 /**

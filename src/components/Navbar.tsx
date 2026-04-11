@@ -76,6 +76,11 @@ export default function Navbar() {
     router.push(transferUrl('/create'))
   }
 
+  const handleCommunityClick = () => {
+    setIsMobileMenuOpen(false)
+    router.push(transferUrl('/community'))
+  }
+
   const scrollToTop = () => {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -310,7 +315,7 @@ export default function Navbar() {
             )}
 
             <button
-              onClick={() => handleNavItemClick('community-showcase')}
+              onClick={handleCommunityClick}
               className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-gray-200/50 hover:bg-gray-300/50 transition-all duration-300"
             >
               <svg className="w-6 h-6 text-gray-700 group-hover:text-gray-900 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

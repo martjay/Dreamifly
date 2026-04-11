@@ -10,7 +10,6 @@ import { siteStats, user } from '@/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { saveUserGeneratedVideo } from '@/utils/userVideoStorage'
 import { callGrokImagineVideo, downloadMp4AsDataUrl } from '@/utils/grokVideoApi'
-import { blurImageToDataUrl } from '@/utils/blurImage'
 import { moderateGeneratedVideoOutput } from '@/utils/videoModerationFlow'
 
 // 设置 API 路由最大执行时间为 25 分钟（1500 秒），确保比视频生成超时时间（20 分钟）更长
@@ -372,14 +371,13 @@ export async function POST(request: Request) {
     })
 
     if (!moderationDecision.approved) {
-      // 未通过：返回 422 + 模糊参考图 + videoUrl:null，占位供前端统一处理
-      const blurredImageUrl = await blurImageToDataUrl(referenceImageDataUrl)
+      // 未通过：返回 422 + 原始参考图 + videoUrl:null，前端叠加蒙版展示
 
       // 留档：把原视频保存到 rejected_images（媒体类型 video），保留审计能力
       try {
         const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
 
-        // 保存参考图到 OSS（留原图，不用模糊图）
+        // 保存参考图到 OSS（留原图）
         let referenceImageUrls: string[] = []
         try {
           const { saveReferenceImages } = await import('@/utils/referenceImageStorage')
@@ -409,6 +407,7 @@ export async function POST(request: Request) {
           fps: videoFps,
           frameCount: videoFrameCount,
           rejectionReason,
+          moderationLevel: moderationDecision.visualRiskLevel,
           referenceImages: referenceImageUrls,
         })
       } catch (error) {
@@ -420,8 +419,9 @@ export async function POST(request: Request) {
           error: '内容未通过审核',
           code: 'VIDEO_MODERATION_FAILED',
           moderation: moderationDecision,
-          blurredImageUrl,
-          videoUrl: null,
+          imageUrl: referenceImageDataUrl,
+          videoUrl,
+          mediaId: null,
         },
         { status: 422 }
       )
@@ -445,6 +445,7 @@ export async function POST(request: Request) {
           frameCount: videoFrameCount,
           ipAddress: ipAddress,
           referenceImages: [referenceImageBase64],
+          moderationLevel: 'low',
         },
         { skipModeration: true }
       )

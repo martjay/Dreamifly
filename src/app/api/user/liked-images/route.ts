@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getUserGeneratedImages, getUserGeneratedImagesCount } from '@/utils/userImageStorage'
+import { getLikedCommunityMediaCount, getLikedCommunityMediaForUser } from '@/utils/communityLikes'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,41 +17,26 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : undefined
 
     const [images, totalCount] = await Promise.all([
-      getUserGeneratedImages(session.user.id, limit),
-      getUserGeneratedImagesCount(session.user.id),
+      getLikedCommunityMediaForUser(session.user.id, limit),
+      getLikedCommunityMediaCount(session.user.id),
     ])
-    
+
     return NextResponse.json({
       success: true,
-      images: images.map(img => ({
+      images: images.map((img) => ({
         ...img,
         createdAt: img.createdAt.toISOString(),
+        likedAt: img.likedAt.toISOString(),
       })),
       count: totalCount,
       returnedCount: images.length,
       totalCount,
     })
   } catch (error) {
-    console.error('Error fetching user images:', error)
+    console.error('Error fetching liked community images:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

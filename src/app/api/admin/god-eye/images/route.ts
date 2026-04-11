@@ -14,6 +14,7 @@ import { headers } from 'next/headers'
  * - search: 搜索关键词（用户昵称）
  * - startDate: 开始日期（YYYY-MM-DD）
  * - endDate: 结束日期（YYYY-MM-DD）
+ * - reviewStatus: 人工审核状态（pending | approved | rejected | all）
  */
 export async function GET(request: NextRequest) {
   try {
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
+    const reviewStatus = searchParams.get('reviewStatus') || 'all'
 
     // 构建筛选条件
     const conditions = []
@@ -62,6 +64,9 @@ export async function GET(request: NextRequest) {
         isNull(userGeneratedImages.userRole)
       )
     )
+
+    // 仅展示模型审核已通过的内容，作为人工审核池
+    conditions.push(eq(userGeneratedImages.moderationLevel, 'low'))
 
     // 用户角色筛选
     if (roleFilter !== 'all') {
@@ -97,6 +102,10 @@ export async function GET(request: NextRequest) {
       conditions.push(lte(userGeneratedImages.createdAt, end))
     }
 
+    if (reviewStatus !== 'all') {
+      conditions.push(eq(userGeneratedImages.manualReviewStatus, reviewStatus))
+    }
+
     // 查询总数
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -127,6 +136,11 @@ export async function GET(request: NextRequest) {
         userNickname: userGeneratedImages.userNickname,
         avatarFrameId: userGeneratedImages.avatarFrameId,
         referenceImages: userGeneratedImages.referenceImages,
+        manualReviewStatus: userGeneratedImages.manualReviewStatus,
+        manualReviewedAt: userGeneratedImages.manualReviewedAt,
+        manualReviewedBy: userGeneratedImages.manualReviewedBy,
+        reportCount: userGeneratedImages.reportCount,
+        nsfw: userGeneratedImages.nsfw,
         createdAt: userGeneratedImages.createdAt,
         userId: userGeneratedImages.userId,
       })
@@ -153,6 +167,11 @@ export async function GET(request: NextRequest) {
       userNickname: img.userNickname || '未知用户',
       avatarFrameId: img.avatarFrameId,
       referenceImages: img.referenceImages || [],
+      manualReviewStatus: img.manualReviewStatus || 'pending',
+      manualReviewedAt: img.manualReviewedAt?.toISOString() || null,
+      manualReviewedBy: img.manualReviewedBy || null,
+      reportCount: img.reportCount || 0,
+      nsfw: Boolean(img.nsfw),
       createdAt: img.createdAt?.toISOString() || new Date().toISOString(),
       userId: img.userId,
     }))

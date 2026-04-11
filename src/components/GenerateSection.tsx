@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import GenerateForm from './GenerateForm'
 import GeneratePreview from './GeneratePreview'
+import ModerationConsentModal from './ModerationConsentModal'
+import RestrictedMediaMask from './RestrictedMediaMask'
 import VideoGenerateForm from './VideoGenerateForm'
 import TabNavigation from './TabNavigation'
 import PromptInput from './PromptInput'
@@ -14,6 +16,7 @@ import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
 import { getVideoModelById, calculateVideoResolution } from '@/utils/videoModelConfig'
+import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GenerateSectionProps {
   communityWorks: { prompt: string }[];
@@ -21,6 +24,27 @@ interface GenerateSectionProps {
   initialModel?: string;
   activeTab?: 'generate' | 'video-generation';
   onTabChange?: (tab: 'generate' | 'video-generation') => void;
+}
+
+type ImagePreviewStatus = {
+  status: 'pending' | 'success' | 'error' | 'warning';
+  message: string;
+  moderationFailed?: boolean;
+  moderationLevel?: Exclude<VisualRiskLevel, 'low'>;
+  warningMessage?: string;
+  canReveal?: boolean;
+  revealed?: boolean;
+  mediaId?: string | null;
+  startTime?: number;
+  endTime?: number;
+}
+
+type VideoModerationState = {
+  warningMessage: string
+  moderationLevel: Exclude<VisualRiskLevel, 'low'>
+  revealed: boolean
+  canReveal: boolean
+  mediaId?: string | null
 }
 
 // 格式化时间（秒转为 MM:SS 或 HH:MM:SS）
@@ -53,13 +77,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [model, setModel] = useState(initialModel || 'Z-Image');
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-  const [imageStatuses, setImageStatuses] = useState<Array<{
-    status: 'pending' | 'success' | 'error' | 'warning';
-    message: string;
-    moderationFailed?: boolean;
-    startTime?: number;
-    endTime?: number;
-  }>>([]);
+  const [imageStatuses, setImageStatuses] = useState<ImagePreviewStatus[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -79,12 +97,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [videoModel, setVideoModel] = useState('Wan2.2-I2V-Lightning');
   const [uploadedVideoImage, setUploadedVideoImage] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
-  const [videoRejectedPreviewImage, setVideoRejectedPreviewImage] = useState<string | null>(null);
+  const [videoModerationState, setVideoModerationState] = useState<VideoModerationState | null>(null);
   const [isVideoGenerating, setIsVideoGenerating] = useState(false);
   const [isVideoQueuing, setIsVideoQueuing] = useState(false);
   const [videoGenerationStartTime, setVideoGenerationStartTime] = useState<number | null>(null);
   const [videoGenerationDuration, setVideoGenerationDuration] = useState<number | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const [showModerationConsentModal, setShowModerationConsentModal] = useState(false)
+  const [pendingRevealTarget, setPendingRevealTarget] = useState<
+    | { type: 'image'; index: number; mediaId?: string | null }
+    | { type: 'video'; mediaId?: string | null }
+    | null
+  >(null)
 
   // 监听视频生成状态，记录开始时间
   useEffect(() => {
@@ -258,6 +282,83 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       return () => clearTimeout(timer);
     }
   }, [generatedImageToSetAsReference]);
+
+  const requestRevealRestrictedImage = (index: number) => {
+    const status = imageStatuses[index]
+    if (!status || status.moderationLevel !== 'medium') return
+
+    setPendingRevealTarget({ type: 'image', index, mediaId: status.mediaId })
+    setShowModerationConsentModal(true)
+  }
+
+  const requestRevealRestrictedVideo = () => {
+    if (!videoModerationState || videoModerationState.moderationLevel !== 'medium') return
+
+    setPendingRevealTarget({ type: 'video', mediaId: videoModerationState.mediaId })
+    setShowModerationConsentModal(true)
+  }
+
+  const closeModerationConsentModal = () => {
+    setShowModerationConsentModal(false)
+    setPendingRevealTarget(null)
+  }
+
+  const confirmRevealRestrictedMedia = async () => {
+    if (!pendingRevealTarget) return
+
+    try {
+      if (pendingRevealTarget.mediaId) {
+        const response = await fetch(`/api/user/images/${pendingRevealTarget.mediaId}/moderation-view`, {
+          method: 'POST',
+        })
+
+        if (!response.ok) {
+          throw new Error('保存查看确认失败')
+        }
+      }
+
+      if (pendingRevealTarget.type === 'image') {
+        setImageStatuses((prev) =>
+          prev.map((status, index) =>
+            index === pendingRevealTarget.index
+              ? { ...status, revealed: true }
+              : status
+          )
+        )
+      } else {
+        setVideoModerationState((prev) => (prev ? { ...prev, revealed: true } : prev))
+      }
+    } catch (error) {
+      console.error('确认查看受限内容失败:', error)
+    } finally {
+      closeModerationConsentModal()
+    }
+  }
+
+  const refreshPostGenerationState = async () => {
+    if (!session?.user) return
+
+    refreshPoints().catch(err => {
+      console.error('Failed to refresh points:', err);
+    });
+
+    try {
+      const token = await generateDynamicTokenWithServerTime();
+      const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
+        setHasQuota(quota);
+      }
+    } catch (error) {
+      console.error('Failed to refresh quota:', error);
+    }
+  }
 
   const handleGenerate = async () => {
     let hasError = false;
@@ -491,11 +592,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             throw new Error(isDailyLimit ? 'DAILY_LIMIT' : 'CONCURRENCY_LIMIT');
           }
 
-          // 审核未通过：非 2xx，但响应体包含 blurredImageUrl 供展示
+          // 审核未通过：非 2xx，但响应体包含 imageUrl 供前端加遮罩展示
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
-            if (errorData?.blurredImageUrl) {
-              const dataUrl = errorData.blurredImageUrl as string;
+            if (errorData?.code === 'MODERATION_FAILED' && errorData?.imageUrl) {
+              const dataUrl = errorData.imageUrl as string;
+              const moderationLevel = errorData?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined
+              const isVisualRestricted = moderationLevel === 'medium' || moderationLevel === 'high'
+              const warningMessage = moderationLevel
+                ? getModerationWarning(moderationLevel, 'image')
+                : '内容未通过审核'
               const imageLoadPromise = new Promise<void>((resolve) => {
                 const img = new window.Image();
                 img.onload = () => {
@@ -506,14 +612,26 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   setImageStatuses(prev => {
                     const newStatuses = [...prev];
                     newStatuses[index] = ({
-                      status: 'warning',
-                      message: `未通过审核（${duration}s）`,
-                      moderationFailed: true,
+                      status: isVisualRestricted ? 'warning' : 'success',
+                      message: isVisualRestricted
+                        ? moderationLevel === 'high'
+                          ? `高风险内容已遮罩（${duration}s）`
+                          : `中风险内容已遮罩（${duration}s）`
+                        : `${t('preview.completed')} (${duration}s)`,
+                      moderationFailed: isVisualRestricted,
+                      moderationLevel: isVisualRestricted ? moderationLevel : undefined,
+                      warningMessage: isVisualRestricted ? warningMessage : undefined,
+                      canReveal: Boolean(session?.user && moderationLevel === 'medium'),
+                      revealed: !isVisualRestricted,
+                      mediaId: isVisualRestricted ? (errorData?.mediaId || null) : null,
                       startTime,
                       endTime
                     });
                     return newStatuses;
                   });
+                  if (!isVisualRestricted) {
+                    refreshPostGenerationState();
+                  }
                   resolve();
                 };
                 img.src = dataUrl;
@@ -543,33 +661,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 });
                 return newStatuses;
               });
-              
-              // 刷新积分显示和额度信息（如果用户已登录）
-              if (session?.user) {
-                refreshPoints().catch(err => {
-                  console.error('Failed to refresh points:', err);
-                });
-                // 刷新额度信息
-                const refreshQuota = async () => {
-                  try {
-                    const token = await generateDynamicTokenWithServerTime();
-                    const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-                      headers: {
-                        'Authorization': `Bearer ${token}`
-                      }
-                    });
-                    if (response.ok) {
-                      const data = await response.json();
-                      const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-                      setHasQuota(quota);
-                    }
-                  } catch (error) {
-                    console.error('Failed to refresh quota:', error);
-                  }
-                };
-                refreshQuota();
-              }
-              
+
+              refreshPostGenerationState();
               resolve();
             };
             img.src = data.imageUrl;
@@ -988,6 +1081,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 isGenerating={isGenerating}
                 setZoomedImage={setZoomedImage}
                 onSetAsReference={handleSetGeneratedImageAsReference}
+                onRevealRestrictedImage={requestRevealRestrictedImage}
               />
             </div>
           </div>
@@ -1018,9 +1112,20 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         setUploadedImage={setUploadedVideoImage}
                         generatedVideo={generatedVideo}
                         setGeneratedVideo={setGeneratedVideo}
-                        onModerationFailed={(blurredImageUrl) => {
-                          setVideoRejectedPreviewImage(blurredImageUrl)
-                          setGeneratedVideo(null)
+                        onModerationFailed={(payload) => {
+                          const moderationLevel = payload.moderation?.visualRiskLevel
+                          if (!moderationLevel) {
+                            return
+                          }
+
+                          setGeneratedVideo(payload.videoUrl || null)
+                          setVideoModerationState({
+                            moderationLevel,
+                            warningMessage: getModerationWarning(moderationLevel, 'video'),
+                            revealed: false,
+                            canReveal: Boolean(session?.user && moderationLevel === 'medium'),
+                            mediaId: payload.mediaId || null,
+                          })
                         }}
                         isGenerating={isVideoGenerating}
                         setIsGenerating={setIsVideoGenerating}
@@ -1032,6 +1137,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             const duration = (Date.now() - videoGenerationStartTime) / 1000 // 转换为秒
                             setVideoGenerationDuration(duration)
                           }
+                          setVideoModerationState(null)
                         }}
                         setErrorModal={(show, type, message) => {
                           console.log('GenerateSection - setErrorModal called:', { show, type, message })
@@ -1077,7 +1183,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         <video
                           ref={videoRef}
                           src={generatedVideo}
-                          className="w-full h-full rounded-xl shadow-lg border border-orange-400/30 object-contain"
+                          className={`w-full h-full rounded-xl shadow-lg border border-orange-400/30 object-contain transition-all ${
+                            videoModerationState && !videoModerationState.revealed ? 'scale-[1.02] blur-xl brightness-75' : ''
+                          }`}
                           autoPlay
                           muted={isVideoMuted}
                           playsInline
@@ -1105,8 +1213,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             console.error('Video load error:', e);
                           }}
                         />
+                        {videoModerationState && (
+                          <RestrictedMediaMask
+                            level={videoModerationState.moderationLevel}
+                            warning={videoModerationState.warningMessage}
+                            revealed={videoModerationState.revealed}
+                            canReveal={videoModerationState.canReveal && !videoModerationState.revealed}
+                            onReveal={requestRevealRestrictedVideo}
+                          />
+                        )}
                         
                         {/* 右上角下载按钮 - 常驻显示 */}
+                        {!videoModerationState?.moderationLevel || videoModerationState.revealed ? (
                         <div className="absolute top-2 right-2 z-20">
                           <button
                             onClick={(e) => {
@@ -1131,6 +1249,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             </div>
                           </button>
                         </div>
+                        ) : null}
                         
                         {/* 控制栏 */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 rounded-b-xl">
@@ -1140,6 +1259,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (videoModerationState && !videoModerationState.revealed) {
+                                  return;
+                                }
                                 if (videoRef.current) {
                                   if (isVideoPlaying) {
                                     videoRef.current.pause();
@@ -1173,6 +1295,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (videoModerationState && !videoModerationState.revealed) {
+                                    return;
+                                  }
                                   const nextMuted = !isVideoMuted;
                                   setIsVideoMuted(nextMuted);
                                   if (videoRef.current) {
@@ -1197,32 +1322,19 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                               </button>
 
                               {/* 全屏按钮 */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setZoomedVideo(generatedVideo);
-                                }}
-                                className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
-                              >
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : videoRejectedPreviewImage ? (
-                      <div className="relative w-full h-full flex flex-col items-center justify-center p-6">
-                        <div className="relative">
-                          <img
-                            src={videoRejectedPreviewImage}
-                            alt="Blurred reference preview"
-                            className="max-w-full max-h-[360px] rounded-lg shadow-lg border border-amber-400/40 object-contain"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="px-5 py-3 rounded-xl bg-white/35 text-amber-900 text-lg font-semibold backdrop-blur-md border border-white/40 shadow-lg">
-                              未通过审核
+                              {!videoModerationState?.moderationLevel || videoModerationState.revealed ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setZoomedVideo(generatedVideo);
+                                  }}
+                                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
+                                >
+                                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                  </svg>
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -1390,6 +1502,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           </div>
         </div>
       )}
+
+      <ModerationConsentModal
+        open={showModerationConsentModal}
+        message={MEDIUM_RISK_CONFIRM_MESSAGE}
+        onClose={closeModerationConsentModal}
+        onConfirm={confirmRevealRestrictedMedia}
+      />
 
       {/* 图片放大模态框 */}
       {zoomedImage && (

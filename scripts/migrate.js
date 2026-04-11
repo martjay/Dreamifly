@@ -2,9 +2,47 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// 从环境变量读取数据库配置
+const projectRoot = path.join(__dirname, '..');
+
+/**
+ * 与 Next 一致：先读 .env，再读 .env.local（后者覆盖前者）
+ * 不引入 dotenv 依赖，仅解析 KEY=VALUE 行
+ */
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(path.join(projectRoot, '.env'));
+loadEnvFile(path.join(projectRoot, '.env.local'));
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error(
+    '❌ 未设置 DATABASE_URL。请在项目根目录的 .env 或 .env.local 中配置，例如：\n' +
+      '   DATABASE_URL=postgresql://user:pass@host:port/dbname'
+  );
+  process.exit(1);
+}
+
+// 从环境变量读取数据库配置（与 Next / Drizzle 使用同一套 .env.local）
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://dreamifly:Dreamifly123!QAZ.@10.0.1.16:5432/dreamifly'
+  connectionString: databaseUrl,
 });
 
 async function runMigration(migrationFileName) {

@@ -3,6 +3,8 @@
 
 import { createScopedT } from '@/lib/strings'
 import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
+import RestrictedMediaMask from '@/components/RestrictedMediaMask'
+import type { VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GeneratePreviewProps {
   generatedImages: string[];
@@ -10,12 +12,17 @@ interface GeneratePreviewProps {
     status: 'pending' | 'success' | 'error' | 'warning';
     message: string;
     moderationFailed?: boolean;
+    moderationLevel?: Exclude<VisualRiskLevel, 'low'>;
+    warningMessage?: string;
+    canReveal?: boolean;
+    revealed?: boolean;
   }>;
   batch_size: number;
   isGenerating: boolean;
   setZoomedImage: (image: string) => void;
   onSetAsReference?: (image: string) => void;
   onDownloadImage?: (image: string, index: number) => void;
+  onRevealRestrictedImage?: (index: number) => void;
 }
 
 export default function GeneratePreview({
@@ -25,12 +32,21 @@ export default function GeneratePreview({
   isGenerating,
   setZoomedImage,
   onSetAsReference,
-  onDownloadImage
+  onDownloadImage,
+  onRevealRestrictedImage,
 }: GeneratePreviewProps) {
   const t = createScopedT('home.generate')
   const { checkAndDownload, DownloadTermsModalWrapper } = useDownloadWithTerms()
 
+  const canUseImage = (index: number) => {
+    const status = imageStatuses[index]
+    if (!status?.moderationFailed) return true
+    return status.moderationLevel === 'medium' && Boolean(status.revealed)
+  }
+
   const handleDownloadImage = async (image: string, index: number) => {
+    if (!canUseImage(index)) return
+
     await checkAndDownload(async () => {
       if (onDownloadImage) {
         onDownloadImage(image, index);
@@ -49,6 +65,7 @@ export default function GeneratePreview({
   const handleBatchDownload = async () => {
     await checkAndDownload(async () => {
       generatedImages.forEach((image, index) => {
+        if (!canUseImage(index)) return
         const link = document.createElement('a');
         link.href = image;
         link.download = `generated-image-${index + 1}.png`;
@@ -91,27 +108,47 @@ export default function GeneratePreview({
             : 'grid grid-cols-2 grid-rows-2 gap-4 sm:gap-8 flex-grow'
         }
       >
-        {Array.from({ length: batch_size }).map((_, index) => (
-          <div
-            key={index}
-            className={
-              batch_size === 1
-                ? 'aspect-square relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 col-span-1 row-span-1 group'
-                : batch_size === 2
-                ? 'aspect-[1/0.5] relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 col-span-1 row-span-1 group'
-                : 'aspect-square relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 group'
-            }
-          >
-            <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              {generatedImages[index] && (
+        {Array.from({ length: batch_size }).map((_, index) => {
+          const status = imageStatuses[index]
+          const isRestricted = Boolean(status?.moderationFailed && status?.moderationLevel)
+          const isRevealed = Boolean(status?.revealed)
+
+          return (
+            <div
+              key={index}
+              className={
+                batch_size === 1
+                  ? 'aspect-square relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 col-span-1 row-span-1 group'
+                  : batch_size === 2
+                  ? 'aspect-[1/0.5] relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 col-span-1 row-span-1 group'
+                  : 'aspect-square relative rounded-2xl bg-white/80 backdrop-blur-sm border border-orange-400/40 transform hover:scale-[1.02] transition-transform duration-300 group'
+              }
+            >
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                {generatedImages[index] && (
                 <img
                   src={generatedImages[index]}
                   alt={`Generated ${index + 1}`}
-                  className="w-full h-full object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
-                  onClick={() => setZoomedImage(generatedImages[index])}
+                  className={`w-full h-full object-contain transition-all ${
+                    canUseImage(index) ? 'cursor-zoom-in hover:opacity-90' : 'scale-105 blur-xl brightness-75'
+                  }`}
+                  onClick={() => {
+                    if (canUseImage(index)) {
+                      setZoomedImage(generatedImages[index])
+                    }
+                  }}
                 />
-              )}
-              <div className={`absolute bottom-0 left-0 right-0 p-4 text-center text-sm backdrop-blur-md ${imageStatuses[index]?.status === 'error'
+                )}
+                {isRestricted && status?.moderationLevel && (
+                  <RestrictedMediaMask
+                    level={status.moderationLevel}
+                    warning={status.warningMessage || '内容未通过审核'}
+                    revealed={isRevealed}
+                    canReveal={Boolean(status.canReveal && !isRevealed)}
+                    onReveal={() => onRevealRestrictedImage?.(index)}
+                  />
+                )}
+                <div className={`absolute bottom-0 left-0 right-0 p-4 text-center text-sm backdrop-blur-md ${imageStatuses[index]?.status === 'error'
                   ? 'bg-red-500/20 text-red-900'
                   : imageStatuses[index]?.status === 'warning'
                     ? 'bg-amber-500/20 text-amber-900'
@@ -153,7 +190,7 @@ export default function GeneratePreview({
             </div>
             
             {/* Hover Menu - 在 overflow-hidden 容器外部 */}
-            {generatedImages[index] && (
+            {generatedImages[index] && canUseImage(index) && (
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
                 <div className="bg-white/90 backdrop-blur-md rounded-xl border border-orange-400/40 shadow-xl p-3 flex gap-2">
                   {/* Set as Reference Button */}
@@ -197,7 +234,8 @@ export default function GeneratePreview({
               </div>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
       <div className="mt-6 text-center text-sm text-gray-600/80">
         {t('preview.hint')}

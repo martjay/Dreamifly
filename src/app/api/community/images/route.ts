@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { userGeneratedImages, user } from '@/db/schema'
 import { desc, or, and, isNull, inArray, eq, notInArray } from 'drizzle-orm'
@@ -60,14 +60,20 @@ function containsCommunityBlockWords(text: string, words: string[]): boolean {
     return lowerText.includes(trimmedWord.toLowerCase());
   });
 }
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const headersList = await headers()
+    const requestedLimit = Number(request.nextUrl.searchParams.get('limit') || '')
+    const displayLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(Math.floor(requestedLimit), 24)
+      : 12
+
     // 默认公开，只有显式配置为 false 时才限制为管理员可见
     const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC !== 'false'
 
     if (!isPublic) {
       const session = await auth.api.getSession({
-        headers: await headers()
+        headers: headersList
       })
 
       if (!session?.user) {
@@ -128,6 +134,9 @@ export async function GET() {
             notInArray(userGeneratedImages.model, i2iModels),
             isNull(userGeneratedImages.model)
           ),
+          // 社区展示必须是模型审核低风险，且经过人工审核通过
+          eq(userGeneratedImages.moderationLevel, 'low'),
+          eq(userGeneratedImages.manualReviewStatus, 'approved'),
           // 排除 NSFW 内容
           eq(userGeneratedImages.nsfw, false)
         )
@@ -164,13 +173,13 @@ export async function GET() {
         success: true,
         images: [],
       })
-    } else if (filteredImages.length <= 12) {
-      // 如果图片数量少于等于12张，直接使用所有图片
+    } else if (filteredImages.length <= displayLimit) {
+      // 如果图片数量不超过展示上限，直接使用所有图片
       selectedImages = filteredImages
     } else {
-      // 如果图片数量大于12张，随机选择12张
+      // 如果图片数量大于展示上限，随机选择指定数量
       const shuffled = [...filteredImages].sort(() => Math.random() - 0.5)
-      selectedImages = shuffled.slice(0, 12)
+      selectedImages = shuffled.slice(0, displayLimit)
     }
 
     return NextResponse.json({

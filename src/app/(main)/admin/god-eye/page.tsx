@@ -16,6 +16,7 @@ import { filterProfanity } from '@/utils/profanityFilter'
 
 type TabType = 'approved' | 'rejected' | 'profanity'
 type RoleFilter = 'all' | 'subscribed' | 'premium' | 'oldUser' | 'regular'
+type ManualReviewStatus = 'pending' | 'approved' | 'rejected'
 
 interface ImageItem {
   id: string
@@ -37,6 +38,11 @@ interface ImageItem {
   userId: string
   rejectionReason?: string
   ipAddress?: string
+  manualReviewStatus?: ManualReviewStatus
+  manualReviewedAt?: string | null
+  manualReviewedBy?: string | null
+  reportCount?: number
+  nsfw?: boolean
 }
 
 export default function GodEyePage() {
@@ -56,10 +62,13 @@ export default function GodEyePage() {
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | ManualReviewStatus>('pending')
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [reviewActionId, setReviewActionId] = useState<string | null>(null)
+  const [reviewError, setReviewError] = useState('')
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
   const [zoomedMediaType, setZoomedMediaType] = useState<'image' | 'video' | null>(null)
   const [clickedPromptId, setClickedPromptId] = useState<string | null>(null)
@@ -241,6 +250,9 @@ export default function GodEyePage() {
         if (roleFilter !== 'all') {
           params.set('role', roleFilter)
         }
+        if (reviewStatusFilter !== 'all') {
+          params.set('reviewStatus', reviewStatusFilter)
+        }
         if (searchTerm.trim()) {
           params.set('search', searchTerm.trim())
         }
@@ -267,7 +279,7 @@ export default function GodEyePage() {
     }
 
     fetchImages()
-  }, [activeTab, isAdmin, page, roleFilter, searchTerm, startDate, endDate])
+  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, searchTerm, startDate, endDate])
 
   // 获取未通过审核图片列表
   useEffect(() => {
@@ -857,6 +869,67 @@ export default function GodEyePage() {
     }
   }
 
+  const getManualReviewBadgeStyle = (status?: ManualReviewStatus) => {
+    switch (status) {
+      case 'approved':
+        return 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+      case 'rejected':
+        return 'bg-red-100 text-red-700 border border-red-200'
+      default:
+        return 'bg-amber-100 text-amber-700 border border-amber-200'
+    }
+  }
+
+  const getManualReviewLabel = (status?: ManualReviewStatus) => {
+    switch (status) {
+      case 'approved':
+        return '人工已通过'
+      case 'rejected':
+        return '人工已驳回'
+      default:
+        return '待人工审核'
+    }
+  }
+
+  const handleManualReview = async (imageId: string, status: Exclude<ManualReviewStatus, 'pending'>) => {
+    try {
+      setReviewError('')
+      setReviewActionId(imageId)
+      const response = await fetch(`/api/admin/god-eye/images/${imageId}/review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || '人工审核失败')
+      }
+
+      const reviewedAt = new Date().toISOString()
+      setImages((prev) =>
+        prev.map((image) =>
+          image.id === imageId
+            ? {
+                ...image,
+                manualReviewStatus: status,
+                manualReviewedAt: reviewedAt,
+                manualReviewedBy: session?.user?.id ?? image.manualReviewedBy ?? null,
+                nsfw: status === 'rejected' ? true : image.nsfw,
+              }
+            : image
+        )
+      )
+    } catch (error) {
+      console.error('人工审核失败:', error)
+      setReviewError(error instanceof Error ? error.message : '人工审核失败')
+    } finally {
+      setReviewActionId(null)
+    }
+  }
+
   if (sessionLoading || checkingAdmin || !isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -946,7 +1019,7 @@ export default function GodEyePage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex gap-2 border-b border-gray-200 pb-1 overflow-x-auto">
                 {[
-                  { id: 'approved', label: '通过审核图片' },
+                  { id: 'approved', label: '人工审核作品' },
                   { id: 'rejected', label: '未通过审核图片' },
                   { id: 'profanity', label: '违禁词管理' },
                 ].map((tab) => (
@@ -987,6 +1060,23 @@ export default function GodEyePage() {
                         <option value="premium">优质用户</option>
                         <option value="oldUser">首批用户</option>
                         <option value="regular">普通用户</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 whitespace-nowrap">人工状态：</span>
+                      <select
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[130px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={reviewStatusFilter}
+                        onChange={(e) => {
+                          setReviewStatusFilter(e.target.value as 'all' | ManualReviewStatus)
+                          setPage(1)
+                        }}
+                      >
+                        <option value="all">全部</option>
+                        <option value="pending">待审核</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已驳回</option>
                       </select>
                     </div>
 
@@ -1049,11 +1139,17 @@ export default function GodEyePage() {
                   </div>
                 </div>
 
+                {reviewError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {reviewError}
+                  </div>
+                )}
+
                 {/* 统计信息 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">
-                      共找到 <span className="font-semibold text-orange-600">{total}</span> 张图片
+                      共找到 <span className="font-semibold text-orange-600">{total}</span> 张模型审核已通过的作品
                     </span>
                     <span className="text-xs text-gray-500">
                       第 {page} 页 / 共 {totalPages} 页
@@ -1214,6 +1310,21 @@ export default function GodEyePage() {
                                   {getRoleLabel(image.userRole)}
                                 </span>
                               </div>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getManualReviewBadgeStyle(image.manualReviewStatus)}`}>
+                                  {getManualReviewLabel(image.manualReviewStatus)}
+                                </span>
+                                {image.nsfw ? (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                                    已下架
+                                  </span>
+                                ) : null}
+                                {(image.reportCount || 0) > 0 ? (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                    举报 {image.reportCount}
+                                  </span>
+                                ) : null}
+                              </div>
                               {image.prompt && (
                                 <div 
                                   className="relative group/prompt prompt-container"
@@ -1284,6 +1395,36 @@ export default function GodEyePage() {
                                   )}
                                 </div>
                               ) : null}
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void handleManualReview(image.id, 'approved')
+                                  }}
+                                  disabled={reviewActionId === image.id || image.manualReviewStatus === 'approved'}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                    reviewActionId === image.id || image.manualReviewStatus === 'approved'
+                                      ? 'bg-emerald-200 text-emerald-600 cursor-not-allowed'
+                                      : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  }`}
+                                >
+                                  {reviewActionId === image.id ? '处理中...' : '人工通过'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void handleManualReview(image.id, 'rejected')
+                                  }}
+                                  disabled={reviewActionId === image.id || image.manualReviewStatus === 'rejected'}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                    reviewActionId === image.id || image.manualReviewStatus === 'rejected'
+                                      ? 'bg-red-200 text-red-600 cursor-not-allowed'
+                                      : 'bg-red-500 text-white hover:bg-red-600'
+                                  }`}
+                                >
+                                  {reviewActionId === image.id ? '处理中...' : '人工驳回'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>

@@ -4,6 +4,9 @@ import { eq, asc, desc, sql, and } from 'drizzle-orm'
 import { uploadToOSS, deleteFromOSS } from './oss'
 import { getImageStorageConfig } from './points'
 import { encodeMediaForStorage } from './mediaStorage'
+import { getMediaViewConsentMap } from './mediaViewConsent'
+import type { VisualRiskLevel } from './visualModeration'
+import { ensureCommunityTagsForSavedMedia } from './communityTags'
 
 /**
  * 检查用户是否为订阅用户（实时检查）
@@ -97,6 +100,7 @@ export async function saveUserGeneratedImage(
     height?: number
     ipAddress?: string // 客户端IP地址（用于未登录用户记录）
     referenceImages?: string[] // 参考图的base64数组（不包含data:image前缀）
+    moderationLevel?: VisualRiskLevel
   },
   options?: {
     /**
@@ -281,6 +285,11 @@ export async function saveUserGeneratedImage(
       model: metadata?.model,
       width: metadata?.width,
       height: metadata?.height,
+      moderationLevel: metadata?.moderationLevel || 'low',
+      manualReviewStatus: 'pending',
+      manualReviewedAt: null,
+      manualReviewedBy: null,
+      nsfw: metadata?.moderationLevel ? metadata.moderationLevel !== 'low' : false,
       userRole,
       userAvatar,
       userNickname,
@@ -288,6 +297,12 @@ export async function saveUserGeneratedImage(
       referenceImages: referenceImageUrls, // 保存参考图URL数组
       createdAt: new Date(),
       updatedAt: new Date(),
+    })
+
+    void ensureCommunityTagsForSavedMedia({
+      mediaId: imageId,
+      prompt: metadata?.prompt,
+      imageBuffer: buffer,
     })
     
     // 10. 自动清理超出数量的旧媒体（图片+视频，从前往后删除，保留最新的）
@@ -310,6 +325,8 @@ export async function getUserGeneratedImages(
   mediaType?: string | null
   prompt?: string | null
   model?: string | null
+  moderationLevel?: string | null
+  hasViewConsent: boolean
   width?: number | null
   height?: number | null
   duration?: number | null
@@ -317,13 +334,19 @@ export async function getUserGeneratedImages(
   frameCount?: number | null
   createdAt: Date
 }>> {
-  const images = await db
+  const conditions = and(
+    eq(userGeneratedImages.userId, userId),
+    eq(userGeneratedImages.moderationLevel, 'low')
+  )
+
+  const baseQuery = db
     .select({
       id: userGeneratedImages.id,
       imageUrl: userGeneratedImages.imageUrl,
       mediaType: userGeneratedImages.mediaType,
       prompt: userGeneratedImages.prompt,
       model: userGeneratedImages.model,
+      moderationLevel: userGeneratedImages.moderationLevel,
       width: userGeneratedImages.width,
       height: userGeneratedImages.height,
       duration: userGeneratedImages.duration,
@@ -332,14 +355,30 @@ export async function getUserGeneratedImages(
       createdAt: userGeneratedImages.createdAt,
     })
     .from(userGeneratedImages)
-    .where(eq(userGeneratedImages.userId, userId))
-    .orderBy(desc(userGeneratedImages.createdAt)) // 按创建时间降序，最新的在前
-  
-  if (limit) {
-    return images.slice(0, limit)
-  }
-  
-  return images
+    .where(conditions)
+    .orderBy(desc(userGeneratedImages.createdAt))
+
+  const images = typeof limit === 'number' ? await baseQuery.limit(limit) : await baseQuery
+  const consentMap = await getMediaViewConsentMap(userId, images.map((image) => image.id))
+
+  return images.map((image) => ({
+    ...image,
+    hasViewConsent: Boolean(consentMap[image.id]),
+  }))
+}
+
+export async function getUserGeneratedImagesCount(userId: string): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userGeneratedImages)
+    .where(
+      and(
+        eq(userGeneratedImages.userId, userId),
+        eq(userGeneratedImages.moderationLevel, 'low')
+      )
+    )
+
+  return Number(rows[0]?.count || 0)
 }
 
 /**

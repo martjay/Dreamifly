@@ -11,10 +11,10 @@ import { concurrencyManager } from '@/utils/concurrencyManager'
 import { ipConcurrencyManager } from '@/utils/ipConcurrencyManager'
 import { randomUUID, createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
-import { blurImageToDataUrl } from '@/utils/blurImage'
 import { moderateGeneratedOutput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isLoginRequiredModel } from '@/utils/modelConfig'
+import { getClientIP } from '@/utils/clientIp'
 
 /**
  * 验证动态API token
@@ -58,36 +58,6 @@ function validateDynamicToken(providedToken: string): boolean {
   }
 
   return false
-}
-
-// 获取客户端IP地址
-export function getClientIP(request: Request): string | null {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const realIP = request.headers.get('x-real-ip')
-  const cfConnectingIP = request.headers.get('cf-connecting-ip') // Cloudflare
-  
-  let ip: string | null = null
-  
-  if (forwarded) {
-    // x-forwarded-for 可能包含多个IP，取第一个
-    ip = forwarded.split(',')[0].trim()
-  } else if (realIP) {
-    ip = realIP.trim()
-  } else if (cfConnectingIP) {
-    ip = cfConnectingIP.trim()
-  }
-  
-  // 处理本地回环地址：将 IPv6 的 ::1 转换为 IPv4 的 127.0.0.1，便于统一显示
-  if (ip === '::1' || ip === '::ffff:127.0.0.1') {
-    ip = '127.0.0.1'
-  }
-  
-  // 处理IPv4映射的IPv6格式（::ffff:192.168.1.1 -> 192.168.1.1）
-  if (ip && ip.startsWith('::ffff:')) {
-    ip = ip.substring(7) // 移除 '::ffff:' 前缀
-  }
-  
-  return ip
 }
 
 export async function POST(request: Request) {
@@ -1014,8 +984,8 @@ export async function POST(request: Request) {
       })
     }
 
-    // --- 同步审核：先审核再决定是否返回原图 ---
-    // 1) 将 base64 转为 Buffer（用于审核/留档/模糊）
+    // --- 同步审核：先审核再决定是否返回 ---
+    // 1) 将 base64 转为 Buffer（用于审核/留档）
     const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '')
     const imageBuffer = Buffer.from(base64Data, 'base64')
 
@@ -1026,7 +996,7 @@ export async function POST(request: Request) {
     })
 
     if (!moderationDecision.approved) {
-      // 留档未通过（原图入 rejected_images），并返回模糊图（非 2xx）
+      // 留档未通过（原图入 rejected_images），并返回原图供前端叠加蒙版（非 2xx）
       try {
         const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
 
@@ -1055,13 +1025,12 @@ export async function POST(request: Request) {
           width,
           height,
           rejectionReason,
+          moderationLevel: moderationDecision.visualRiskLevel,
           referenceImages: referenceImageUrls,
         })
       } catch (error) {
         console.error('保存未通过审核图片失败:', error)
       }
-
-      const blurredImageUrl = await blurImageToDataUrl(imageUrl)
 
       // 审核未通过也属于“请求已结束”的一种，需要回收并发计数
       if (generationId) {
@@ -1079,7 +1048,8 @@ export async function POST(request: Request) {
           error: '内容未通过审核',
           code: 'MODERATION_FAILED',
           moderation: moderationDecision,
-          blurredImageUrl,
+          imageUrl,
+          mediaId: null,
         },
         { status: 403 }
       )
@@ -1155,6 +1125,7 @@ export async function POST(request: Request) {
             height,
             ipAddress: clientIP || undefined,
             referenceImages: images || [],
+            moderationLevel: 'low',
           },
           { skipModeration: true }
         )

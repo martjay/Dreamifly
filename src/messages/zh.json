@@ -264,6 +264,7 @@
       "title": "社区",
       "subtitle": "探索其他用户创作的精彩作品，并从中获取灵感",
       "generateSame": "画同款",
+      "exploreNew": "进入新社区",
       "sharePrompt": {
         "title": "想分享你的绘画作品和创意提示词？",
         "description": "欢迎填写问卷，让更多人看到你的灵感！"
@@ -349,6 +350,39 @@
     "pricing": "会员订阅",
     "myWorks": "我的作品",
     "aiPlaza": "AI广场"
+  },
+  "communityPage": {
+    "heroTitle": "灵感社区",
+    "heroSubtitle": "搜索标签与提示词，发现最新、最热和随机涌现的创作灵感。",
+    "searchPlaceholder": "搜索标签或提示词，例如：动漫少女 / 校园风 / 糖果色",
+    "searchButton": "搜索",
+    "clearButton": "清除筛选",
+    "recommendTitle": "推荐标签",
+    "feedTitle": "社区作品",
+    "feedSubtitle": "快来看看其他人都在生成什么宝藏图片~",
+    "empty": "暂时没有符合条件的作品",
+    "loadMore": "加载更多",
+    "loading": "加载中...",
+    "sort": {
+      "latest": "最新",
+      "hot": "最热",
+      "random": "随机"
+    },
+    "tagMode": {
+      "latest": "最新标签",
+      "hot": "最热标签",
+      "random": "随机标签"
+    },
+    "mediaType": {
+      "all": "全部",
+      "image": "图片",
+      "video": "视频"
+    },
+    "activeFilter": {
+      "search": "搜索",
+      "tag": "标签"
+    },
+    "cta": "画同款"
   },
   "footer": {
     "copyright": "Dreamifly 版权所有"
@@ -631,9 +665,24 @@
     "expiresAt": "会员到期时间",
     "delete": "删除",
     "deleting": "删除中...",
+    "generated": {
+      "title": "最近生成",
+      "description": "这里展示你最近生成并保存的图片与视频。"
+    },
+    "liked": {
+      "title": "收藏",
+      "description": "这里展示你在社区收藏过的作品。"
+    },
+    "sectionToggle": {
+      "expand": "展开查看全部",
+      "collapse": "收起",
+      "loading": "加载中...",
+      "showingPartial": "当前仅展示最近 {visible} / {total} 项",
+      "showingAll": "当前展示全部 {count} 项"
+    },
     "empty": {
       "title": "还没有保存任何作品",
-      "description": "生成图片后会自动保存到这里",
+      "description": "生成作品或在社区收藏后，会展示在这里",
       "button": "开始生成图片"
     }
   },

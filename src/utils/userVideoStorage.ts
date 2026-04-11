@@ -4,6 +4,8 @@ import { eq, asc } from 'drizzle-orm'
 import { uploadToOSS, deleteFromOSS } from './oss'
 import { getImageStorageConfig } from './points'
 import { encodeMediaForStorage } from './mediaStorage'
+import type { VisualRiskLevel } from './visualModeration'
+import { ensureCommunityTagsForSavedMedia } from './communityTags'
 
 /**
  * 检查用户是否为订阅用户（实时检查）
@@ -99,6 +101,7 @@ export async function saveUserGeneratedVideo(
     frameCount?: number // 视频总帧数
     ipAddress?: string // 客户端IP地址（用于未登录用户记录）
     referenceImages?: string[] // 参考图的base64数组（不包含data:image前缀）
+    moderationLevel?: VisualRiskLevel
   },
   options?: {
     /**
@@ -289,6 +292,11 @@ export async function saveUserGeneratedVideo(
       mediaType: 'video', // 明确指定为视频类型
       prompt: metadata?.prompt,
       model: metadata?.model,
+      moderationLevel: metadata?.moderationLevel || 'low',
+      manualReviewStatus: 'pending',
+      manualReviewedAt: null,
+      manualReviewedBy: null,
+      nsfw: metadata?.moderationLevel ? metadata.moderationLevel !== 'low' : false,
       width: metadata?.width,
       height: metadata?.height,
       duration: metadata?.duration,
@@ -301,6 +309,12 @@ export async function saveUserGeneratedVideo(
       referenceImages: referenceImageUrls, // 保存参考图URL数组
       createdAt: new Date(),
       updatedAt: new Date(),
+    })
+
+    void ensureCommunityTagsForSavedMedia({
+      mediaId: videoId,
+      prompt: metadata?.prompt,
+      referenceImageBase64: metadata?.referenceImages?.[0] || null,
     })
 
     // 10. 自动清理超出数量的旧媒体（图片+视频，从前往后删除，保留最新的）

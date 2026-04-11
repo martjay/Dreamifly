@@ -24,6 +24,7 @@ interface FAQItem {
 }
 
 export default function HomeClient() {
+  const COMMUNITY_SHOWCASE_LIMIT = 6
   const [currentShowcaseIndex, setCurrentShowcaseIndex] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const t = createScopedT('home')
@@ -120,14 +121,14 @@ export default function HomeClient() {
 
   // 社区作品数据状态
   const [communityWorks, setCommunityWorks] = useState<CommunityWork[]>(
-    community as unknown as CommunityWork[]
+    (community.slice(0, COMMUNITY_SHOWCASE_LIMIT) as unknown as CommunityWork[])
   )
 
   // 加载社区作品图片，游客也展示真实社区图片
   useEffect(() => {
     const fetchCommunityImages = async () => {
       try {
-        const response = await fetch('/api/community/images')
+        const response = await fetch(`/api/community/images?limit=${COMMUNITY_SHOWCASE_LIMIT}`)
         
         if (response.ok) {
           const data = await response.json()
@@ -143,8 +144,8 @@ export default function HomeClient() {
               avatarFrameId: img.avatarFrameId || null,
             }))
             
-            // 如果数据库中的图片少于12张，用默认图片填充到12张
-            if (dbImages.length < 12) {
+            // 如果数据库中的图片少于目标数量，用默认图片补足
+            if (dbImages.length < COMMUNITY_SHOWCASE_LIMIT) {
               const defaultImages = community.map((work: any) => ({
                 ...work,
                 model: '默认',
@@ -156,7 +157,7 @@ export default function HomeClient() {
               // 合并数据库图片和默认图片，优先显示数据库图片
               // 使用 'default-' 前缀确保默认图片的ID不会与数据库图片ID冲突
               const fillImages = defaultImages
-                .slice(0, 12 - dbImages.length)
+                .slice(0, COMMUNITY_SHOWCASE_LIMIT - dbImages.length)
                 .map((work: any, index: number) => ({
                   ...work,
                   id: `default-${work.id}-${index}`, // 确保ID唯一
@@ -171,8 +172,8 @@ export default function HomeClient() {
               
               setCommunityWorks(combinedImages)
             } else {
-              // 如果已经有12张或更多，直接使用数据库图片（最多显示12张）
-              setCommunityWorks(dbImages.slice(0, 12))
+              // 如果数量足够，直接使用指定数量的社区图片
+              setCommunityWorks(dbImages.slice(0, COMMUNITY_SHOWCASE_LIMIT))
             }
           } else {
             // 如果返回的数据无效或为空，使用默认图片（添加默认头像信息）
@@ -182,7 +183,7 @@ export default function HomeClient() {
               userAvatar: '/images/default-avatar.svg',
               userNickname: '默认',
               avatarFrameId: null,
-            })))
+            })).slice(0, COMMUNITY_SHOWCASE_LIMIT))
           }
         } else {
           // 请求失败，使用默认图片（添加默认头像信息）
@@ -192,7 +193,7 @@ export default function HomeClient() {
             userAvatar: '/images/default-avatar.svg',
             userNickname: '默认',
             avatarFrameId: null,
-          })))
+          })).slice(0, COMMUNITY_SHOWCASE_LIMIT))
         }
       } catch (error) {
         console.error('Error fetching community images:', error)
@@ -203,7 +204,7 @@ export default function HomeClient() {
           userAvatar: '/images/default-avatar.svg',
           userNickname: '默认',
           avatarFrameId: null,
-        })))
+        })).slice(0, COMMUNITY_SHOWCASE_LIMIT))
       }
     }
 
@@ -478,8 +479,8 @@ export default function HomeClient() {
         {/* Community Showcase Section - 改进响应式设计 */}
         <section id="community-showcase" className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 relative overflow-hidden">
           <div className="w-full max-w-[1260px] mx-auto relative px-4 sm:px-6">
-            <div className="text-center mb-12 sm:mb-15">
-              <div className="flex items-center justify-center gap-5 mb-7">
+            <div className="mb-12 sm:mb-15">
+              <div className="relative flex items-center justify-center gap-5 mb-7">
                 <Image 
                   src="/common/comunity.svg" 
                   alt="Community" 
@@ -489,6 +490,12 @@ export default function HomeClient() {
                   priority={false}
                 />
                 <h2 className="text-2xl font-bold text-gray-900 animate-fadeInUp">{t('community.title')}</h2>
+                <Link
+                  href={transferUrl('/community')}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50"
+                >
+                  {t('community.exploreNew')}
+                </Link>
               </div>
             </div>
 

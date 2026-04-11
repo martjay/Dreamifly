@@ -1,10 +1,13 @@
 import { moderatePrompt, moderateGeneratedImage } from './imageModeration'
+import { isRestrictedVisualRisk, type VisualRiskLevel } from './visualModeration'
 
 export type VideoModerationFailureReason = 'prompt' | 'video' | 'service_error'
 
+const FAIL_CLOSED_VISUAL_RISK: Exclude<VisualRiskLevel, 'low'> = 'high'
+
 export type VideoModerationDecision =
-  | { approved: true }
-  | { approved: false; reason: VideoModerationFailureReason }
+  | { approved: true; visualRiskLevel: 'low' }
+  | { approved: false; reason: VideoModerationFailureReason; visualRiskLevel?: Exclude<VisualRiskLevel, 'low'> }
 
 type ModerationEnv = {
   baseUrl?: string
@@ -25,7 +28,7 @@ function getModerationEnv(): ModerationEnv {
     // 说明：当前仓库未稳定接入“直接审核视频 buffer”的能力，因此用参考图作为视频内容代表做审核。
     videoModerationPrompt:
       process.env.GENERATED_VIDEO_MODERATION_PROMPT ||
-      '请判断该视频内容是否可以在公共场所展示（可视内容标准：不得包含黄色、血腥、暴力、政治敏感等）。你只需输出是或者否即可。',
+      '请判断图片内容是否包含直接的色情元素、过于夸张的血腥场景及强烈政治暗示，仅输出一个包含上述任意元素的概率值，高、中、低三选一。',
   }
 }
 
@@ -55,7 +58,7 @@ export async function moderateGeneratedVideoOutput(params: {
   referenceImageBase64OrDataUrl: string
 }): Promise<VideoModerationDecision> {
   const env = getModerationEnv()
-  if (!env.baseUrl) return { approved: true }
+  if (!env.baseUrl) return { approved: true, visualRiskLevel: 'low' }
 
   const promptText = params.prompt?.trim() || ''
 
@@ -64,7 +67,7 @@ export async function moderateGeneratedVideoOutput(params: {
     const r = await onceRetryOnThrow(() =>
       moderatePrompt(promptText, env.baseUrl as string, env.apiKey, env.model, env.promptModerationPrompt)
     )
-    if (!r.ok) return { approved: false, reason: 'service_error' }
+    if (!r.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
     if (!r.value) return { approved: false, reason: 'prompt' }
   }
 
@@ -74,9 +77,11 @@ export async function moderateGeneratedVideoOutput(params: {
   const r2 = await onceRetryOnThrow(() =>
     moderateGeneratedImage(refBuffer, 'video-reference.png', env.baseUrl as string, env.apiKey, env.model, env.videoModerationPrompt)
   )
-  if (!r2.ok) return { approved: false, reason: 'service_error' }
-  if (!r2.value) return { approved: false, reason: 'video' }
+  if (!r2.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
+  if (isRestrictedVisualRisk(r2.value)) {
+    return { approved: false, reason: 'video', visualRiskLevel: r2.value as Exclude<VisualRiskLevel, 'low'> }
+  }
 
-  return { approved: true }
+  return { approved: true, visualRiskLevel: 'low' }
 }
 
