@@ -29,6 +29,11 @@ const publicRoutes: Array<{
     changeFrequency: 'weekly',
     priority: 0.8,
   },
+  {
+    path: '/community',
+    changeFrequency: 'daily',
+    priority: 0.85,
+  },
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {

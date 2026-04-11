@@ -271,6 +271,11 @@ export default function CommunityFeedGrid({
     )
   }
 
+  const selectedItemLiked = selectedItem ? likedItemIds.has(selectedItem.id) : false
+  const selectedItemLikeLoading = selectedItem ? likeLoadingIds.has(selectedItem.id) : false
+  const compactActionButtonClass =
+    'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition duration-200 disabled:cursor-not-allowed disabled:opacity-60'
+
   if (loading && items.length === 0) {
     return (
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-3 xl:gap-4">
@@ -328,7 +333,7 @@ export default function CommunityFeedGrid({
                 </div>
               </div>
 
-              <div className="space-y-3 px-0.5 pt-2.5 sm:space-y-4 sm:px-1 sm:pt-3.5">
+              <div className="px-0.5 pt-2.5 sm:px-1 sm:pt-3.5">
                 <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                   <AvatarWithFrame
                     avatar={avatar}
@@ -344,7 +349,7 @@ export default function CommunityFeedGrid({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 border-t border-orange-100 pt-3 text-[10px] text-gray-500 sm:gap-3 sm:text-xs">
+                <div className="flex items-center justify-between gap-2 pt-3 text-[10px] text-gray-500 sm:gap-3 sm:pt-4 sm:text-xs">
                   <span className="max-w-[52%] truncate text-[10px] sm:max-w-none sm:text-xs">{model}</span>
                   <button
                     type="button"
@@ -404,7 +409,20 @@ export default function CommunityFeedGrid({
             <div className="max-h-[92vh] overflow-y-auto p-3 pb-8 sm:p-5 sm:pb-10 lg:p-6 lg:pb-12">
               <div className="space-y-4 sm:space-y-5">
                 <div className="flex justify-center">
-                  <div className="max-h-[68vh] max-w-full">
+                  <div className="relative max-h-[68vh] max-w-full">
+                    {session?.user && (
+                      <button
+                        type="button"
+                        onClick={() => handleReport(selectedItem.id)}
+                        className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/76 text-gray-600 shadow-[0_14px_32px_-18px_rgba(15,23,42,0.45)] backdrop-blur-md transition hover:bg-white hover:text-orange-700"
+                        aria-label="举报不当内容"
+                        title="举报不当内容"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                      </button>
+                    )}
                     {renderMedia(selectedItem, {
                       sizes: '(max-width: 1024px) 92vw, 880px',
                       className:
@@ -436,14 +454,38 @@ export default function CommunityFeedGrid({
                         </p>
                       </div>
                     </div>
-                    <div className="rounded-full border border-orange-200/80 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-gray-600 sm:px-3 sm:py-1.5 sm:text-xs">
-                      {selectedItem.model?.trim() || '未知模型'}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleLikeToggle(selectedItem.id)}
+                      disabled={selectedItemLikeLoading}
+                      className={`${compactActionButtonClass} px-3 py-2 text-[12px] ${
+                        selectedItemLiked
+                          ? 'border-pink-200 bg-pink-50 text-pink-600 shadow-[0_16px_28px_-24px_rgba(236,72,153,0.65)] hover:border-pink-300 hover:bg-pink-100'
+                          : 'border-orange-100 bg-white text-gray-700 hover:border-orange-200 hover:bg-orange-50/70 hover:text-orange-700'
+                      }`}
+                      aria-label={selectedItemLiked ? '取消收藏' : '收藏作品'}
+                      title={selectedItemLiked ? '取消收藏' : '收藏作品'}
+                    >
+                      <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill={selectedItemLiked ? 'currentColor' : 'none'} stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                        />
+                      </svg>
+                      <span>{selectedItemLiked ? '已收藏' : '收藏'}</span>
+                    </button>
                   </div>
 
                   <div className="rounded-[22px] border border-orange-100/80 bg-white/78 p-4 shadow-sm">
                     <div className="mb-2 flex items-start justify-between gap-3">
-                      <p className="text-xs font-medium tracking-[0.2em] text-orange-500/90">提示词</p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="shrink-0 text-xs font-medium tracking-[0.2em] text-orange-500/90">提示词</p>
+                        <span className="truncate rounded-full border border-orange-200/70 bg-orange-50/80 px-2.5 py-1 text-[10px] font-medium text-gray-600 sm:text-[11px]">
+                          {selectedItem.model?.trim() || '未知模型'}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => void handleCopyPrompt(selectedItem)}
@@ -489,29 +531,13 @@ export default function CommunityFeedGrid({
                         </span>
                       )}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      {session?.user && (
-                        <button
-                          type="button"
-                          onClick={() => handleReport(selectedItem.id)}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-orange-200 bg-white text-orange-700 transition hover:border-orange-300 hover:bg-orange-50"
-                          aria-label="举报不当内容"
-                          title="举报不当内容"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1 sm:gap-3">
+                  <div className="flex items-stretch gap-2.5 pt-1 sm:gap-3">
                     <button
                       type="button"
                       onClick={() => void handleDownload(selectedItem)}
-                      className="inline-flex min-w-0 items-center justify-center gap-2 rounded-[18px] border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-50 sm:px-5"
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[18px] border border-orange-100 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition duration-200 hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50/70 hover:text-orange-700 sm:px-5"
                       aria-label="下载作品"
                       title="下载作品"
                     >
@@ -520,11 +546,12 @@ export default function CommunityFeedGrid({
                       </svg>
                       <span>下载</span>
                     </button>
+
                     {onGenerateSame && (
                       <button
                         type="button"
                         onClick={() => onGenerateSame(selectedItem)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition hover:from-orange-400 hover:to-amber-400 active:scale-[0.99] sm:px-5 sm:text-base"
+                        className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[18px] bg-gradient-to-r from-orange-500 via-orange-500 to-amber-400 px-5 py-3 text-sm font-semibold text-white shadow-[0_24px_48px_-24px_rgba(249,115,22,0.72)] transition duration-200 hover:-translate-y-0.5 hover:from-orange-400 hover:via-orange-500 hover:to-amber-300 active:scale-[0.99] sm:px-6"
                       >
                         <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                           <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" />
