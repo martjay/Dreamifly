@@ -674,24 +674,36 @@ export default function HomeClient() {
                 </Link>
               </div>
 
-                             <div className="group animate-fadeInUp animation-delay-600 opacity-60">
-                 <div className="block bg-gray-300/30 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-orange-400/20 border-dashed">
-                   <div className="flex items-center gap-4 mb-4">
-                     <div className="w-12 h-12 bg-gray-400/50 rounded-xl flex items-center justify-center">
-                       <svg className="w-6 h-6 text-orange-300/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                       </svg>
-                     </div>
-                     <div>
-                       <h3 className="text-lg font-semibold text-gray-900/50">{tFriends('comingSoon.title')}</h3>
-                       <p className="text-sm text-gray-700/40">{tFriends('comingSoon.subtitle')}</p>
-                     </div>
-                   </div>
-                   <p className="text-gray-700/40 text-sm leading-relaxed">
-                     {tFriends('comingSoon.description')}
-                   </p>
-                 </div>
-               </div>
+              {/* AI空间站 友链 */}
+              <div className="group animate-fadeInUp animation-delay-600">
+                <Link
+                  href="https://ai-kjz.cn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block bg-gray-200/50 backdrop-blur-sm p-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-orange-400/30 hover:border-orange-400/50"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-100 to-amber-50">
+                      <svg className="w-7 h-7 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-800 transition-colors">{tFriends('aikjz.name')}</h3>
+                      <p className="text-sm text-gray-600">{tFriends('aikjz.url')}</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 text-sm leading-relaxed">
+                    {tFriends('aikjz.description')}
+                  </p>
+                  <div className="mt-4 flex items-center text-orange-700 text-sm group-hover:text-orange-600 transition-colors">
+                    <span>{tFriends('visitSite')}</span>
+                    <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
