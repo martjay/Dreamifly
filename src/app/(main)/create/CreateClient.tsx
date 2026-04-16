@@ -260,42 +260,53 @@ export default function CreateClient() {
           onTabChange={setActiveTab}
         />
 
-        {/* Community Showcase Section（从首页复用，但不包含 SiteStats） */}
+        {/* Community Showcase Section - 同步首页优化方案 */}
         <section
           id="community-showcase"
           className="py-14 sm:py-20 px-5 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 bg-gray-50/90 backdrop-blur-md relative"
         >
           <div className="w-full max-w-[1260px] mx-auto relative px-4 sm:px-6">
-            <div className="mb-12 sm:mb-15">
-              <div className="relative flex items-center justify-center gap-5 mb-7">
-                <Image
-                  src="/common/comunity.svg"
-                  alt="Community"
-                  width={40}
-                  height={40}
-                  className="w-10 h-10"
-                  priority={false}
-                />
-                <h2 className="text-2xl font-bold text-gray-900 animate-fadeInUp">
+            {/* 头部区域：与首页保持一致的优化结构 */}
+            <div className="text-center mb-10 sm:mb-14">
+              {/* 主标题 + 社区图标 */}
+              <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6">
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 border border-orange-200 shadow-sm">
+                  <Image
+                    src="/common/comunity.svg"
+                    alt="Community"
+                    width={32}
+                    height={32}
+                    className="w-7 h-7 sm:w-8 sm:h-8"
+                    priority={false}
+                  />
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 animate-fadeInUp">
                   {t('community.title')}
                 </h2>
+              </div>
+
+              {/* 副标题 + 立即进入按钮 */}
+              <div className="animate-fadeInUp animation-delay-200">
+                <p className="text-base sm:text-lg text-gray-600 mb-5 max-w-2xl mx-auto">
+                  {t('community.subtitle')}
+                </p>
+
+                {/* 核心优化：显眼的完整社区入口 */}
                 <button
                   type="button"
                   onClick={() => router.push(transferUrl('/community'))}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-6 sm:px-8 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition-all duration-300 hover:shadow-orange-500/40 hover:scale-105 hover:from-orange-400 hover:to-amber-400 active:scale-95"
                 >
-                  {t('community.exploreNew')}
+                  <span>进入社区</span>
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
                 </button>
               </div>
             </div>
 
-            <div className="text-center mb-8">
-              <p className="text-lg text-gray-700 animate-fadeInUp animation-delay-200">
-                {t('community.subtitle')}
-              </p>
-            </div>
-
-            <div className="animate-fadeInUp">
+            {/* 微型社区展示 */}
+            <div className="animate-fadeInUp animation-delay-300">
               <CommunityMasonry
                 works={activeTab === 'video-generation' ? videoWorks : communityWorks}
                 onGenerateSame={(prompt, model, imageUrl) => navigateToCreate(prompt, model, imageUrl)}
@@ -303,6 +314,7 @@ export default function CreateClient() {
                 generateSameText={t('community.generateSame')}
               />
             </div>
+
           </div>
         </section>
       </main>

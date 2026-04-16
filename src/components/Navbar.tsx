@@ -31,6 +31,8 @@ export default function Navbar() {
   const router = useRouter()
   const pricingPath = transferUrl('/pricing')
   const isPricingActive = pathname === pricingPath || pathname?.startsWith(`${pricingPath}/`)
+  const communityPath = transferUrl('/community')
+  const isCommunityActive = pathname === communityPath || pathname?.startsWith(`${communityPath}/`)
 
   // 检查管理员和优质用户状态
   useEffect(() => {
@@ -314,14 +316,32 @@ export default function Navbar() {
               </Link>
             )}
 
+            {/* 社区入口 - 优化视觉权重，增加活跃状态指示 */}
             <button
               onClick={handleCommunityClick}
-              className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-gray-200/50 hover:bg-gray-300/50 transition-all duration-300"
+              className={`group w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 border ${
+                isCommunityActive
+                  ? 'bg-gradient-to-r from-orange-100/70 to-amber-100/70 border-orange-200/60 shadow-md'
+                  : 'bg-gradient-to-r from-orange-50/50 to-amber-50/50 hover:from-orange-100/50 hover:to-amber-100/50 border-orange-200/40'
+              }`}
             >
-              <svg className="w-6 h-6 text-gray-700 group-hover:text-gray-900 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span className="text-sm text-gray-900 group-hover:text-gray-800">{t('community')}</span>
+              <div className={`p-1.5 rounded-xl flex-shrink-0 ${
+                isCommunityActive ? 'bg-orange-200/50' : 'bg-orange-100/30 group-hover:bg-orange-200/40'
+              }`}>
+                <svg className={`w-5 h-5 flex-shrink-0 ${
+                  isCommunityActive ? 'text-orange-600' : 'text-orange-500 group-hover:text-orange-600'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <span className={`text-sm font-medium ${
+                isCommunityActive ? 'text-orange-700' : 'text-gray-800 group-hover:text-orange-700'
+              }`}>{t('community')}</span>
+
+              {/* 活跃状态指示器 */}
+              {isCommunityActive && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              )}
             </button>
 
             {/* 管理员菜单 - 仅管理员可见 */}
