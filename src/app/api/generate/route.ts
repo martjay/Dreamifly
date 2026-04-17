@@ -63,7 +63,6 @@ export async function POST(request: Request) {
   
   // 在 try 块外声明，以便在 catch 块中也能访问
   let isAdmin = false
-  let isSubscribed = false
   // 当前请求使用的模型ID（用于在 catch 中判断是否为 nano-banana-2）
   let currentModelId: string | null = null
   // 如果本次请求已成功扣除积分，则记录消费记录ID，方便失败时返还
@@ -111,20 +110,11 @@ export async function POST(request: Request) {
     let isPremium = false
     let currentUserId: string | null = null
     
-    // 检查用户订阅是否有效的辅助函数
-    const isSubscriptionActive = (isSubscribed: boolean | null, subscriptionExpiresAt: Date | null): boolean => {
-      if (!isSubscribed) return false;
-      if (!subscriptionExpiresAt) return false;
-      return new Date(subscriptionExpiresAt) > new Date();
-    }
-    
     if (session?.user) {
       currentUserId = session.user.id
       const currentUser = await db.select({
         isAdmin: user.isAdmin,
         isPremium: user.isPremium,
-        isSubscribed: user.isSubscribed,
-        subscriptionExpiresAt: user.subscriptionExpiresAt,
       })
         .from(user)
         .where(eq(user.id, currentUserId))
@@ -133,7 +123,6 @@ export async function POST(request: Request) {
       if (currentUser.length > 0) {
         isAdmin = currentUser[0].isAdmin || false
         isPremium = currentUser[0].isPremium || false
-        isSubscribed = isSubscriptionActive(currentUser[0].isSubscribed, currentUser[0].subscriptionExpiresAt)
       }
     }
     
@@ -399,8 +388,6 @@ export async function POST(request: Request) {
         isOldUser: user.isOldUser,
         isActive: user.isActive,
         dailyRequestCount: user.dailyRequestCount,
-        isSubscribed: user.isSubscribed,
-        subscriptionExpiresAt: user.subscriptionExpiresAt,
         // 将 timestamptz 转换为 UTC 时间字符串，确保读取正确
         lastRequestResetDate: sql<string | null>`${user.lastRequestResetDate} AT TIME ZONE 'UTC'`,
         updatedAt: user.updatedAt,
@@ -423,10 +410,6 @@ export async function POST(request: Request) {
         // 更新isAdmin、isPremium和isSubscribed（如果之前没有获取到）
         if (!isAdmin) isAdmin = userData.isAdmin || false;
         if (!isPremium) isPremium = userData.isPremium || false;
-        // 检查会员状态（如果用户既是管理员又是会员，按管理员处理，所以这里只在非管理员时更新）
-        if (!isAdmin) {
-          isSubscribed = isSubscriptionActive(userData.isSubscribed, userData.subscriptionExpiresAt)
-        }
         const isOldUser = userData.isOldUser || false;
 
         // 检查是否需要重置每日计数（使用东八区时区判断）
