@@ -4,10 +4,10 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "node scripts/reset-concurrency-on-startup.js && next dev",
+    "dev": "next dev",
     "build": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch(e) {}\" && next build",
     "build:clean": "rimraf .next && next build",
-    "start": "node scripts/reset-concurrency-on-startup.js && next start",
+    "start": "next start",
     "lint": "next lint",
     "fix-terms": "node scripts/fix-markdown-punctuation.js"
   },

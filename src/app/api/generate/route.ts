@@ -7,8 +7,6 @@ import { siteStats, modelUsageStats, user, userLimitConfig, ipBlacklist, ipDaily
 import { eq, sql, and, lt } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { concurrencyManager } from '@/utils/concurrencyManager'
-import { ipConcurrencyManager } from '@/utils/ipConcurrencyManager'
 import { randomUUID, createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
 import { moderateGeneratedOutput } from '@/utils/moderationFlow'
@@ -61,7 +59,6 @@ function validateDynamicToken(providedToken: string): boolean {
 }
 
 export async function POST(request: Request) {
-  let generationId: string | null = null;
   const clientIP = getClientIP(request)
   
   // 在 try 块外声明，以便在 catch 块中也能访问
@@ -137,46 +134,6 @@ export async function POST(request: Request) {
         isAdmin = currentUser[0].isAdmin || false
         isPremium = currentUser[0].isPremium || false
         isSubscribed = isSubscriptionActive(currentUser[0].isSubscribed, currentUser[0].subscriptionExpiresAt)
-      }
-    }
-    
-    // 检查IP并发限制（在所有其他检查之前）
-    let ipMaxConcurrency: number | null = null
-    if (clientIP) {
-      const ipConcurrencyCheck = await ipConcurrencyManager.canStart(
-        clientIP,
-        currentUserId,
-        isAdmin,
-        isPremium,
-        isSubscribed
-      )
-      
-      if (!ipConcurrencyCheck.canStart) {
-        return NextResponse.json({
-          error: `当前有 ${ipConcurrencyCheck.currentConcurrency} 个生图任务正在执行，请等待其他任务执行完成后再试。`,
-          code: 'IP_CONCURRENCY_LIMIT_EXCEEDED',
-          currentConcurrency: ipConcurrencyCheck.currentConcurrency,
-          maxConcurrency: ipConcurrencyCheck.maxConcurrency
-        }, { status: 429 })
-      }
-      
-      // 保存最大并发数，用于后续增加计数
-      ipMaxConcurrency = ipConcurrencyCheck.maxConcurrency
-      
-      // 对于未登录用户，在进入排队前就增加IP并发计数，避免多个请求同时排队
-      // 已登录用户的IP并发计数在后续统一增加（在用户并发检查之后）
-      if (!session?.user) {
-        const ipStartSuccess = await ipConcurrencyManager.start(clientIP, ipMaxConcurrency)
-        if (!ipStartSuccess) {
-          // 如果增加计数失败（可能因为并发冲突），返回错误
-          const currentInfo = await ipConcurrencyManager.getInfo(clientIP)
-          return NextResponse.json({
-            error: `当前有 ${currentInfo?.currentConcurrency || 0} 个生图任务正在执行，请等待其他任务执行完成后再试。`,
-            code: 'IP_CONCURRENCY_LIMIT_EXCEEDED',
-            currentConcurrency: currentInfo?.currentConcurrency || 0,
-            maxConcurrency: ipMaxConcurrency
-          }, { status: 429 })
-        }
       }
     }
     
@@ -381,10 +338,6 @@ export async function POST(request: Request) {
         
         // 检查是否超过每日限制
         if (currentCount >= maxDailyRequests) {
-          // 清理已增加的IP并发计数
-          await ipConcurrencyManager.end(clientIP).catch(err => {
-            console.error('Error decrementing IP concurrency after daily limit check:', err)
-          })
           return NextResponse.json({ 
             error: `今日生图次数已达上限。未登录用户每日可使用${maxDailyRequests}次生图功能。`,
             code: 'IP_DAILY_LIMIT_EXCEEDED',
@@ -419,12 +372,7 @@ export async function POST(request: Request) {
             .limit(1);
           
           const finalCount = currentIpUsageData[0]?.dailyRequestCount || 0;
-          
-          // 清理已增加的IP并发计数
-          await ipConcurrencyManager.end(clientIP).catch(err => {
-            console.error('Error decrementing IP concurrency after daily limit check:', err)
-          })
-          
+
           return NextResponse.json({ 
             error: `今日生图次数已达上限。未登录用户每日可使用${maxDailyRequests}次生图功能。`,
             code: 'IP_DAILY_LIMIT_EXCEEDED',
@@ -480,22 +428,6 @@ export async function POST(request: Request) {
           isSubscribed = isSubscriptionActive(userData.isSubscribed, userData.subscriptionExpiresAt)
         }
         const isOldUser = userData.isOldUser || false;
-        
-        // 管理员和会员不受用户并发限制
-        if (!isAdmin && !isSubscribed) {
-          const maxConcurrent = parseInt(process.env.MAX_CONCURRENT_GENERATIONS || '2', 10);
-          
-          // 检查是否超过用户并发限制
-          if (!concurrencyManager.canStart(userId, maxConcurrent)) {
-            const currentCount = concurrencyManager.getCurrentCount(userId);
-            return NextResponse.json({ 
-              error: `您当前有 ${currentCount} 个生图任务正在进行，最多允许 ${maxConcurrent} 个任务同时进行。请等待其中一个完成后再试。`,
-              code: 'CONCURRENCY_LIMIT_EXCEEDED',
-              currentCount,
-              maxConcurrent
-            }, { status: 429 }) // 429 Too Many Requests
-          }
-        }
 
         // 检查是否需要重置每日计数（使用东八区时区判断）
         // 辅助函数：获取指定日期在东八区的年月日
@@ -660,11 +592,6 @@ export async function POST(request: Request) {
         }
       }
       
-      // 开始跟踪这个生成请求（用户并发）
-      // 管理员和会员不受用户并发限制，不需要跟踪
-      if (!isAdmin && !isSubscribed) {
-        generationId = concurrencyManager.start(userId);
-      }
     }
     
     // 解析请求体（提前解析，以便检查积分和额度）
@@ -782,17 +709,6 @@ export async function POST(request: Request) {
             const hasEnoughPoints = await checkPointsSufficient(userId, pointsCost);
             
             if (!hasEnoughPoints) {
-              // 清理并发跟踪
-              if (generationId) {
-                concurrencyManager.end(generationId);
-              }
-              // 管理员和会员不受IP并发限制，不需要清理计数
-              if (clientIP && !isAdmin && !isSubscribed) {
-                await ipConcurrencyManager.end(clientIP).catch(err => {
-                  console.error('Error decrementing IP concurrency:', err)
-                })
-              }
-              
               return NextResponse.json({
                 error: `积分不足。本次生成需要消耗 ${pointsCost} 积分，但您的积分余额不足。`,
                 code: 'INSUFFICIENT_POINTS',
@@ -808,17 +724,6 @@ export async function POST(request: Request) {
             );
             
             if (!deductResult) {
-              // 清理并发跟踪
-              if (generationId) {
-                concurrencyManager.end(generationId);
-              }
-              // 管理员和会员不受IP并发限制，不需要清理计数
-              if (clientIP && !isAdmin && !isSubscribed) {
-                await ipConcurrencyManager.end(clientIP).catch(err => {
-                  console.error('Error decrementing IP concurrency:', err)
-                })
-              }
-              
               // 再次检查积分余额，判断是积分不足还是其他错误
               const currentBalance = await getPointsBalance(userId);
               if (currentBalance < pointsCost) {
@@ -845,17 +750,6 @@ export async function POST(request: Request) {
           }
         } else if (!hasQuota) {
           // 模型未配置积分消耗，且用户已超出额度
-          // 清理并发跟踪
-          if (generationId) {
-            concurrencyManager.end(generationId);
-          }
-          // 管理员和会员不受IP并发限制，不需要清理计数
-          if (clientIP && !isAdmin && !isSubscribed) {
-            await ipConcurrencyManager.end(clientIP).catch(err => {
-              console.error('Error decrementing IP concurrency:', err)
-            })
-          }
-          
           return NextResponse.json({
             error: `您今日的生图次数已达上限（${maxDailyRequests}次）。${isPremium ? '优质用户' : '普通用户'}每日可使用${maxDailyRequests}次生图功能。`,
             code: 'DAILY_LIMIT_EXCEEDED',
@@ -872,12 +766,6 @@ export async function POST(request: Request) {
       // 检查模型是否支持I2I（图改图）
       const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
       if (i2iModels.includes(model)) {
-        // 清理已增加的并发计数
-        if (clientIP) {
-          await ipConcurrencyManager.end(clientIP).catch(err => {
-            console.error('Error decrementing IP concurrency after I2I login check:', err)
-          })
-        }
         return NextResponse.json({ 
           error: '图改图功能仅限登录用户使用，请先登录后再使用',
           code: 'LOGIN_REQUIRED_FOR_I2I'
@@ -887,14 +775,6 @@ export async function POST(request: Request) {
 
     // 检查仅限登录使用的模型（如 grok-imagine-1.0）
     if (!session?.user && isLoginRequiredModel(model)) {
-      if (clientIP) {
-        await ipConcurrencyManager.end(clientIP).catch(err => {
-          console.error('Error decrementing IP concurrency after grok login check:', err)
-        })
-      }
-      if (generationId) {
-        concurrencyManager.end(generationId)
-      }
       return NextResponse.json({
         error: '该模型仅限登录用户使用，请先登录后再使用',
         code: 'LOGIN_REQUIRED'
@@ -911,16 +791,6 @@ export async function POST(request: Request) {
     // 验证输入
     // 只检查最小尺寸，不限制最大尺寸
     if (width < 64 || height < 64) {
-      // 如果输入验证失败，需要清理已增加的并发计数
-      if (!session?.user && clientIP) {
-        // 未登录用户：清理IP并发计数
-        await ipConcurrencyManager.end(clientIP).catch(err => {
-          console.error('Error decrementing IP concurrency after validation error:', err)
-        })
-      } else if (session?.user && generationId) {
-        // 已登录用户：清理用户并发跟踪（IP并发计数此时还未增加）
-        concurrencyManager.end(generationId)
-      }
       return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
     }
     // 验证步数：根据模型配置验证
@@ -928,39 +798,9 @@ export async function POST(request: Request) {
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
       // 如果模型支持步数修改，验证步数是否在允许范围内
       if (steps !== thresholds.normalSteps && steps !== thresholds.highSteps) {
-        // 如果输入验证失败，需要清理已增加的并发计数
-        if (!session?.user && clientIP) {
-          // 未登录用户：清理IP并发计数
-          await ipConcurrencyManager.end(clientIP).catch(err => {
-            console.error('Error decrementing IP concurrency after validation error:', err)
-          })
-        } else if (session?.user && generationId) {
-          // 已登录用户：清理用户并发跟踪（IP并发计数此时还未增加）
-          concurrencyManager.end(generationId)
-        }
         return NextResponse.json({ 
           error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.` 
         }, { status: 400 })
-      }
-    }
-    
-    // 对于已登录用户，在所有检查都通过后，原子性地增加IP并发计数
-    // 未登录用户的IP并发计数已在前面增加
-    // 管理员和会员不受IP并发限制，不需要增加计数
-    if (clientIP && session?.user && !isAdmin && !isSubscribed) {
-      const ipStartSuccess = await ipConcurrencyManager.start(clientIP, ipMaxConcurrency)
-      if (!ipStartSuccess) {
-        // 如果增加计数失败，需要清理用户并发跟踪
-        if (generationId) {
-          concurrencyManager.end(generationId)
-        }
-        const currentInfo = await ipConcurrencyManager.getInfo(clientIP)
-        return NextResponse.json({
-          error: `当前有 ${currentInfo?.currentConcurrency || 0} 个生图任务正在执行，请等待其他任务执行完成后再试。`,
-          code: 'IP_CONCURRENCY_LIMIT_EXCEEDED',
-          currentConcurrency: currentInfo?.currentConcurrency || 0,
-          maxConcurrency: ipMaxConcurrency
-        }, { status: 429 })
       }
     }
 
@@ -1032,17 +872,6 @@ export async function POST(request: Request) {
         console.error('保存未通过审核图片失败:', error)
       }
 
-      // 审核未通过也属于“请求已结束”的一种，需要回收并发计数
-      if (generationId) {
-        concurrencyManager.end(generationId)
-      }
-      // 管理员和会员不受IP并发限制，不需要清理计数
-      if (clientIP && !isAdmin && !isSubscribed) {
-        await ipConcurrencyManager.end(clientIP).catch(err => {
-          console.error('Error decrementing IP concurrency after moderation failed:', err)
-        })
-      }
-
       return NextResponse.json(
         {
           error: '内容未通过审核',
@@ -1100,17 +929,6 @@ export async function POST(request: Request) {
       console.error('Failed to record model usage stats:', error)
     }
 
-    // 成功完成，清理并发跟踪
-    if (generationId) {
-      concurrencyManager.end(generationId);
-    }
-    
-    // 清理IP并发跟踪
-    // 管理员和会员不受IP并发限制，不需要清理计数
-    if (clientIP && !isAdmin && !isSubscribed) {
-      await ipConcurrencyManager.end(clientIP)
-    }
-
     // 如果用户已登录，同步保存生成的图片（审核已通过，可跳过保存内二次审核）
     if (session?.user) {
       try {
@@ -1158,19 +976,6 @@ export async function POST(request: Request) {
       }
     }
     console.error('Error generating image:', error)
-    
-    // 发生错误，清理并发跟踪
-    if (generationId) {
-      concurrencyManager.end(generationId);
-    }
-    
-    // 清理IP并发跟踪
-    // 管理员和会员不受IP并发限制，不需要清理计数
-    if (clientIP && !isAdmin && !isSubscribed) {
-      await ipConcurrencyManager.end(clientIP).catch(err => {
-        console.error('Error decrementing IP concurrency:', err)
-      })
-    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate image' },
       { status: 500 }
