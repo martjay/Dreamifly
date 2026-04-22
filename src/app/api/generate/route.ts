@@ -926,7 +926,7 @@ export async function POST(request: Request) {
             height,
             ipAddress: clientIP || undefined,
             referenceImages: images || [],
-            moderationLevel: 'low',
+            moderationLevel: moderationDecision.visualRiskLevel,
           },
           { skipModeration: true }
         )
@@ -936,7 +936,13 @@ export async function POST(request: Request) {
     }
 
     // 立即返回响应，不等待保存完成
-    return NextResponse.json({ imageUrl })
+    return NextResponse.json({
+      imageUrl,
+      moderation:
+        moderationDecision.visualRiskLevel === 'medium'
+          ? { visualRiskLevel: moderationDecision.visualRiskLevel }
+          : undefined,
+    })
   } catch (error) {
     // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
     if (spentRecordId && currentModelId === 'nano-banana-2') {

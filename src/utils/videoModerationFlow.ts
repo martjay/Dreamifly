@@ -1,12 +1,12 @@
 import { moderatePrompt, moderateGeneratedImage } from './imageModeration'
-import { isRestrictedVisualRisk, type VisualRiskLevel } from './visualModeration'
+import type { VisualRiskLevel } from './visualModeration'
 
 export type VideoModerationFailureReason = 'prompt' | 'video' | 'service_error'
 
 const FAIL_CLOSED_VISUAL_RISK: Exclude<VisualRiskLevel, 'low'> = 'high'
 
 export type VideoModerationDecision =
-  | { approved: true; visualRiskLevel: 'low' }
+  | { approved: true; visualRiskLevel: VisualRiskLevel }
   | { approved: false; reason: VideoModerationFailureReason; visualRiskLevel?: Exclude<VisualRiskLevel, 'low'> }
 
 type ModerationEnv = {
@@ -78,10 +78,10 @@ export async function moderateGeneratedVideoOutput(params: {
     moderateGeneratedImage(refBuffer, 'video-reference.png', env.baseUrl as string, env.apiKey, env.model, env.videoModerationPrompt)
   )
   if (!r2.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-  if (isRestrictedVisualRisk(r2.value)) {
+  if (r2.value === 'high') {
     return { approved: false, reason: 'video', visualRiskLevel: r2.value as Exclude<VisualRiskLevel, 'low'> }
   }
 
-  return { approved: true, visualRiskLevel: 'low' }
+  return { approved: true, visualRiskLevel: r2.value }
 }
 

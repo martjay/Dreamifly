@@ -1,12 +1,12 @@
 import { moderateGeneratedImage, moderatePrompt } from './imageModeration'
-import { isRestrictedVisualRisk, type VisualRiskLevel } from './visualModeration'
+import type { VisualRiskLevel } from './visualModeration'
 
 export type ModerationFailureReason = 'prompt' | 'image' | 'service_error'
 
 const FAIL_CLOSED_VISUAL_RISK: Exclude<VisualRiskLevel, 'low'> = 'high'
 
 export type ModerationDecision =
-  | { approved: true; visualRiskLevel: 'low' }
+  | { approved: true; visualRiskLevel: VisualRiskLevel }
   | { approved: false; reason: ModerationFailureReason; visualRiskLevel?: Exclude<VisualRiskLevel, 'low'> }
 
 type ModerationEnv = {
@@ -78,11 +78,11 @@ export async function moderateGeneratedOutput(params: {
       )
     )
     if (!r.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-    if (isRestrictedVisualRisk(r.value)) {
+    if (r.value === 'high') {
       return { approved: false, reason: 'image', visualRiskLevel: r.value as Exclude<VisualRiskLevel, 'low'> }
     }
 
-    return null
+    return r.value === 'medium' ? { approved: true, visualRiskLevel: 'medium' } : null
   }
 
   if (checkPromptFirst) {
@@ -95,9 +95,10 @@ export async function moderateGeneratedOutput(params: {
 
   // 无参考图：保持现有顺序（先图后词），尽量减少行为变化
   const imageDecision = await runImage()
-  if (imageDecision) return imageDecision
+  if (imageDecision && !imageDecision.approved) return imageDecision
   const promptDecision = await runPrompt()
   if (promptDecision) return promptDecision
+  if (imageDecision) return imageDecision
   return { approved: true, visualRiskLevel: 'low' }
 }
 

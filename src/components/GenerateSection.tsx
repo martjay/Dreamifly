@@ -598,7 +598,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             if (errorData?.code === 'MODERATION_FAILED' && errorData?.imageUrl) {
               const dataUrl = errorData.imageUrl as string;
               const moderationLevel = errorData?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined
-              const isVisualRestricted = moderationLevel === 'medium' || moderationLevel === 'high'
+              const isVisualRestricted = moderationLevel === 'high'
               const warningMessage = moderationLevel
                 ? getModerationWarning(moderationLevel, 'image')
                 : '内容未通过审核'
@@ -612,18 +612,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   setImageStatuses(prev => {
                     const newStatuses = [...prev];
                     newStatuses[index] = ({
-                      status: isVisualRestricted ? 'warning' : 'success',
+                      status: moderationLevel ? 'warning' : 'success',
                       message: isVisualRestricted
-                        ? moderationLevel === 'high'
-                          ? `高风险内容已遮罩（${duration}s）`
-                          : `中风险内容已遮罩（${duration}s）`
+                        ? `高风险内容已遮罩（${duration}s）`
                         : `${t('preview.completed')} (${duration}s)`,
-                      moderationFailed: isVisualRestricted,
-                      moderationLevel: isVisualRestricted ? moderationLevel : undefined,
-                      warningMessage: isVisualRestricted ? warningMessage : undefined,
-                      canReveal: Boolean(session?.user && moderationLevel === 'medium'),
+                      moderationFailed: Boolean(moderationLevel),
+                      moderationLevel,
+                      warningMessage: moderationLevel ? warningMessage : undefined,
+                      canReveal: false,
                       revealed: !isVisualRestricted,
-                      mediaId: isVisualRestricted ? (errorData?.mediaId || null) : null,
+                      mediaId: null,
                       startTime,
                       endTime
                     });
@@ -643,6 +641,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           }
 
           const data = await res.json();
+          const moderationLevel = data?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined
           // Create a new promise to track image loading
           const imageLoadPromise = new Promise<void>((resolve) => {
             const img = new window.Image();
@@ -654,8 +653,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               setImageStatuses(prev => {
                 const newStatuses = [...prev];
                 newStatuses[index] = ({
-                  status: 'success',
+                  status: moderationLevel === 'medium' ? 'warning' : 'success',
                   message: `${t('preview.completed')} (${duration}s)`,
+                  moderationFailed: moderationLevel === 'medium',
+                  moderationLevel,
+                  warningMessage: moderationLevel ? getModerationWarning(moderationLevel, 'image') : undefined,
+                  canReveal: false,
+                  revealed: true,
                   startTime,
                   endTime
                 });
@@ -1122,8 +1126,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                           setVideoModerationState({
                             moderationLevel,
                             warningMessage: getModerationWarning(moderationLevel, 'video'),
-                            revealed: false,
-                            canReveal: Boolean(session?.user && moderationLevel === 'medium'),
+                            revealed: moderationLevel === 'medium',
+                            canReveal: false,
                             mediaId: payload.mediaId || null,
                           })
                         }}
@@ -1131,13 +1135,23 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         setIsGenerating={setIsVideoGenerating}
                         isQueuing={isVideoQueuing}
                         setIsQueuing={setIsVideoQueuing}
-                        onGenerate={() => {
+                        onGenerate={(_, moderation) => {
                           // 计算视频生成耗时
                           if (videoGenerationStartTime) {
                             const duration = (Date.now() - videoGenerationStartTime) / 1000 // 转换为秒
                             setVideoGenerationDuration(duration)
                           }
-                          setVideoModerationState(null)
+                          const moderationLevel = moderation?.visualRiskLevel
+                          setVideoModerationState(
+                            moderationLevel === 'medium'
+                              ? {
+                                  moderationLevel,
+                                  warningMessage: getModerationWarning(moderationLevel, 'video'),
+                                  revealed: true,
+                                  canReveal: false,
+                                }
+                              : null
+                          )
                         }}
                         setErrorModal={(show, type, message) => {
                           console.log('GenerateSection - setErrorModal called:', { show, type, message })

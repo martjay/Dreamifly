@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { userGeneratedImages, user } from '@/db/schema'
-import { eq, asc, desc, sql, and } from 'drizzle-orm'
+import { eq, asc, desc, sql, and, inArray } from 'drizzle-orm'
 import { uploadToOSS, deleteFromOSS } from './oss'
 import { getImageStorageConfig } from './points'
 import { encodeMediaForStorage } from './mediaStorage'
@@ -336,7 +336,7 @@ export async function getUserGeneratedImages(
 }>> {
   const conditions = and(
     eq(userGeneratedImages.userId, userId),
-    eq(userGeneratedImages.moderationLevel, 'low')
+    inArray(userGeneratedImages.moderationLevel, ['low', 'medium'])
   )
 
   const baseQuery = db
@@ -374,7 +374,7 @@ export async function getUserGeneratedImagesCount(userId: string): Promise<numbe
     .where(
       and(
         eq(userGeneratedImages.userId, userId),
-        eq(userGeneratedImages.moderationLevel, 'low')
+        inArray(userGeneratedImages.moderationLevel, ['low', 'medium'])
       )
     )
 

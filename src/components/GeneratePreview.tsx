@@ -41,7 +41,7 @@ export default function GeneratePreview({
   const canUseImage = (index: number) => {
     const status = imageStatuses[index]
     if (!status?.moderationFailed) return true
-    return status.moderationLevel === 'medium' && Boolean(status.revealed)
+    return status.moderationLevel === 'medium'
   }
 
   const handleDownloadImage = async (image: string, index: number) => {
@@ -143,8 +143,8 @@ export default function GeneratePreview({
                   <RestrictedMediaMask
                     level={status.moderationLevel}
                     warning={status.warningMessage || '内容未通过审核'}
-                    revealed={isRevealed}
-                    canReveal={Boolean(status.canReveal && !isRevealed)}
+                    revealed={isRevealed || status.moderationLevel === 'medium'}
+                    canReveal={Boolean(status.canReveal && !isRevealed && status.moderationLevel !== 'medium')}
                     onReveal={() => onRevealRestrictedImage?.(index)}
                   />
                 )}

@@ -445,7 +445,7 @@ export async function POST(request: Request) {
           frameCount: videoFrameCount,
           ipAddress: ipAddress,
           referenceImages: [referenceImageBase64],
-          moderationLevel: 'low',
+          moderationLevel: moderationDecision.visualRiskLevel,
         },
         { skipModeration: true }
       )
@@ -468,8 +468,12 @@ export async function POST(request: Request) {
     }
 
     // 返回视频 URL
-    return NextResponse.json({ 
+    return NextResponse.json({
       videoUrl,
+      moderation:
+        moderationDecision.visualRiskLevel === 'medium'
+          ? { visualRiskLevel: moderationDecision.visualRiskLevel }
+          : undefined,
       responseTime: Math.round(responseTime * 100) / 100 // 保留两位小数
     });
   } catch (error) {
@@ -509,4 +513,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

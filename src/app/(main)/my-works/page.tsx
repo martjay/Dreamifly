@@ -202,12 +202,11 @@ export default function MyWorksPage() {
 
   const canViewOriginal = (image: UserImage) => {
     if (image.moderationLevel === 'high') return false
-    if (image.moderationLevel === 'medium') return image.hasViewConsent
     return true
   }
 
   const shouldShowMask = (image: UserImage) => {
-    return image.moderationLevel === 'high' || (image.moderationLevel === 'medium' && !image.hasViewConsent)
+    return image.moderationLevel === 'high'
   }
 
   const handleRequestRevealModeratedMedia = (imageId: string) => {
@@ -551,7 +550,7 @@ export default function MyWorksPage() {
                   level={image.moderationLevel}
                   warning={warningMessage}
                   revealed={canView}
-                  canReveal={image.moderationLevel === 'medium' && !image.hasViewConsent}
+                  canReveal={false}
                   onReveal={() => handleRequestRevealModeratedMedia(image.id)}
                 />
               )}

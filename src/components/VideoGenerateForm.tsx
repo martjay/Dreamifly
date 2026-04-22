@@ -38,7 +38,7 @@ interface VideoGenerateFormProps {
   setIsGenerating: (generating: boolean) => void;
   isQueuing: boolean;
   setIsQueuing: (queuing: boolean) => void;
-  onGenerate: (videoUrl: string) => void;
+  onGenerate: (videoUrl: string, moderation?: { visualRiskLevel?: Exclude<VisualRiskLevel, 'low'> }) => void;
   setErrorModal: (show: boolean, type: 'concurrency' | 'daily_limit' | 'insufficient_points' | 'login_required' | 'maintenance_mode', message?: string) => void;
 }
 
@@ -460,7 +460,7 @@ const VideoGenerateForm = ({
       await refreshPoints()
 
       // 通知父组件
-      onGenerate(videoUrl)
+      onGenerate(videoUrl, data.moderation)
 
     } catch (error) {
       console.error('Video generation error:', error)

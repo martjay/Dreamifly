@@ -25,12 +25,11 @@ export default function RestrictedMediaMask({
 
   if (revealed) {
     return (
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
-        <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-200/80 bg-white/85 px-3 py-2 text-xs font-medium text-amber-900 shadow-lg backdrop-blur-sm">
-          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeClassName}`}>
+      <div className="pointer-events-none absolute left-2 top-2 z-20">
+        <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/70 bg-white/55 px-2 py-1 text-[10px] font-medium text-gray-600 shadow-sm backdrop-blur-sm">
+          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${badgeClassName}`}>
             {levelLabel}
           </span>
-          <span>{warning}</span>
         </div>
       </div>
     )
