@@ -1,6 +1,7 @@
 import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import GenerateForm from './GenerateForm'
 import GeneratePreview from './GeneratePreview'
 import ModerationConsentModal from './ModerationConsentModal'
@@ -11,11 +12,11 @@ import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
-import { getVideoModelById, calculateVideoResolution } from '@/utils/videoModelConfig'
+import { calculateVideoLayoutForAspectRatio, getVideoModelById } from '@/utils/videoModelConfig'
 import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GenerateSectionProps {
@@ -63,6 +64,7 @@ const formatTime = (seconds: number): string => {
 const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
   const t = createScopedT('home.generate')
   const tHome = createScopedT('home')
+  const router = useRouter()
   const { data: session, isPending } = useSession()
   const { refreshPoints } = usePoints()
   const [prompt, setPrompt] = useState(initialPrompt || '');
@@ -139,13 +141,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   useEffect(() => {
     if (activeTab !== 'video-generation') return
     if (!initialModel) return
-    if (videoModel === initialModel) return
 
     const videoConfig = getVideoModelById(initialModel)
     if (videoConfig) {
       setVideoModel(initialModel)
     }
-  }, [activeTab, initialModel, videoModel])
+  }, [activeTab, initialModel])
+
+  const handleVideoModelChange = (nextModel: string) => {
+    setVideoModel(nextModel)
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', 'video')
+    params.set('model', nextModel)
+    const query = params.toString()
+    router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
+  }
 
   // 监听视频参考图片就绪事件
   useEffect(() => {
@@ -168,9 +181,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               // 根据宽高比计算视频分辨率（保持总像素不变）
               const modelConfig = getVideoModelById(videoModelRef.current)
               if (modelConfig) {
-                const resolution = calculateVideoResolution(modelConfig, imageAspectRatio)
-                setVideoWidth(resolution.width)
-                setVideoHeight(resolution.height)
+                const layout = calculateVideoLayoutForAspectRatio(modelConfig, imageAspectRatio)
+                setVideoAspectRatio(layout.aspectRatio)
+                setVideoWidth(layout.width)
+                setVideoHeight(layout.height)
               }
 
               // 设置上传的图片
@@ -202,9 +216,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         // 根据宽高比计算视频分辨率（保持总像素不变）
         const modelConfig = getVideoModelById(videoModelRef.current)
         if (modelConfig) {
-          const resolution = calculateVideoResolution(modelConfig, imageAspectRatio)
-          setVideoWidth(resolution.width)
-          setVideoHeight(resolution.height)
+          const layout = calculateVideoLayoutForAspectRatio(modelConfig, imageAspectRatio)
+          setVideoAspectRatio(layout.aspectRatio)
+          setVideoWidth(layout.width)
+          setVideoHeight(layout.height)
         }
 
         // 设置上传的图片
@@ -417,6 +432,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       {
         id: "grok-imagine-1.0",
         maxImages: 0,
+        tags: ["chineseSupport", "fastGeneration"]
+      },
+      {
+        id: "gpt-image-2",
+        maxImages: 1,
         tags: ["chineseSupport", "fastGeneration"]
       }
     ];
@@ -748,6 +768,15 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
   }, [model, aspectRatio]);
 
+  useEffect(() => {
+    if (model === 'gpt-image-2' && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
+      setAspectRatio('1:1');
+      setWidth(1024);
+      setHeight(1024);
+      setIsHighResolution(false);
+    }
+  }, [model, aspectRatio]);
+
   // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为 1:1（1K）
   useEffect(() => {
     if (model === 'nano-banana-2' && !NANO_BANANA_ALLOWED_RATIOS.includes(aspectRatio)) {
@@ -763,7 +792,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setAspectRatio(ratio);
 
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
-    if (model === 'grok-imagine-1.0') {
+    if (model === 'grok-imagine-1.0' || model === 'gpt-image-2') {
       const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
       setWidth(size.width);
       setHeight(size.height);
@@ -1111,7 +1140,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         aspectRatio={videoAspectRatio}
                         setAspectRatio={setVideoAspectRatio}
                         model={videoModel}
-                        setModel={setVideoModel}
+                        setModel={handleVideoModelChange}
                         uploadedImage={uploadedVideoImage}
                         setUploadedImage={setUploadedVideoImage}
                         generatedVideo={generatedVideo}

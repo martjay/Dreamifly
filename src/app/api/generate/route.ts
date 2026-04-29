@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateImage } from '@/utils/comfyApi'
 import { generateGrokImage } from '@/utils/grokApi'
+import { generateGptImage2 } from '@/utils/gptImage2Api'
 import { generateNanoBananaImage } from '@/utils/nanoBananaApi'
 import { db } from '@/db'
 import { siteStats, modelUsageStats, user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
@@ -727,7 +728,7 @@ export async function POST(request: Request) {
             }
 
             // 仅对 nano-banana-2 记录消费记录ID，方便后续失败时返还积分
-            if (model === 'nano-banana-2') {
+            if (model === 'nano-banana-2' || model === 'gpt-image-2') {
               spentRecordId = deductResult
             }
           }
@@ -747,7 +748,7 @@ export async function POST(request: Request) {
     // 如果用户未登录且使用图改图模型（有上传图片且模型支持I2I），返回401
     if (!session?.user && images && images.length > 0) {
       // 检查模型是否支持I2I（图改图）
-      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
+      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext', 'gpt-image-2']
       if (i2iModels.includes(model)) {
         return NextResponse.json({ 
           error: '图改图功能仅限登录用户使用，请先登录后再使用',
@@ -776,6 +777,9 @@ export async function POST(request: Request) {
     if (width < 64 || height < 64) {
       return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
     }
+    if (model === 'gpt-image-2' && images && images.length > 1) {
+      return NextResponse.json({ error: 'GPT-image-2 supports one input image per edit request' }, { status: 400 })
+    }
     // 验证步数：根据模型配置验证
     const thresholds = getModelThresholds(model);
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
@@ -791,6 +795,8 @@ export async function POST(request: Request) {
     let imageUrl: string
     if (model === 'grok-imagine-1.0') {
       imageUrl = await generateGrokImage({ prompt, width, height })
+    } else if (model === 'gpt-image-2') {
+      imageUrl = await generateGptImage2({ prompt, width, height, images })
     } else if (model === 'nano-banana-2') {
       imageUrl = await generateNanoBananaImage({ prompt, width, height, negative_prompt, seed: seed ? parseInt(seed) : undefined, images })
     } else {
@@ -945,7 +951,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
-    if (spentRecordId && currentModelId === 'nano-banana-2') {
+    if (spentRecordId && (currentModelId === 'nano-banana-2' || currentModelId === 'gpt-image-2')) {
       console.log('[图像生成API] 图像生成失败，开始返还积分', { spentRecordId })
       try {
         const refundSuccess = await refundPoints(

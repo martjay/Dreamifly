@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 import { ALL_VIDEO_MODELS, type VideoModelConfig } from '@/utils/videoModelConfig'
+import { isHappyHorseConfigured } from '@/utils/happyHorseVideoApi'
 
 // 视频模型环境变量映射（与 videoModelConfig.ts 保持一致）
 const VIDEO_MODEL_ENV_MAP = {
   "Wan2.2-I2V-Lightning": "WAN_I2V_URL",
   "grok-imagine-1.0-video": "GROK_VIDEO_API_URL",
+  "happyhorse-1.0-t2v": "HAPPYHORSE_API_URL",
+  "happyhorse-1.0-i2v": "HAPPYHORSE_API_URL",
+  "happyhorse-1.0-r2v": "HAPPYHORSE_API_URL",
+  "happyhorse-1.0-video-edit": "HAPPYHORSE_API_URL",
   // 可以添加更多视频模型
 } as const;
 
@@ -12,6 +17,10 @@ const VIDEO_MODEL_ENV_MAP = {
  * 检查视频模型是否在环境变量中配置了URL
  */
 function isVideoModelConfigured(modelId: string): boolean {
+  if (modelId.startsWith('happyhorse-1.0-')) {
+    return isHappyHorseConfigured()
+  }
+
   const envVarName = VIDEO_MODEL_ENV_MAP[modelId as keyof typeof VIDEO_MODEL_ENV_MAP];
   if (!envVarName) {
     return false;

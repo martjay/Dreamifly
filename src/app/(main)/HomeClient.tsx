@@ -469,6 +469,15 @@ export default function HomeClient() {
                         thumbnailSrc="/images/video-community/video-demo-10.png"
                       />
                     </div>
+                    <div className="animate-fadeInUp" style={{ animationDelay: '200ms' }}>
+                      <VideoToVideoPlazaCard
+                        name="HappyHorse I2V"
+                        description="HappyHorse image-to-video model. Fixed 5-second output using the uploaded image as the first frame."
+                        videoSrc="/images/video-community/video-demo-11.mp4"
+                        thumbnailSrc="/images/video-community/video-demo-11.png"
+                        modelId="happyhorse-1.0-i2v"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

@@ -14,6 +14,7 @@ const MODEL_ENV_MAP = {
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
+  "gpt-image-2": "GPT_IMAGE_2_API_URL",
   "nano-banana-2": "REPLICATE_API_TOKEN"
 } as const;
 
@@ -169,6 +170,18 @@ export const ALL_MODELS: ModelConfig[] = [
     use_i2i: false,
     use_t2i: true,
     maxImages: 0,
+    tags: ["chineseSupport"],
+    requiresLogin: true
+  },
+  {
+    id: "gpt-image-2",
+    name: "GPT-image-2",
+    image: "/images/gpt-image-2.png",
+    homepageCover: "/images/gpt-image-2.png",
+    description: "GPT-image-2 supports text-to-image generation and single-image editing with Chinese prompts.",
+    use_i2i: true,
+    use_t2i: true,
+    maxImages: 1,
     tags: ["chineseSupport"],
     requiresLogin: true
   },
@@ -353,6 +366,12 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
     normalResolutionPixels: null,
     highResolutionPixels: null,
   },
+  "gpt-image-2": {
+    normalSteps: null,
+    highSteps: null,
+    normalResolutionPixels: null,
+    highResolutionPixels: null,
+  },
   "nano-banana-2": {
     normalSteps: null,
     highSteps: null,
@@ -372,6 +391,8 @@ export const GROK_RATIO_SIZES: Record<string, { width: number; height: number }>
 
 /** grok-imagine-1.0 支持的比例列表 */
 export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
+
+export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
 
 /**
  * nano-banana-2 支持的比例列表

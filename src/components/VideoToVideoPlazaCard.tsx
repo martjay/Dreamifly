@@ -9,12 +9,14 @@ interface VideoToVideoPlazaCardProps {
   description?: string
   videoSrc: string
   thumbnailSrc: string
+  modelId?: string
 }
 
 export default function VideoToVideoPlazaCard({
   name,
   videoSrc,
-  thumbnailSrc
+  thumbnailSrc,
+  modelId = 'Wan2.2-I2V-Lightning'
 }: VideoToVideoPlazaCardProps) {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -31,7 +33,7 @@ export default function VideoToVideoPlazaCard({
   return (
     <div className="relative group">
       <Link
-        href={transferUrl('/create?tab=video&model=Wan2.2-I2V-Lightning')}
+        href={transferUrl(`/create?tab=video&model=${encodeURIComponent(modelId)}`)}
         className="block"
       >
         {/* 视频卡片 */}
