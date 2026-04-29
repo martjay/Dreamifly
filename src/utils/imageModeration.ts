@@ -22,6 +22,7 @@ export async function moderateGeneratedImage(
   const base64Media = imageBuffer.toString('base64')
   const response = await client.chat.completions.create({
     model,
+    temperature: 0,
     messages: [
       {
         role: 'user',
@@ -80,6 +81,7 @@ export async function moderatePrompt(
     // chat_template_kwargs 为 Qwen 等模型专用参数，OpenAI SDK 类型未包含
     const response = await client.chat.completions.create({
       model: model,
+      temperature: 0,
       messages: [
         {
           role: 'user',

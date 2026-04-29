@@ -532,12 +532,25 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
     // 判断是否需要间隔发送请求（登录用户且batch_size > 1）
     const shouldStaggerRequests = authStatus === 'authenticated' && batch_size > 1;
+    let inputModerationFailureMessage: string | null = null;
     
     const requests = Array(batch_size).fill(null).map((_, index) => {
       const startTime = Date.now();
 
       const makeRequest = async () => {
         try {
+          if (inputModerationFailureMessage) {
+            setImageStatuses(prev => {
+              const newStatuses = [...prev];
+              newStatuses[index] = ({
+                status: 'error',
+                message: inputModerationFailureMessage as string
+              });
+              return newStatuses;
+            });
+            return;
+          }
+
           // 如果是登录用户且需要间隔发送，第一个请求后等待0秒
           if (shouldStaggerRequests && index > 0) {
             await new Promise(resolve => setTimeout(resolve, 0 * index));
@@ -566,6 +579,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           });
 
           // 检查是否是401未登录错误（图改图模型限制）
+          if (inputModerationFailureMessage) {
+            setImageStatuses(prev => {
+              const newStatuses = [...prev];
+              newStatuses[index] = ({
+                status: 'error',
+                message: inputModerationFailureMessage as string
+              });
+              return newStatuses;
+            });
+            return;
+          }
+
           if (res.status === 401) {
             const errorData = await res.json().catch(() => ({}));
             if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I') {
@@ -627,15 +652,15 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
             if (errorData?.code === 'MODERATION_FAILED' && !errorData?.imageUrl) {
-              const message = getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
+              const message = inputModerationFailureMessage || getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
+              inputModerationFailureMessage = message
               setIsGenerating(false);
               setImageStatuses(prev => {
-                const newStatuses = [...prev];
-                newStatuses[index] = ({
-                  status: 'error',
-                  message
-                });
-                return newStatuses;
+                return prev.map((status) => (
+                  status.status === 'pending'
+                    ? { status: 'error', message }
+                    : status
+                ));
               });
               return;
             }
