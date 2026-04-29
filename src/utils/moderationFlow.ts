@@ -102,3 +102,63 @@ export async function moderateGeneratedOutput(params: {
   return { approved: true, visualRiskLevel: 'low' }
 }
 
+function imageBase64ToBuffer(imageBase64: string): Buffer {
+  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+  return Buffer.from(base64Data, 'base64')
+}
+
+export async function moderateGenerationInput(params: {
+  prompt?: string
+  referenceImages?: string[]
+}): Promise<ModerationDecision> {
+  const env = getModerationEnv()
+  if (!env.baseUrl) return { approved: true, visualRiskLevel: 'low' }
+
+  const promptText = params.prompt?.trim() || ''
+
+  if (promptText) {
+    const promptResult = await onceRetryOnThrow(() =>
+      moderatePrompt(promptText, env.baseUrl as string, env.apiKey, env.model, env.promptModerationPrompt)
+    )
+
+    if (!promptResult.ok) {
+      return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
+    }
+
+    if (!promptResult.value) {
+      return { approved: false, reason: 'prompt' }
+    }
+  }
+
+  let highestReferenceRisk: VisualRiskLevel = 'low'
+  const referenceImages = params.referenceImages?.filter(Boolean) || []
+
+  for (let index = 0; index < referenceImages.length; index += 1) {
+    const imageBuffer = imageBase64ToBuffer(referenceImages[index])
+    const imageResult = await onceRetryOnThrow(() =>
+      moderateGeneratedImage(
+        imageBuffer,
+        `reference-image-${index + 1}.png`,
+        env.baseUrl as string,
+        env.apiKey,
+        env.model,
+        env.imageModerationPrompt
+      )
+    )
+
+    if (!imageResult.ok) {
+      return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
+    }
+
+    if (imageResult.value === 'high') {
+      return { approved: false, reason: 'image', visualRiskLevel: 'high' }
+    }
+
+    if (imageResult.value === 'medium') {
+      highestReferenceRisk = 'medium'
+    }
+  }
+
+  return { approved: true, visualRiskLevel: highestReferenceRisk }
+}
+

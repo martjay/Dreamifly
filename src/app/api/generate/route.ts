@@ -10,7 +10,7 @@ import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { randomUUID, createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
-import { moderateGeneratedOutput } from '@/utils/moderationFlow'
+import { moderateGenerationInput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
@@ -609,6 +609,23 @@ export async function POST(request: Request) {
       // 如果过滤失败，继续使用原始 prompt，不阻止流程
     }
     
+    const inputModerationDecision = await moderateGenerationInput({
+      prompt,
+      referenceImages: Array.isArray(images) ? images : [],
+    })
+
+    if (!inputModerationDecision.approved) {
+      return NextResponse.json(
+        {
+          error: '内容未通过审核',
+          code: 'MODERATION_FAILED',
+          moderation: inputModerationDecision,
+          mediaId: null,
+        },
+        { status: 403 }
+      )
+    }
+
     // 对于已登录用户，在解析请求体后检查积分和额度
     if (session?.user && !isAdmin) {
       const userId = session.user.id;
@@ -813,66 +830,6 @@ export async function POST(request: Request) {
       })
     }
 
-    // --- 同步审核：先审核再决定是否返回 ---
-    // 1) 将 base64 转为 Buffer（用于审核/留档）
-    const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '')
-    const imageBuffer = Buffer.from(base64Data, 'base64')
-
-    const moderationDecision = await moderateGeneratedOutput({
-      imageBuffer,
-      prompt,
-      hasReferenceImages: Boolean(images && Array.isArray(images) && images.length > 0),
-    })
-
-    if (!moderationDecision.approved) {
-      // 留档未通过（原图入 rejected_images），并返回原图供前端叠加蒙版（非 2xx）
-      try {
-        const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
-
-        let referenceImageUrls: string[] = []
-        if (images && Array.isArray(images) && images.length > 0) {
-          try {
-            const { saveReferenceImages } = await import('@/utils/referenceImageStorage')
-            referenceImageUrls = await saveReferenceImages(images)
-          } catch (error) {
-            console.error('保存未通过审核图片的参考图失败:', error)
-          }
-        }
-
-        const rejectionReason =
-          moderationDecision.reason === 'prompt'
-            ? 'prompt'
-            : moderationDecision.reason === 'image'
-              ? 'image'
-              : 'both'
-
-        await saveRejectedImage(imageBuffer, {
-          userId: session?.user?.id || null,
-          ipAddress: clientIP || undefined,
-          prompt,
-          model,
-          width,
-          height,
-          rejectionReason,
-          moderationLevel: moderationDecision.visualRiskLevel,
-          referenceImages: referenceImageUrls,
-        })
-      } catch (error) {
-        console.error('保存未通过审核图片失败:', error)
-      }
-
-      return NextResponse.json(
-        {
-          error: '内容未通过审核',
-          code: 'MODERATION_FAILED',
-          moderation: moderationDecision,
-          imageUrl,
-          mediaId: null,
-        },
-        { status: 403 }
-      )
-    }
-
     // 如果用户未登录，审核通过后再添加水印（保持原有逻辑）
     if (!session?.user) {
       const enableWatermark = process.env.ENABLE_WATERMARK !== 'false'
@@ -918,7 +875,7 @@ export async function POST(request: Request) {
       console.error('Failed to record model usage stats:', error)
     }
 
-    // 如果用户已登录，同步保存生成的图片（审核已通过，可跳过保存内二次审核）
+    // 如果用户已登录，同步保存生成的图片（输入审核已通过，可跳过保存内二次审核）
     if (session?.user) {
       try {
         const { saveUserGeneratedImage } = await import('@/utils/userImageStorage')
@@ -932,7 +889,7 @@ export async function POST(request: Request) {
             height,
             ipAddress: clientIP || undefined,
             referenceImages: images || [],
-            moderationLevel: moderationDecision.visualRiskLevel,
+            moderationLevel: inputModerationDecision.visualRiskLevel,
           },
           { skipModeration: true }
         )
@@ -945,8 +902,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       imageUrl,
       moderation:
-        moderationDecision.visualRiskLevel === 'medium'
-          ? { visualRiskLevel: moderationDecision.visualRiskLevel }
+        inputModerationDecision.visualRiskLevel === 'medium'
+          ? { visualRiskLevel: inputModerationDecision.visualRiskLevel }
           : undefined,
     })
   } catch (error) {

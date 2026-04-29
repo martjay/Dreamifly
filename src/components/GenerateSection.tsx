@@ -61,6 +61,17 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${String(secs).padStart(2, '0')}`
 }
 
+function getInputModerationFailureMessage(reason?: string, mediaType: 'image' | 'video' = 'image') {
+  if (reason === 'prompt') return '提示词未通过审核，请调整后重试'
+  if (reason === 'image' || reason === 'video') {
+    return mediaType === 'video'
+      ? '参考图或源视频未通过审核，请更换后重试'
+      : '参考图未通过审核，请更换后重试'
+  }
+  if (reason === 'service_error') return '审核服务暂时不可用，请稍后重试'
+  return '内容未通过审核，请调整后重试'
+}
+
 const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
   const t = createScopedT('home.generate')
   const tHome = createScopedT('home')
@@ -615,6 +626,19 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           // 审核未通过：非 2xx，但响应体包含 imageUrl 供前端加遮罩展示
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
+            if (errorData?.code === 'MODERATION_FAILED' && !errorData?.imageUrl) {
+              const message = getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
+              setIsGenerating(false);
+              setImageStatuses(prev => {
+                const newStatuses = [...prev];
+                newStatuses[index] = ({
+                  status: 'error',
+                  message
+                });
+                return newStatuses;
+              });
+              return;
+            }
             if (errorData?.code === 'MODERATION_FAILED' && errorData?.imageUrl) {
               const dataUrl = errorData.imageUrl as string;
               const moderationLevel = errorData?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined

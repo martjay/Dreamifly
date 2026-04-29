@@ -83,6 +83,13 @@ function inferHappyHorseMode(modelId: string): VideoModelMode | undefined {
   return undefined
 }
 
+function getVideoInputModerationFailureMessage(reason?: string) {
+  if (reason === 'prompt') return '提示词未通过审核，请调整后重试'
+  if (reason === 'video' || reason === 'image') return '参考图或源视频未通过审核，请更换后重试'
+  if (reason === 'service_error') return '审核服务暂时不可用，请稍后重试'
+  return '内容未通过审核，请调整后重试'
+}
+
 const VideoGenerateForm = ({
   prompt,
   setPrompt,
@@ -540,7 +547,11 @@ const VideoGenerateForm = ({
           setErrorModal(true, 'insufficient_points', errorData.error)
           return
         }
-        if (response.status === 422 && errorData.code === 'VIDEO_MODERATION_FAILED') {
+        if ((response.status === 403 || response.status === 422) && errorData.code === 'VIDEO_MODERATION_FAILED') {
+          if (!errorData.videoUrl && !errorData.imageUrl) {
+            setToast({ message: getVideoInputModerationFailureMessage(errorData?.moderation?.reason), type: 'error' })
+            return
+          }
           setModerationPreviewImageUrl(errorData.imageUrl || null)
           onModerationFailed?.({
             imageUrl: errorData.imageUrl || null,

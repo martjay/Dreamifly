@@ -26,7 +26,7 @@ import {
   type HappyHorseMediaInput,
   type HappyHorseResolution,
 } from '@/utils/happyHorseVideoApi'
-import { moderateGeneratedVideoOutput } from '@/utils/videoModerationFlow'
+import { moderateVideoGenerationInput } from '@/utils/videoModerationFlow'
 
 export const maxDuration = 1500
 
@@ -295,6 +295,42 @@ export async function POST(request: Request) {
       billableSeconds = Math.ceil(generationSeconds)
     }
 
+    let moderationReferenceImages: string[] = []
+    let moderationSourceVideo: string | null = null
+    if (modelConfig.provider === 'grok') {
+      moderationReferenceImages = image ? [image] : []
+    } else if (modelConfig.provider === 'happyhorse') {
+      const mode = getHappyHorseMode(modelConfig)
+      if (mode === 'image-to-video') {
+        moderationReferenceImages = image ? [image] : []
+      } else if (mode === 'reference-to-video') {
+        moderationReferenceImages = refs
+      } else if (mode === 'video-edit') {
+        moderationReferenceImages = refs
+        moderationSourceVideo = sourceVideo || null
+      }
+    } else {
+      moderationReferenceImages = image ? [image] : []
+    }
+
+    const inputModerationDecision = await moderateVideoGenerationInput({
+      prompt: promptText,
+      referenceImagesBase64OrDataUrl: moderationReferenceImages,
+      sourceVideoBase64OrDataUrl: moderationSourceVideo,
+    })
+
+    if (!inputModerationDecision.approved) {
+      return NextResponse.json(
+        {
+          error: '内容未通过审核',
+          code: 'VIDEO_MODERATION_FAILED',
+          moderation: inputModerationDecision,
+          mediaId: null,
+        },
+        { status: 403 }
+      )
+    }
+
     let pointsCostForResponse = 0
     if (!isAdmin) {
       const baseCost = await getModelBaseCost(model, happyHorseResolution)
@@ -425,58 +461,6 @@ export async function POST(request: Request) {
       referenceImagesForStorage.push(stripDataUrlPrefix(image as string))
     }
 
-    const moderationDecision = await moderateGeneratedVideoOutput({
-      prompt: promptText,
-      referenceImageBase64OrDataUrl: referenceImagesForStorage[0] || null,
-      sourceVideoBase64OrDataUrl: sourceVideo || null,
-    })
-
-    const referenceImageDataUrl = referenceImagesForStorage[0]
-      ? `data:image/jpeg;base64,${referenceImagesForStorage[0]}`
-      : null
-
-    if (!moderationDecision.approved) {
-      try {
-        const { saveRejectedImage } = await import('@/utils/rejectedImageStorage')
-        const { saveReferenceImages } = await import('@/utils/referenceImageStorage')
-        const referenceImageUrls = referenceImagesForStorage.length > 0
-          ? await saveReferenceImages(referenceImagesForStorage)
-          : []
-        const base64VideoData = videoUrl.replace(/^data:video\/\w+;base64,/, '')
-        const videoBuffer = Buffer.from(base64VideoData, 'base64')
-        const rejectionReason = moderationDecision.reason === 'prompt' ? 'prompt' : moderationDecision.reason === 'video' ? 'image' : 'both'
-
-        await saveRejectedImage(videoBuffer, {
-          userId,
-          prompt: promptText,
-          model,
-          width: finalWidth,
-          height: finalHeight,
-          mediaType: 'video',
-          duration: Math.round(videoDurationSeconds),
-          fps: videoFps,
-          frameCount: videoFrameCount,
-          rejectionReason,
-          moderationLevel: moderationDecision.visualRiskLevel,
-          referenceImages: referenceImageUrls,
-        })
-      } catch (error) {
-        console.error('Failed to save rejected video:', error)
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Video moderation failed',
-          code: 'VIDEO_MODERATION_FAILED',
-          moderation: moderationDecision,
-          imageUrl: referenceImageDataUrl,
-          videoUrl,
-          mediaId: null,
-        },
-        { status: 422 }
-      )
-    }
-
     try {
       const headersList = await headers()
       const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown'
@@ -494,7 +478,7 @@ export async function POST(request: Request) {
           frameCount: videoFrameCount,
           ipAddress,
           referenceImages: referenceImagesForStorage,
-          moderationLevel: moderationDecision.visualRiskLevel,
+          moderationLevel: inputModerationDecision.visualRiskLevel,
         },
         { skipModeration: true }
       )
@@ -517,8 +501,8 @@ export async function POST(request: Request) {
     const responseTime = (Date.now() - totalStartTime) / 1000
     return NextResponse.json({
       videoUrl,
-      moderation: moderationDecision.visualRiskLevel === 'medium'
-        ? { visualRiskLevel: moderationDecision.visualRiskLevel }
+      moderation: inputModerationDecision.visualRiskLevel === 'medium'
+        ? { visualRiskLevel: inputModerationDecision.visualRiskLevel }
         : undefined,
       responseTime: Math.round(responseTime * 100) / 100,
       pointsCost: pointsCostForResponse,
