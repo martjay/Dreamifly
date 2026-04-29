@@ -1,6 +1,7 @@
 import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import GenerateForm from './GenerateForm'
 import GeneratePreview from './GeneratePreview'
 import ModerationConsentModal from './ModerationConsentModal'
@@ -63,6 +64,7 @@ const formatTime = (seconds: number): string => {
 const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
   const t = createScopedT('home.generate')
   const tHome = createScopedT('home')
+  const router = useRouter()
   const { data: session, isPending } = useSession()
   const { refreshPoints } = usePoints()
   const [prompt, setPrompt] = useState(initialPrompt || '');
@@ -139,13 +141,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   useEffect(() => {
     if (activeTab !== 'video-generation') return
     if (!initialModel) return
-    if (videoModel === initialModel) return
 
     const videoConfig = getVideoModelById(initialModel)
     if (videoConfig) {
       setVideoModel(initialModel)
     }
-  }, [activeTab, initialModel, videoModel])
+  }, [activeTab, initialModel])
+
+  const handleVideoModelChange = (nextModel: string) => {
+    setVideoModel(nextModel)
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', 'video')
+    params.set('model', nextModel)
+    const query = params.toString()
+    router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
+  }
 
   // 监听视频参考图片就绪事件
   useEffect(() => {
@@ -1127,7 +1140,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         aspectRatio={videoAspectRatio}
                         setAspectRatio={setVideoAspectRatio}
                         model={videoModel}
-                        setModel={setVideoModel}
+                        setModel={handleVideoModelChange}
                         uploadedImage={uploadedVideoImage}
                         setUploadedImage={setUploadedVideoImage}
                         generatedVideo={generatedVideo}
