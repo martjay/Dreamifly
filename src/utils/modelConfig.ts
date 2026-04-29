@@ -176,7 +176,7 @@ export const ALL_MODELS: ModelConfig[] = [
   {
     id: "gpt-image-2",
     name: "GPT-image-2",
-    image: "/models/grok-imagine-1.0.jpg",
+    image: "/images/gpt-image-2.png",
     homepageCover: "/models/homepageModelCover/demo.jpg",
     description: "GPT-image-2 supports text-to-image generation and single-image editing with Chinese prompts.",
     use_i2i: true,
