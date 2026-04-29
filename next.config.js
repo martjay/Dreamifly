@@ -1,4 +1,6 @@
 const nextConfig = {
+  serverExternalPackages: ['ali-oss'],
+
   images: {
     remotePatterns: [
       {
