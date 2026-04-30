@@ -372,6 +372,12 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
     normalResolutionPixels: null,
     highResolutionPixels: null,
   },
+  "gpt-image-2.0": {
+    normalSteps: null,
+    highSteps: null,
+    normalResolutionPixels: null,
+    highResolutionPixels: null,
+  },
   "nano-banana-2": {
     normalSteps: null,
     highSteps: null,
@@ -395,7 +401,7 @@ export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
 export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
 export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
 
-export function isGptImage2Model(modelId?: string): boolean {
+export function isGptImage2Model(modelId?: string | null): boolean {
   const normalizedModelId = modelId?.trim().toLowerCase();
   return Boolean(normalizedModelId && GPT_IMAGE_2_MODEL_IDS.includes(normalizedModelId as typeof GPT_IMAGE_2_MODEL_IDS[number]));
 }
@@ -463,6 +469,10 @@ export function supportsResolutionModification(modelId: string): boolean {
  * @returns 是否仅限登录用户
  */
 export function isLoginRequiredModel(modelId: string): boolean {
+  if (isGptImage2Model(modelId)) {
+    return true;
+  }
+
   const model = ALL_MODELS.find(m => m.id === modelId);
   return model?.requiresLogin === true;
 }

@@ -2,7 +2,7 @@ import { db } from '@/db';
 import { userPoints, pointsConfig, user, userLimitConfig } from '@/db/schema';
 import { eq, and, gte, sql, inArray, isNotNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
-import { getModelThresholds } from '@/utils/modelConfig';
+import { getModelThresholds, isGptImage2Model } from '@/utils/modelConfig';
 import type { HappyHorseResolution } from '@/utils/happyHorseVideoApi';
 
 /**
@@ -109,6 +109,7 @@ export async function getModelBaseCost(modelId: string, resolution: HappyHorseRe
     case 'grok-imagine-1.0':
       return config.grokImagine1Cost;
     case 'gpt-image-2':
+    case 'gpt-image-2.0':
       return config.gptImage2Cost;
     case 'grok-imagine-1.0-video':
       return config.grokVideoCost;
@@ -171,7 +172,7 @@ export function calculateGenerationCost(
   const totalCost = baseCost * multiplier;
 
   // External paid image models do not use free quota offsets.
-  if (modelId === 'nano-banana-2' || modelId === 'gpt-image-2') {
+  if (modelId === 'nano-banana-2' || isGptImage2Model(modelId)) {
     return totalCost
   }
 

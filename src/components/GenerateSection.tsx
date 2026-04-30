@@ -1016,8 +1016,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       // 计算有额度时需要扣除的积分（总消耗 - 基础消耗）
       if (totalCostWithBatch !== null && hasQuota !== null) {
         const baseCostWithBatch = modelBaseCost * batch_size;
-        // nano-banana-2 不享受额度减免：始终展示全额消耗
-        if (model === 'nano-banana-2') {
+        // 独立计费模型不享受额度减免：始终展示全额消耗
+        if (model === 'nano-banana-2' || isGptImage2Model(model)) {
           setEstimatedCost(totalCostWithBatch);
         } else if (hasQuota) {
           // 有额度：显示额外消耗（总消耗 - 基础消耗）

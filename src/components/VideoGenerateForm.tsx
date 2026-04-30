@@ -155,7 +155,12 @@ const VideoGenerateForm = ({
   const isTextToVideo = isHappyHorse && mode === 'text-to-video'
   const isReferenceToVideo = isHappyHorse && mode === 'reference-to-video'
   const isVideoEdit = isHappyHorse && mode === 'video-edit'
-  const optimizationImage = uploadedImage || referenceImages[0] || null
+  const canOptimizePrompt = (() => {
+    if (isTextToVideo) return true
+    if (isReferenceToVideo) return referenceImages.length > 0
+    if (isVideoEdit) return Boolean(sourceVideo)
+    return Boolean(uploadedImage)
+  })()
   const billableSeconds = clampSeconds(videoSeconds)
 
   const applyVideoLayout = (modelConfig: VideoModelConfig, sourceAspectRatio: number) => {
@@ -436,15 +441,21 @@ const VideoGenerateForm = ({
   }
 
   const handleOptimizePrompt = async () => {
-    if (!optimizationImage) {
-      setToast({ message: tVideo('imageRequiredForOptimization') || 'Upload a reference image first.', type: 'info' })
+    if (!canOptimizePrompt) {
+      setToast({ message: '请先补充当前模式需要的图片或视频。', type: 'info' })
       return
     }
 
     const hasPrompt = prompt.trim().length > 0
     setIsOptimizing(true)
     try {
-      const optimizedPrompt = await optimizeVideoPrompt(hasPrompt ? prompt : '', optimizationImage)
+      const optimizedPrompt = await optimizeVideoPrompt({
+        prompt: hasPrompt ? prompt : '',
+        mode,
+        image: uploadedImage || undefined,
+        images: isReferenceToVideo ? referenceImages : undefined,
+        video: isVideoEdit ? sourceVideo || undefined : undefined,
+      })
       setPrompt(optimizedPrompt)
       setToast({ message: hasPrompt ? (t('form.promptOptimized') || 'Prompt optimized.') : (t('form.promptGenerated') || 'Prompt generated.'), type: 'success' })
     } catch (error) {
@@ -822,7 +833,7 @@ const VideoGenerateForm = ({
               type="button"
               onClick={handleOptimizePrompt}
               className="rounded-lg border border-amber-400/40 bg-white/95 px-3 py-2 text-sm text-gray-900 shadow-md shadow-amber-400/10 transition-all hover:bg-amber-50/50 disabled:opacity-50"
-              disabled={isGenerating || isOptimizing || !optimizationImage}
+              disabled={isGenerating || isOptimizing || !canOptimizePrompt}
             >
               {isOptimizing ? t('form.optimizingPrompt') || 'Optimizing...' : t('form.optimizePrompt') || 'Optimize'}
             </button>

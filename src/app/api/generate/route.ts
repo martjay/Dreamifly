@@ -12,7 +12,7 @@ import { randomUUID, createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
 import { moderateGenerationInput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
-import { getModelThresholds, isLoginRequiredModel } from '@/utils/modelConfig'
+import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
 
 /**
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
   let currentModelId: string | null = null
   // 如果本次请求已成功扣除积分，则记录消费记录ID，方便失败时返还
   let spentRecordId: string | null = null
+  let consumedDailyQuota = false
   
   try {
     // 记录总开始时间（包含排队延迟）
@@ -562,6 +563,8 @@ export async function POST(request: Request) {
           if (updateResult.length === 0) {
             // 标记为超出额度，但不立即返回错误
             // 后续在解析请求体后会检查积分
+          } else {
+            consumedDailyQuota = true
           }
         } else {
           // 管理员不限次，直接更新计数
@@ -569,11 +572,12 @@ export async function POST(request: Request) {
             dailyRequestCount: sql`${user.dailyRequestCount} + 1`,
             updatedAt: sql`now()`,
           };
-          await db
-            .update(user)
-            .set(updateData)
-            .where(eq(user.id, userId));
-        }
+        await db
+          .update(user)
+          .set(updateData)
+          .where(eq(user.id, userId));
+        consumedDailyQuota = true
+      }
       }
       
     }
@@ -695,7 +699,22 @@ export async function POST(request: Request) {
           }
         }
         
-        const hasQuota = currentCount < maxDailyRequests;
+        const hasQuota = consumedDailyQuota;
+
+        if (hasQuota && isGptImage2Model(model)) {
+          await db
+            .update(user)
+            .set({
+              dailyRequestCount: sql`${user.dailyRequestCount} + 1`,
+              updatedAt: sql`now()`,
+            })
+            .where(
+              and(
+                eq(user.id, userId),
+                lt(user.dailyRequestCount, maxDailyRequests)
+              )
+            );
+        }
         
         // 获取模型基础积分消耗
         const baseCost = await getModelBaseCost(model);
@@ -744,8 +763,8 @@ export async function POST(request: Request) {
               }
             }
 
-            // 仅对 nano-banana-2 记录消费记录ID，方便后续失败时返还积分
-            if (model === 'nano-banana-2' || model === 'gpt-image-2') {
+            // 仅对第三方独立计费模型记录消费记录ID，方便后续失败时返还积分
+            if (model === 'nano-banana-2' || isGptImage2Model(model)) {
               spentRecordId = deductResult
             }
           }
@@ -765,8 +784,8 @@ export async function POST(request: Request) {
     // 如果用户未登录且使用图改图模型（有上传图片且模型支持I2I），返回401
     if (!session?.user && images && images.length > 0) {
       // 检查模型是否支持I2I（图改图）
-      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext', 'gpt-image-2']
-      if (i2iModels.includes(model)) {
+      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
+      if (i2iModels.includes(model) || isGptImage2Model(model)) {
         return NextResponse.json({ 
           error: '图改图功能仅限登录用户使用，请先登录后再使用',
           code: 'LOGIN_REQUIRED_FOR_I2I'
@@ -794,7 +813,7 @@ export async function POST(request: Request) {
     if (width < 64 || height < 64) {
       return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
     }
-    if (model === 'gpt-image-2' && images && images.length > 1) {
+    if (isGptImage2Model(model) && images && images.length > 1) {
       return NextResponse.json({ error: 'GPT-image-2 supports one input image per edit request' }, { status: 400 })
     }
     // 验证步数：根据模型配置验证
@@ -812,7 +831,7 @@ export async function POST(request: Request) {
     let imageUrl: string
     if (model === 'grok-imagine-1.0') {
       imageUrl = await generateGrokImage({ prompt, width, height })
-    } else if (model === 'gpt-image-2') {
+    } else if (isGptImage2Model(model)) {
       imageUrl = await generateGptImage2({ prompt, width, height, images })
     } else if (model === 'nano-banana-2') {
       imageUrl = await generateNanoBananaImage({ prompt, width, height, negative_prompt, seed: seed ? parseInt(seed) : undefined, images })
@@ -908,7 +927,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
-    if (spentRecordId && (currentModelId === 'nano-banana-2' || currentModelId === 'gpt-image-2')) {
+    if (spentRecordId && (currentModelId === 'nano-banana-2' || isGptImage2Model(currentModelId))) {
       console.log('[图像生成API] 图像生成失败，开始返还积分', { spentRecordId })
       try {
         const refundSuccess = await refundPoints(
