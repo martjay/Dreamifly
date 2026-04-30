@@ -160,40 +160,6 @@ const VideoGenerateForm = ({
     : estimatedCost !== null
       ? `${estimatedCost} 积分/次`
       : '加载计费中'
-  const modeGuide = (() => {
-    switch (mode) {
-      case 'text-to-video':
-        return {
-          title: 'T2V 文生视频',
-          body: '只需要输入提示词，适合从零生成镜头、动作和氛围，不需要上传图片。',
-          inputs: '输入：提示词 + 时长 + 画幅',
-        }
-      case 'image-to-video':
-        return {
-          title: 'I2V 图生视频',
-          body: '上传一张首帧图，模型会基于这张图延展动作，适合让现有图片动起来。',
-          inputs: '输入：首帧图 + 提示词 + 时长',
-        }
-      case 'reference-to-video':
-        return {
-          title: 'R2V 参考生视频',
-          body: '上传 1-9 张参考图来约束角色、主体或风格，提示词中可以写 character1、character2 指代参考图。',
-          inputs: '输入：1-9 张参考图 + 提示词 + 时长',
-        }
-      case 'video-edit':
-        return {
-          title: '视频编辑',
-          body: '上传源视频并写编辑指令，可选参考图用于补充主体或风格，输出秒数按下方选择。',
-          inputs: '输入：源视频 + 编辑指令 + 时长，可选参考图',
-        }
-      default:
-        return {
-          title: '视频生成',
-          body: '上传图片并输入提示词生成视频。',
-          inputs: '输入：图片 + 提示词',
-        }
-    }
-  })()
 
   const applyVideoLayout = (modelConfig: VideoModelConfig, sourceAspectRatio: number) => {
     const layout = calculateVideoLayoutForAspectRatio(modelConfig, sourceAspectRatio)
@@ -623,30 +589,6 @@ const VideoGenerateForm = ({
               </option>
             ))}
           </select>
-          {currentModelConfig?.description && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-              <span>{currentModelConfig.description}</span>
-              {isHappyHorse && (
-                <span className="rounded-md border border-amber-300/60 bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
-                  {baseCost ?? '-'} pts/s
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 p-4 text-sm text-gray-800 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-1">
-              <div className="font-semibold text-gray-950">{modeGuide.title}</div>
-              <div>{modeGuide.body}</div>
-              <div className="text-xs text-gray-600">{modeGuide.inputs}</div>
-            </div>
-            <div className="shrink-0 rounded-lg border border-amber-300/70 bg-white/80 px-3 py-2 text-xs font-semibold text-amber-800">
-              {isHappyHorse ? '按秒计费' : '固定计费'}
-              <div className="mt-1 text-gray-900">{billingRuleText}</div>
-            </div>
-          </div>
         </div>
 
         {isHappyHorse && (
