@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, type ReactNode } from 'react';
 import Image from 'next/image';
 import { styleOptions } from './StyleTransferForm';
 import LoginHint from './LoginHint';
-import { GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS } from '@/utils/modelConfig';
+import { GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, isGptImage2Model } from '@/utils/modelConfig';
 
 interface PromptInputProps {
   prompt: string;
@@ -25,6 +25,7 @@ interface PromptInputProps {
   estimatedCost?: number | null;
   extraCost?: number | null;
   model?: string;
+  hideRatioSelector?: boolean;
   extraContent?: ReactNode;
 }
 
@@ -47,6 +48,7 @@ const PromptInput = ({
   estimatedCost = null,
   extraCost = null,
   model,
+  hideRatioSelector = false,
   extraContent
 }: PromptInputProps) => {
   const t = createScopedT('home.generate')
@@ -75,13 +77,20 @@ const PromptInput = ({
     };
   }, [isStyleOpen, isRatioOpen]);
 
+  const shouldShowRatioSelector = !hideRatioSelector && !isGptImage2Model(model);
   const ratios = model === 'grok-imagine-1.0'
     ? GROK_ALLOWED_RATIOS
-    : model === 'gpt-image-2'
+    : isGptImage2Model(model)
       ? GPT_IMAGE_2_ALLOWED_RATIOS
     : model === 'nano-banana-2'
       ? NANO_BANANA_ALLOWED_RATIOS
       : ['10:3', '16:9', '3:2', '5:4','7:4', '1:1', '4:7', '4:5', '2:3', '9:16'];
+
+  useEffect(() => {
+    if (!shouldShowRatioSelector) {
+      setIsRatioOpen(false);
+    }
+  }, [shouldShowRatioSelector]);
 
   return (
     <div>
@@ -182,7 +191,7 @@ const PromptInput = ({
             <button
               type="button"
               onClick={() => setIsStyleOpen(!isStyleOpen)}
-              className="w-[calc(50%-0.375rem)] min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative"
+              className={`${shouldShowRatioSelector ? 'w-[calc(50%-0.375rem)]' : 'w-full'} min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative`}
               disabled={isGenerating}
             >
               <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 md:mr-1.5 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -224,39 +233,41 @@ const PromptInput = ({
                 ))}
               </div>
             </button>
-            <div
-              onClick={() => setIsRatioOpen(!isRatioOpen)}
-              className="w-[calc(50%-0.375rem)] min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative cursor-pointer"
-              tabIndex={0}
-              role="button"
-              aria-disabled={isGenerating}
-            >
-              <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 md:mr-1.5 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
-              </svg>
-              {aspectRatio}
-              {isRatioOpen && (
-                <div ref={ratioDropdownRef} className="absolute top-full left-0 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 min-w-[150px] z-50">
-                  {ratios.map(r => {
-                    const [rw, rh] = r.split(':').map(Number);
-                    const isHorizontal = rw >= rh;
-                    const rectWidth = 20;
-                    const rectHeight = isHorizontal ? Math.round(rectWidth * rh / rw) : Math.round(rectWidth * rw / rh);
-                    const rectStyle = isHorizontal ? {width: `${rectWidth}px`, height: `${rectHeight}px`} : {width: `${rectHeight}px`, height: `${rectWidth}px`};
-                    return (
-                      <div
-                        key={r}
-                        onClick={() => { onRatioChange(r); setIsRatioOpen(false); }}
-                        className="flex items-center px-3 py-2 text-sm text-gray-900 hover:bg-gray-100/50 w-full rounded-lg cursor-pointer"
-                      >
-                        <div className="bg-amber-400/40 mr-2" style={rectStyle}></div>
-                        {r}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {shouldShowRatioSelector && (
+              <div
+                onClick={() => setIsRatioOpen(!isRatioOpen)}
+                className="w-[calc(50%-0.375rem)] min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative cursor-pointer"
+                tabIndex={0}
+                role="button"
+                aria-disabled={isGenerating}
+              >
+                <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 md:mr-1.5 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
+                </svg>
+                {aspectRatio}
+                {isRatioOpen && (
+                  <div ref={ratioDropdownRef} className="absolute top-full left-0 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 min-w-[150px] z-50">
+                    {ratios.map(r => {
+                      const [rw, rh] = r.split(':').map(Number);
+                      const isHorizontal = rw >= rh;
+                      const rectWidth = 20;
+                      const rectHeight = isHorizontal ? Math.round(rectWidth * rh / rw) : Math.round(rectWidth * rw / rh);
+                      const rectStyle = isHorizontal ? {width: `${rectWidth}px`, height: `${rectHeight}px`} : {width: `${rectHeight}px`, height: `${rectWidth}px`};
+                      return (
+                        <div
+                          key={r}
+                          onClick={() => { onRatioChange(r); setIsRatioOpen(false); }}
+                          className="flex items-center px-3 py-2 text-sm text-gray-900 hover:bg-gray-100/50 w-full rounded-lg cursor-pointer"
+                        >
+                          <div className="bg-amber-400/40 mr-2" style={rectStyle}></div>
+                          {r}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={onOptimizePrompt}

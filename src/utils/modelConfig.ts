@@ -393,6 +393,12 @@ export const GROK_RATIO_SIZES: Record<string, { width: number; height: number }>
 export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
 
 export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
+export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
+
+export function isGptImage2Model(modelId?: string): boolean {
+  const normalizedModelId = modelId?.trim().toLowerCase();
+  return Boolean(normalizedModelId && GPT_IMAGE_2_MODEL_IDS.includes(normalizedModelId as typeof GPT_IMAGE_2_MODEL_IDS[number]));
+}
 
 /**
  * nano-banana-2 支持的比例列表

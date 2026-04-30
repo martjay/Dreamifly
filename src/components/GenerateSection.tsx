@@ -12,7 +12,7 @@ import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
@@ -804,6 +804,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
 
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const hideImageRatioSelector = isGptImage2Model(model);
   // 高分辨率开关状态（独立控制，不受图片比例影响）
   const [isHighResolution, setIsHighResolution] = useState(false);
 
@@ -818,7 +819,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   }, [model, aspectRatio]);
 
   useEffect(() => {
-    if (model === 'gpt-image-2' && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
+    if (isGptImage2Model(model) && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
       setAspectRatio('1:1');
       setWidth(1024);
       setHeight(1024);
@@ -841,7 +842,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setAspectRatio(ratio);
 
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
-    if (model === 'grok-imagine-1.0' || model === 'gpt-image-2') {
+    if (model === 'grok-imagine-1.0' || isGptImage2Model(model)) {
       const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
       setWidth(size.width);
       setHeight(size.height);
@@ -1071,6 +1072,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   aspectRatio={aspectRatio}
                   onRatioChange={handleRatioChange}
                   model={model}
+                  hideRatioSelector={hideImageRatioSelector}
                   selectedStyle={selectedStyle}
                   onStyleChange={setSelectedStyle}
                   isQueuing={isQueuing}
