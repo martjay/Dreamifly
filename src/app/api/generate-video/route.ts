@@ -295,28 +295,8 @@ export async function POST(request: Request) {
       billableSeconds = Math.ceil(generationSeconds)
     }
 
-    let moderationReferenceImages: string[] = []
-    let moderationSourceVideo: string | null = null
-    if (modelConfig.provider === 'grok') {
-      moderationReferenceImages = image ? [image] : []
-    } else if (modelConfig.provider === 'happyhorse') {
-      const mode = getHappyHorseMode(modelConfig)
-      if (mode === 'image-to-video') {
-        moderationReferenceImages = image ? [image] : []
-      } else if (mode === 'reference-to-video') {
-        moderationReferenceImages = refs
-      } else if (mode === 'video-edit') {
-        moderationReferenceImages = refs
-        moderationSourceVideo = sourceVideo || null
-      }
-    } else {
-      moderationReferenceImages = image ? [image] : []
-    }
-
     const inputModerationDecision = await moderateVideoGenerationInput({
       prompt: promptText,
-      referenceImagesBase64OrDataUrl: moderationReferenceImages,
-      sourceVideoBase64OrDataUrl: moderationSourceVideo,
     })
 
     if (!inputModerationDecision.approved) {

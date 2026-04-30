@@ -617,7 +617,6 @@ export async function POST(request: Request) {
     
     const inputModerationDecision = await moderateGenerationInput({
       prompt,
-      referenceImages: Array.isArray(images) ? images : [],
     })
 
     if (!inputModerationDecision.approved) {

@@ -2,8 +2,7 @@ import OpenAI from 'openai'
 import { parseVisualRiskLevel, type VisualRiskLevel } from './visualModeration'
 
 /**
- * 审核生成的图片
- * 复用头像审核函数
+ * 审核生成的图片，返回视觉风险等级。
  */
 export async function moderateGeneratedImage(
   imageBuffer: Buffer,
@@ -51,14 +50,24 @@ export async function moderateGeneratedImage(
   return level
 }
 
+function normalizeModerationAnswer(rawResult: string | null | undefined): string {
+  return (rawResult || '')
+    .trim()
+    .toLowerCase()
+    .replace(/["'`“”‘’。.!！?？,，、\s]/g, '')
+}
+
+function promptUsesViolationSemantics(moderationPrompt: string): boolean {
+  return (
+    moderationPrompt.includes('是否包含') ||
+    moderationPrompt.includes('是否含有') ||
+    moderationPrompt.includes('是否存在')
+  )
+}
+
 /**
- * 审核提示词
- * @param promptText 要审核的提示词文本
- * @param baseUrl API基础URL
- * @param apiKey API密钥
- * @param model 使用的模型名称
- * @param moderationPrompt 审核提示词模板
- * @returns 审核结果（true表示通过，false表示不通过）
+ * 审核提示词。
+ * @returns true 表示通过，false 表示不通过。
  */
 export async function moderatePrompt(
   promptText: string,
@@ -68,19 +77,14 @@ export async function moderatePrompt(
   moderationPrompt: string
 ): Promise<boolean> {
   try {
-    // 创建OpenAI客户端
     const client = new OpenAI({
       baseURL: baseUrl,
-      apiKey: apiKey || 'dummy-key', // 某些服务可能不需要key，但SDK要求非空值
+      apiKey: apiKey || 'dummy-key',
     })
 
-    // 构建审核消息，将用户提示词插入到审核模板中
     const fullPrompt = moderationPrompt.replace('{prompt}', promptText)
-
-    // 调用API进行审核（禁用流式输出和思考模式）
-    // chat_template_kwargs 为 Qwen 等模型专用参数，OpenAI SDK 类型未包含
     const response = await client.chat.completions.create({
-      model: model,
+      model,
       temperature: 0,
       messages: [
         {
@@ -92,33 +96,34 @@ export async function moderatePrompt(
       chat_template_kwargs: { enable_thinking: false },
     } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
-    // 解析返回结果
     const rawResult = response.choices[0]?.message?.content?.trim()
-    const result = rawResult?.toLowerCase()
-    
-    // 如果结果为空，默认不通过（安全起见）
+    const result = normalizeModerationAnswer(rawResult)
+
     if (!result) {
       console.warn('提示词审核结果为空')
       return false
     }
-    
-    // 判断是否通过审核（返回"是"或包含"通过"等关键词表示通过）
-    if (result === '是' || result === 'yes' || result.includes('通过') || result.includes('pass')) {
-      return true
+
+    const yes = result === '是' || result === 'yes'
+    const no = result === '否' || result === 'no'
+    const violationSemantics = promptUsesViolationSemantics(moderationPrompt)
+
+    if (yes || no) {
+      return violationSemantics ? no : yes
     }
-    
-    // 返回"否"或包含"不通过"等关键词表示不通过
-    if (result === '否' || result === 'no' || result.includes('不通过') || result.includes('fail')) {
+
+    if (result.includes('不通过') || result.includes('fail') || result.includes('reject')) {
       return false
     }
 
-    // 如果结果不明确，默认不通过（安全起见）
-    console.warn('提示词审核结果不明确:', result)
+    if (result.includes('通过') || result.includes('pass') || result.includes('approve')) {
+      return true
+    }
+
+    console.warn('提示词审核结果不明确:', rawResult)
     return false
   } catch (error) {
     console.error('提示词审核失败:', error)
-    // 审核服务出错时，抛出错误确保审核功能正常工作
     throw new Error(`提示词审核失败: ${error instanceof Error ? error.message : '未知错误'}`)
   }
 }
-

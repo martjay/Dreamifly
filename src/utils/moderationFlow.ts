@@ -1,9 +1,12 @@
-import { moderateGeneratedImage, moderatePrompt } from './imageModeration'
+import { moderatePrompt } from './imageModeration'
 import type { VisualRiskLevel } from './visualModeration'
 
 export type ModerationFailureReason = 'prompt' | 'image' | 'service_error'
 
 const FAIL_CLOSED_VISUAL_RISK: Exclude<VisualRiskLevel, 'low'> = 'high'
+
+export const DEFAULT_PROMPT_MODERATION_PROMPT =
+  "请判断下面提示词是否包含真实风格儿童色情元素（请忽略成人、二次元色情元素）， 仅输出一个值——'是/否'， 提示词内容为'{prompt}'"
 
 export type ModerationDecision =
   | { approved: true; visualRiskLevel: VisualRiskLevel }
@@ -13,7 +16,6 @@ type ModerationEnv = {
   baseUrl?: string
   apiKey: string
   model: string
-  imageModerationPrompt: string
   promptModerationPrompt: string
 }
 
@@ -22,12 +24,7 @@ function getModerationEnv(): ModerationEnv {
     baseUrl: process.env.AVATAR_MODERATION_BASE_URL,
     apiKey: process.env.AVATAR_MODERATION_API_KEY || '',
     model: process.env.AVATAR_MODERATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8',
-    imageModerationPrompt:
-      process.env.GENERATED_IMAGE_MODERATION_PROMPT ||
-      '请判断图片内容是否包含直接的色情元素、过于夸张的血腥场景及强烈政治暗示，仅输出一个包含上述任意元素的概率值，高、中、低三选一。',
-    promptModerationPrompt:
-      process.env.PROMPT_MODERATION_PROMPT ||
-      '请判断以下图片生成提示词是否可以在公共场所使用，评判标准包括但不限于不应该包含"黄色"、"血腥"、"暴力"、"政治敏感"等内容，你只需输出是或者否即可。提示词：{prompt}',
+    promptModerationPrompt: process.env.PROMPT_MODERATION_PROMPT || DEFAULT_PROMPT_MODERATION_PROMPT,
   }
 }
 
@@ -44,6 +41,24 @@ async function onceRetryOnThrow<T>(fn: () => Promise<T>): Promise<{ ok: true; va
   }
 }
 
+async function moderatePromptOnly(promptText: string, env: ModerationEnv): Promise<ModerationDecision> {
+  if (!promptText) return { approved: true, visualRiskLevel: 'low' }
+
+  const result = await onceRetryOnThrow(() =>
+    moderatePrompt(promptText, env.baseUrl as string, env.apiKey, env.model, env.promptModerationPrompt)
+  )
+
+  if (!result.ok) {
+    return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
+  }
+
+  if (!result.value) {
+    return { approved: false, reason: 'prompt' }
+  }
+
+  return { approved: true, visualRiskLevel: 'low' }
+}
+
 export async function moderateGeneratedOutput(params: {
   imageBuffer: Buffer
   prompt?: string
@@ -52,59 +67,7 @@ export async function moderateGeneratedOutput(params: {
   const env = getModerationEnv()
   if (!env.baseUrl) return { approved: true, visualRiskLevel: 'low' }
 
-  const promptText = params.prompt?.trim() || ''
-
-  // 规则：有参考图时，先审文字再审图片
-  const checkPromptFirst = params.hasReferenceImages
-
-  const runPrompt = async (): Promise<ModerationDecision | null> => {
-    if (!promptText) return null
-    const r = await onceRetryOnThrow(() =>
-      moderatePrompt(promptText, env.baseUrl as string, env.apiKey, env.model, env.promptModerationPrompt)
-    )
-    if (!r.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-    return r.value ? null : { approved: false, reason: 'prompt' }
-  }
-
-  const runImage = async (): Promise<ModerationDecision | null> => {
-    const r = await onceRetryOnThrow(() =>
-      moderateGeneratedImage(
-        params.imageBuffer,
-        'generated-image.png',
-        env.baseUrl as string,
-        env.apiKey,
-        env.model,
-        env.imageModerationPrompt
-      )
-    )
-    if (!r.ok) return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-    if (r.value === 'high') {
-      return { approved: false, reason: 'image', visualRiskLevel: r.value as Exclude<VisualRiskLevel, 'low'> }
-    }
-
-    return r.value === 'medium' ? { approved: true, visualRiskLevel: 'medium' } : null
-  }
-
-  if (checkPromptFirst) {
-    const promptDecision = await runPrompt()
-    if (promptDecision) return promptDecision
-    const imageDecision = await runImage()
-    if (imageDecision) return imageDecision
-    return { approved: true, visualRiskLevel: 'low' }
-  }
-
-  // 无参考图：保持现有顺序（先图后词），尽量减少行为变化
-  const imageDecision = await runImage()
-  if (imageDecision && !imageDecision.approved) return imageDecision
-  const promptDecision = await runPrompt()
-  if (promptDecision) return promptDecision
-  if (imageDecision) return imageDecision
-  return { approved: true, visualRiskLevel: 'low' }
-}
-
-function imageBase64ToBuffer(imageBase64: string): Buffer {
-  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '')
-  return Buffer.from(base64Data, 'base64')
+  return moderatePromptOnly(params.prompt?.trim() || '', env)
 }
 
 export async function moderateGenerationInput(params: {
@@ -114,51 +77,5 @@ export async function moderateGenerationInput(params: {
   const env = getModerationEnv()
   if (!env.baseUrl) return { approved: true, visualRiskLevel: 'low' }
 
-  const promptText = params.prompt?.trim() || ''
-
-  if (promptText) {
-    const promptResult = await onceRetryOnThrow(() =>
-      moderatePrompt(promptText, env.baseUrl as string, env.apiKey, env.model, env.promptModerationPrompt)
-    )
-
-    if (!promptResult.ok) {
-      return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-    }
-
-    if (!promptResult.value) {
-      return { approved: false, reason: 'prompt' }
-    }
-  }
-
-  let highestReferenceRisk: VisualRiskLevel = 'low'
-  const referenceImages = params.referenceImages?.filter(Boolean) || []
-
-  for (let index = 0; index < referenceImages.length; index += 1) {
-    const imageBuffer = imageBase64ToBuffer(referenceImages[index])
-    const imageResult = await onceRetryOnThrow(() =>
-      moderateGeneratedImage(
-        imageBuffer,
-        `reference-image-${index + 1}.png`,
-        env.baseUrl as string,
-        env.apiKey,
-        env.model,
-        env.imageModerationPrompt
-      )
-    )
-
-    if (!imageResult.ok) {
-      return { approved: false, reason: 'service_error', visualRiskLevel: FAIL_CLOSED_VISUAL_RISK }
-    }
-
-    if (imageResult.value === 'high') {
-      return { approved: false, reason: 'image', visualRiskLevel: 'high' }
-    }
-
-    if (imageResult.value === 'medium') {
-      highestReferenceRisk = 'medium'
-    }
-  }
-
-  return { approved: true, visualRiskLevel: highestReferenceRisk }
+  return moderatePromptOnly(params.prompt?.trim() || '', env)
 }
-
