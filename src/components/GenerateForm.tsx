@@ -512,6 +512,7 @@ export default function GenerateForm({
 
             // 更新父组件中的图片数据（使用无前缀的 base64）
             setUploadedImages((prev: string[]) => [...prev, base64String])
+            switchToReferenceImageDefaultModel()
           }
           img.src = event.target.result as string
         }
@@ -585,6 +586,7 @@ export default function GenerateForm({
           setWidth(finalWidth)
           setHeight(finalHeight)
           setUploadedImages((prev: string[]) => [...prev, base64String])
+          switchToReferenceImageDefaultModel()
           console.log('GenerateForm: Successfully set uploadedImage to new base64 string')
           console.log('GenerateForm: New image dimensions:', finalWidth, 'x', finalHeight)
         }
@@ -623,6 +625,13 @@ export default function GenerateForm({
       const { width: newWidth, height: newHeight } = getDimensionsByPixels(targetArea, aspectRatio)
       setWidth(newWidth)
       setHeight(newHeight)
+    }
+  }
+
+  const switchToReferenceImageDefaultModel = () => {
+    const hasGptImage2 = availableModels.some(modelOption => modelOption.id === 'gpt-image-2')
+    if (hasGptImage2 && model !== 'gpt-image-2') {
+      setModel('gpt-image-2')
     }
   }
 
@@ -732,6 +741,7 @@ export default function GenerateForm({
 
                   // 更新父组件中的图片数据（使用无前缀的 base64）
                   setUploadedImages((prev: string[]) => [...prev, base64String]);
+                  switchToReferenceImageDefaultModel();
                   
                   // 添加小延迟确保状态更新完成
                   setTimeout(() => {

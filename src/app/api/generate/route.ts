@@ -15,6 +15,8 @@ import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deduc
 import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
 
+export const maxDuration = 650
+
 /**
  * 验证动态API token
  * 支持±1分钟时间窗口，处理时间边界问题

@@ -12,6 +12,7 @@ interface AIPlazaCardProps {
 }
 
 export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
+  const isFeaturedGptImage2 = type === 'model' && item.id === 'gpt-image-2'
 
   // 获取标签文本（仅用于模型）
   const getTagText = (tag: string) => {
@@ -103,8 +104,15 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
               ))}
             </div>
           )}
-          <h3 className="text-base font-semibold text-gray-900 line-clamp-1">
-            {item.name}
+          <h3 className={isFeaturedGptImage2 ? 'flex min-w-0 items-center gap-1.5 text-base font-bold' : 'text-base font-semibold text-gray-900 line-clamp-1'}>
+            {isFeaturedGptImage2 && (
+              <span className="featured-gpt-badge shrink-0">
+                顶级
+              </span>
+            )}
+            <span className={isFeaturedGptImage2 ? 'gold-flow-text min-w-0 truncate' : undefined}>
+              {item.name}
+            </span>
           </h3>
         </div>
       </Link>

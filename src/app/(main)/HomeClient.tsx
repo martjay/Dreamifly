@@ -65,7 +65,16 @@ function getVideoModelTags(model: VideoModelConfig): string[] {
     }
   })()
 
-  return model.provider === 'grok' ? [modeLabel, '支持音频'] : [modeLabel, '支持中文']
+  return model.provider === 'grok' ? [modeLabel, '支持中文'] : [modeLabel, '支持音频', '支持中文']
+}
+
+function sortImageModelsForHomepage(models: ModelConfig[]): ModelConfig[] {
+  return [...models].sort((a, b) => {
+    const aIsGrok = a.id.toLowerCase().includes('grok')
+    const bIsGrok = b.id.toLowerCase().includes('grok')
+    if (aIsGrok === bIsGrok) return 0
+    return aIsGrok ? 1 : -1
+  })
 }
 
 export default function HomeClient() {
@@ -81,6 +90,7 @@ export default function HomeClient() {
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([])
   const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowConfig[]>([])
   const [isLoadingAIItems, setIsLoadingAIItems] = useState(false)
+  const homepageImageModels = sortImageModelsForHomepage(availableModels)
 
   // 加载可用的模型和工作流（基于环境变量）
   useEffect(() => {
@@ -483,7 +493,7 @@ export default function HomeClient() {
                     AI 生图模型
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-                    {availableModels.map((model, index) => (
+                    {homepageImageModels.map((model, index) => (
                       <div key={`model-${model.id}`} className="animate-fadeInUp" style={{ animationDelay: `${index * 100}ms` }}>
                         <AIPlazaCard item={model} type="model" />
                       </div>

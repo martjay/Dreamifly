@@ -13,6 +13,12 @@ interface VideoToVideoPlazaCardProps {
   tags?: string[]
 }
 
+function getTagClassName(tag: string, index: number): string {
+  if (tag === '支持音频') return 'bg-emerald-100 text-emerald-700'
+  if (tag === '支持中文') return 'bg-pink-100 text-pink-700'
+  return index === 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'
+}
+
 export default function VideoToVideoPlazaCard({
   name,
   videoSrc,
@@ -78,11 +84,7 @@ export default function VideoToVideoPlazaCard({
             {tags.map((tag, index) => (
               <span
                 key={tag}
-                className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
-                  index === 0
-                    ? 'bg-indigo-100 text-indigo-700'
-                    : 'bg-pink-100 text-pink-700'
-                }`}
+                className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${getTagClassName(tag, index)}`}
               >
                 {tag}
               </span>

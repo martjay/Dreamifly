@@ -18,7 +18,7 @@ interface GptImage2Response {
 const MODEL_ID = 'gpt-image-2';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
-const REQUEST_TIMEOUT_MS = 60000;
+const REQUEST_TIMEOUT_MS = 600_000;
 
 function buildEndpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`;
