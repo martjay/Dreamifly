@@ -11,9 +11,9 @@ import SiteStats from '@/components/SiteStats'
 import { transferUrl } from '@/utils/locale'
 import { getAvailableModels } from '@/utils/modelConfig'
 import { getAvailableWorkflows } from '@/utils/workflowConfig'
+import { ALL_VIDEO_MODELS, type VideoModelConfig } from '@/utils/videoModelConfig'
 import AIPlazaCard from '@/components/AIPlazaCard'
 import VideoToVideoPlazaCard from '@/components/VideoToVideoPlazaCard'
-import GrokVideoPlazaCard from '@/components/GrokVideoPlazaCard'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
@@ -21,6 +21,51 @@ import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMaso
 interface FAQItem {
   q: string;
   a: string;
+}
+
+const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; thumbnailSrc: string }> = {
+  'Wan2.2-I2V-Lightning': {
+    videoSrc: '/images/video-community/video-demo-8.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-8.png',
+  },
+  'grok-imagine-1.0-video': {
+    videoSrc: '/images/video-community/video-demo-10.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-10.png',
+  },
+  'happyhorse-1.0-t2v': {
+    videoSrc: '/images/video-community/video-demo-11.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-11.png',
+  },
+  'happyhorse-1.0-i2v': {
+    videoSrc: '/images/video-community/video-demo-5.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-5.png',
+  },
+  'happyhorse-1.0-r2v': {
+    videoSrc: '/images/video-community/video-demo-12.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-12.png',
+  },
+  'happyhorse-1.0-video-edit': {
+    videoSrc: '/images/video-community/video-demo-9.mp4',
+    thumbnailSrc: '/images/video-community/video-demo-9.png',
+  },
+}
+
+function getVideoModelTags(model: VideoModelConfig): string[] {
+  const modeLabel = (() => {
+    switch (model.mode) {
+      case 'text-to-video':
+        return '文生视频'
+      case 'reference-to-video':
+        return '多参考图'
+      case 'video-edit':
+        return '视频编辑'
+      case 'image-to-video':
+      default:
+        return '图生视频'
+    }
+  })()
+
+  return model.provider === 'grok' ? [modeLabel, '支持音频'] : [modeLabel, '支持中文']
 }
 
 export default function HomeClient() {
@@ -453,31 +498,25 @@ export default function HomeClient() {
                     AI 视频模型
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-                    <div className="animate-fadeInUp" style={{ animationDelay: '0ms' }}>
-                      <VideoToVideoPlazaCard
-                        name="Wan 2.2 I2V Lightning"
-                        description="Wan 2.2 图像到视频模型，支持快速生成高质量视频，采用 Lightning 架构，4步即可生成视频。"
-                        videoSrc="/images/video-community/video-demo-8.mp4"
-                        thumbnailSrc="/images/video-community/video-demo-8.png"
-                      />
-                    </div>
-                    <div className="animate-fadeInUp" style={{ animationDelay: '100ms' }}>
-                      <GrokVideoPlazaCard
-                        name="grok-imagine-1.0-video"
-                        description="基于 Grok Imagine 的图生视频模型，支持中文提示词、快速生成，并可输出带音频的视频效果。"
-                        videoSrc="/images/video-community/video-demo-10.mp4"
-                        thumbnailSrc="/images/video-community/video-demo-10.png"
-                      />
-                    </div>
-                    <div className="animate-fadeInUp" style={{ animationDelay: '200ms' }}>
-                      <VideoToVideoPlazaCard
-                        name="HappyHorse I2V"
-                        description="HappyHorse 图生视频模型，将上传图片作为首帧生成视频。"
-                        videoSrc="/images/video-community/video-demo-11.mp4"
-                        thumbnailSrc="/images/video-community/video-demo-11.png"
-                        modelId="happyhorse-1.0-i2v"
-                      />
-                    </div>
+                    {ALL_VIDEO_MODELS.map((videoModel, index) => {
+                      const demo = VIDEO_MODEL_DEMOS[videoModel.id] || {
+                        videoSrc: '/images/video-community/video-demo-11.mp4',
+                        thumbnailSrc: videoModel.homepageCover || videoModel.image || '/images/video-community/video-demo-11.png',
+                      }
+
+                      return (
+                        <div key={`video-model-${videoModel.id}`} className="animate-fadeInUp" style={{ animationDelay: `${index * 100}ms` }}>
+                          <VideoToVideoPlazaCard
+                            name={videoModel.name}
+                            description={videoModel.description}
+                            videoSrc={demo.videoSrc}
+                            thumbnailSrc={demo.thumbnailSrc}
+                            modelId={videoModel.id}
+                            tags={getVideoModelTags(videoModel)}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>

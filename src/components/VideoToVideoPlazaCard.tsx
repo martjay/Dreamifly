@@ -10,13 +10,15 @@ interface VideoToVideoPlazaCardProps {
   videoSrc: string
   thumbnailSrc: string
   modelId?: string
+  tags?: string[]
 }
 
 export default function VideoToVideoPlazaCard({
   name,
   videoSrc,
   thumbnailSrc,
-  modelId = 'Wan2.2-I2V-Lightning'
+  modelId = 'Wan2.2-I2V-Lightning',
+  tags = ['图生视频', '支持中文'],
 }: VideoToVideoPlazaCardProps) {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -73,12 +75,18 @@ export default function VideoToVideoPlazaCard({
         <div className="px-1">
           {/* 特征标签 - 位于标题上方 */}
           <div className="flex gap-1 flex-wrap mb-1.5">
-            <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap">
-              图生视频
-            </span>
-            <span className="px-1.5 py-0.5 bg-pink-100 text-pink-700 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap">
-              支持中文
-            </span>
+            {tags.map((tag, index) => (
+              <span
+                key={tag}
+                className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${
+                  index === 0
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-pink-100 text-pink-700'
+                }`}
+              >
+                {tag}
+              </span>
+            ))}
           </div>
           <h3 className="text-base font-semibold text-gray-900 line-clamp-1">
             {name}
