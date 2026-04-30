@@ -472,7 +472,7 @@ export default function HomeClient() {
                     <div className="animate-fadeInUp" style={{ animationDelay: '200ms' }}>
                       <VideoToVideoPlazaCard
                         name="HappyHorse I2V"
-                        description="HappyHorse image-to-video model. Fixed 5-second output using the uploaded image as the first frame."
+                        description="HappyHorse 图生视频模型，将上传图片作为首帧生成视频。"
                         videoSrc="/images/video-community/video-demo-11.mp4"
                         thumbnailSrc="/images/video-community/video-demo-11.png"
                         modelId="happyhorse-1.0-i2v"

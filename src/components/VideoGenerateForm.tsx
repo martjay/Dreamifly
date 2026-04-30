@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { useSession } from '@/lib/auth-client'
 import { usePoints } from '@/contexts/PointsContext'
+import { Clock3 } from 'lucide-react'
 import {
   aspectRatioLabelToNumber,
   calculateVideoLayoutForAspectRatio,
@@ -123,6 +124,7 @@ const VideoGenerateForm = ({
   const [baseCost, setBaseCost] = useState<number | null>(null)
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null)
   const [videoSeconds, setVideoSeconds] = useState(5)
+  const [videoSecondsInput, setVideoSecondsInput] = useState('5')
   const [happyHorseResolution, setHappyHorseResolution] = useState<HappyHorseResolution>('720P')
   const [referenceImages, setReferenceImages] = useState<string[]>([])
   const [sourceVideo, setSourceVideo] = useState<string | null>(null)
@@ -155,11 +157,6 @@ const VideoGenerateForm = ({
   const isVideoEdit = isHappyHorse && mode === 'video-edit'
   const optimizationImage = uploadedImage || referenceImages[0] || null
   const billableSeconds = clampSeconds(videoSeconds)
-  const billingRuleText = isHappyHorse
-    ? `${baseCost ?? '-'} 积分/秒 x ${billableSeconds} 秒 = ${estimatedCost ?? '-'} 积分`
-    : estimatedCost !== null
-      ? `${estimatedCost} 积分/次`
-      : '加载计费中'
 
   const applyVideoLayout = (modelConfig: VideoModelConfig, sourceAspectRatio: number) => {
     const layout = calculateVideoLayoutForAspectRatio(modelConfig, sourceAspectRatio)
@@ -201,7 +198,9 @@ const VideoGenerateForm = ({
 
   useEffect(() => {
     if (!currentModelConfig) return
-    setVideoSeconds(currentModelConfig.defaultVideoSeconds || 5)
+    const defaultSeconds = currentModelConfig.defaultVideoSeconds || 5
+    setVideoSeconds(defaultSeconds)
+    setVideoSecondsInput(String(defaultSeconds))
     setUploadError(null)
     setModerationPreviewImageUrl(null)
   }, [currentModelConfig?.id])
@@ -301,6 +300,25 @@ const VideoGenerateForm = ({
     const newAspectRatio = aspectRatioLabelToNumber(newLabel)
     applyVideoLayout(currentModelConfig, newAspectRatio)
     setIsRatioOpen(false)
+  }
+
+  const handleVideoSecondsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value
+    if (!/^\d*$/.test(rawValue)) return
+    setVideoSecondsInput(rawValue)
+    if (rawValue) setVideoSeconds(clampSeconds(Number(rawValue)))
+  }
+
+  const normalizeVideoSecondsInput = () => {
+    const normalized = clampSeconds(Number(videoSecondsInput || videoSeconds))
+    setVideoSeconds(normalized)
+    setVideoSecondsInput(String(normalized))
+  }
+
+  const stepVideoSeconds = (delta: number) => {
+    const nextSeconds = clampSeconds(videoSeconds + delta)
+    setVideoSeconds(nextSeconds)
+    setVideoSecondsInput(String(nextSeconds))
   }
 
   const handlePrimaryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -591,81 +609,15 @@ const VideoGenerateForm = ({
           </select>
         </div>
 
-        {isHappyHorse && (
-          <div className="rounded-xl border border-orange-300/60 bg-white/80 p-4 shadow-sm">
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-gray-950">Resolution</div>
-                <div className="text-xs text-gray-600">Choose the HappyHorse output quality.</div>
-              </div>
-              <div className="text-sm font-semibold text-amber-800">{baseCost ?? '-'} pts/s</div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-orange-50 p-1">
-              {(['720P', '1080P'] as const).map(resolutionOption => (
-                <button
-                  key={resolutionOption}
-                  type="button"
-                  onClick={() => setHappyHorseResolution(resolutionOption)}
-                  disabled={isGenerating}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                    happyHorseResolution === resolutionOption
-                      ? 'bg-orange-500 text-white shadow-sm'
-                      : 'text-gray-700 hover:bg-white'
-                  }`}
-                  aria-pressed={happyHorseResolution === resolutionOption}
-                >
-                  {resolutionOption}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {isHappyHorse && (
-          <div className="rounded-xl border border-orange-300/60 bg-white/80 p-4 shadow-sm">
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-gray-950">视频时长</div>
-                <div className="text-xs text-gray-600">HappyHorse 支持选择 3 到 15 秒，积分按所选秒数实时计算。</div>
-              </div>
-              <div className="text-sm font-semibold text-amber-800">{videoSeconds} 秒</div>
-            </div>
-            <div className="space-y-2">
-              <input
-                type="range"
-                min={3}
-                max={15}
-                step={1}
-                value={videoSeconds}
-                onChange={(e) => setVideoSeconds(clampSeconds(Number(e.target.value)))}
-                disabled={isGenerating}
-                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-amber-200 accent-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="HappyHorse video duration seconds"
-              />
-              <div className="flex justify-between text-[11px] font-medium text-gray-500">
-                <span>3s</span>
-                <span>6s</span>
-                <span>9s</span>
-                <span>12s</span>
-                <span>15s</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isTextToVideo ? (
-          <div className="rounded-xl border border-orange-200/70 bg-white/70 px-4 py-3 text-sm text-gray-700">
-            Text-to-video does not require an uploaded image.
-          </div>
-        ) : isReferenceToVideo ? (
+        {isTextToVideo ? null : isReferenceToVideo ? (
           <div>
             <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
-              <img src="/form/image.svg" alt="Reference" className="w-5 h-5 mr-2 text-gray-900" />
-              Reference images
+              <img src="/form/image.svg" alt="参考图" className="w-5 h-5 mr-2 text-gray-900" />
+              参考图
             </label>
             {renderDropzone({
-              title: 'Upload 1-9 reference images',
-              description: `${referenceImages.length}/${MAX_HAPPYHORSE_REFERENCE_IMAGES} selected`,
+              title: '上传 1-9 张参考图',
+              description: `已选择 ${referenceImages.length}/${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`,
               onClick: () => referenceInputRef.current?.click(),
             })}
             <input ref={referenceInputRef} type="file" accept="image/*" multiple onChange={handleReferenceUpload} className="hidden" />
@@ -673,7 +625,7 @@ const VideoGenerateForm = ({
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {referenceImages.map((ref, index) => (
                   <div key={`${index}-${ref.slice(0, 16)}`} className="relative aspect-square overflow-hidden rounded-lg border border-orange-200 bg-white">
-                    <img src={imageSrc(ref)} alt={`Reference ${index + 1}`} className="h-full w-full object-cover" />
+                    <img src={imageSrc(ref)} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
                     <button type="button" onClick={() => removeReferenceImage(index)} className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white">
                       <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
@@ -686,12 +638,12 @@ const VideoGenerateForm = ({
           <div className="space-y-4">
             <div>
               <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
-                <img src="/form/image.svg" alt="Video" className="w-5 h-5 mr-2 text-gray-900" />
-                Source video
+                <img src="/form/image.svg" alt="源视频" className="w-5 h-5 mr-2 text-gray-900" />
+                源视频
               </label>
               {renderDropzone({
-                title: sourceVideoName || 'Upload source video',
-                description: sourceVideoSeconds ? `${Math.ceil(sourceVideoSeconds)}s detected, output set to ${billableSeconds}s` : 'MP4/WebM/MOV up to 120MB',
+                title: sourceVideoName || '上传源视频',
+                description: sourceVideoSeconds ? `检测到 ${Math.ceil(sourceVideoSeconds)} 秒，输出设置为 ${billableSeconds} 秒` : '支持 MP4/WebM/MOV，最大 120MB',
                 onClick: () => !sourceVideo && videoInputRef.current?.click(),
                 children: sourceVideo ? (
                   <div className="relative">
@@ -706,15 +658,15 @@ const VideoGenerateForm = ({
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-900">Optional reference images</label>
-                <button type="button" onClick={() => referenceInputRef.current?.click()} className="text-xs font-medium text-orange-700">Add images</button>
+                <label className="text-sm font-medium text-gray-900">可选参考图</label>
+                <button type="button" onClick={() => referenceInputRef.current?.click()} className="text-xs font-medium text-orange-700">添加图片</button>
               </div>
               <input ref={referenceInputRef} type="file" accept="image/*" multiple onChange={handleReferenceUpload} className="hidden" />
               {referenceImages.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {referenceImages.map((ref, index) => (
                     <div key={`${index}-${ref.slice(0, 16)}`} className="relative aspect-square overflow-hidden rounded-lg border border-orange-200 bg-white">
-                      <img src={imageSrc(ref)} alt={`Reference ${index + 1}`} className="h-full w-full object-cover" />
+                      <img src={imageSrc(ref)} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
                       <button type="button" onClick={() => removeReferenceImage(index)} className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white">
                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
@@ -732,7 +684,7 @@ const VideoGenerateForm = ({
             </label>
             {renderDropzone({
               title: t('form.upload.clickOrDrag') || 'Upload image',
-              description: 'JPG, PNG, or WebP up to 10MB',
+              description: '支持 JPG、PNG 或 WebP，最大 10MB',
               onClick: () => !uploadedImage && imageInputRef.current?.click(),
               children: uploadedImage ? (
                 <div className="relative">
@@ -748,7 +700,7 @@ const VideoGenerateForm = ({
         )}
 
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
-        {moderationPreviewImageUrl && <p className="text-sm text-amber-900">Video moderation failed. Review the generated preview before retrying.</p>}
+        {moderationPreviewImageUrl && <p className="text-sm text-amber-900">视频审核未通过，请查看生成预览后重试。</p>}
 
         <div>
           <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
@@ -758,11 +710,91 @@ const VideoGenerateForm = ({
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder={isVideoEdit ? 'Describe how the source video should be edited.' : tVideo('promptPlaceholder')}
+            placeholder={isVideoEdit ? '描述希望如何编辑源视频。' : tVideo('promptPlaceholder')}
             className="w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 resize-none"
             rows={4}
             disabled={isGenerating}
           />
+
+          {isHappyHorse && (
+            <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <label className="flex items-center text-sm font-semibold text-gray-900">
+                    <img src="/form/steps.svg" alt="Quality" className="mr-2 h-5 w-5 text-gray-900" />
+                    启用高质量
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setHappyHorseResolution(happyHorseResolution === '1080P' ? '720P' : '1080P')}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 sm:h-6 sm:w-11 ${
+                      happyHorseResolution === '1080P' ? 'bg-amber-500' : 'bg-gray-300'
+                    }`}
+                    disabled={isGenerating}
+                    aria-pressed={happyHorseResolution === '1080P'}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform sm:h-4 sm:w-4 ${
+                        happyHorseResolution === '1080P' ? 'translate-x-5 sm:translate-x-6' : 'translate-x-0.5 sm:translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className="text-xs leading-5 text-gray-600 sm:text-sm">
+                  提供更高的视频质量，但也会花费少许积分
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="videoSeconds" className="mb-3 flex items-center text-sm font-semibold text-gray-900">
+                  <Clock3 className="mr-2 h-5 w-5 text-gray-900" aria-hidden="true" />
+                  视频时长
+                </label>
+                <div className="relative flex items-center rounded-xl border border-amber-400/40 bg-white/50 shadow-inner backdrop-blur-sm transition-all">
+                  <input
+                    id="videoSeconds"
+                    type="number"
+                    min={3}
+                    max={15}
+                    step={1}
+                    value={videoSecondsInput}
+                    onChange={handleVideoSecondsInputChange}
+                    onBlur={normalizeVideoSecondsInput}
+                    disabled={isGenerating}
+                      className="w-full border-0 bg-transparent px-4 py-2.5 text-center text-sm text-gray-900 outline-none focus:outline-none focus:ring-0 [appearance:textfield] disabled:cursor-not-allowed disabled:opacity-60 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    aria-label="HappyHorse 视频时长秒数"
+                  />
+                  <div className="flex items-center border-l border-orange-400/30">
+                    <button
+                      type="button"
+                      onClick={() => stepVideoSeconds(-1)}
+                      className="flex h-full items-center justify-center px-3 text-gray-700 transition-colors hover:text-gray-900 disabled:opacity-50"
+                      disabled={isGenerating || videoSeconds <= 3}
+                      aria-label="减少视频时长"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => stepVideoSeconds(1)}
+                      className="flex h-full items-center justify-center px-3 text-gray-700 transition-colors hover:text-gray-900 disabled:opacity-50"
+                      disabled={isGenerating || videoSeconds >= 15}
+                      aria-label="增加视频时长"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-gray-600 sm:text-sm">
+                  一次生成的视频时长（3-15 秒）
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="mt-3 flex flex-wrap gap-2 md:gap-3">
             {!isVideoEdit && (
@@ -836,7 +868,11 @@ const VideoGenerateForm = ({
             </span>
             {estimatedCost !== null && authStatus === 'authenticated' && !isGenerating && !isQueuing && (
               <div className="absolute bottom-1.5 right-2.5 flex items-center gap-0.5 rounded-full border border-amber-300/70 bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 shadow-sm backdrop-blur-sm md:text-xs">
-                {isHappyHorse ? billingRuleText : estimatedCost}
+                <svg className="h-2.5 w-2.5 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                </svg>
+                <span>{estimatedCost}</span>
               </div>
             )}
           </button>
