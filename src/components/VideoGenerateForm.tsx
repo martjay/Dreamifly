@@ -132,6 +132,7 @@ const VideoGenerateForm = ({
   const [sourceVideoName, setSourceVideoName] = useState<string | null>(null)
   const [moderationPreviewImageUrl, setModerationPreviewImageUrl] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [generationNotice, setGenerationNotice] = useState<string | null>(null)
   const [isNegativePromptEnabled, setIsNegativePromptEnabled] = useState(false)
   const [isRatioOpen, setIsRatioOpen] = useState(false)
   const [isOptimizing, setIsOptimizing] = useState(false)
@@ -343,6 +344,7 @@ const VideoGenerateForm = ({
       const base64 = stripDataUrlPrefix(dataUrl)
       setUploadedImage(base64)
       setUploadError(null)
+      setGenerationNotice(null)
       if (currentModelConfig) applyVideoLayoutFromImage(base64, currentModelConfig, aspectRatio)
     } catch (error) {
       console.error('Error processing image:', error)
@@ -371,6 +373,7 @@ const VideoGenerateForm = ({
         return combined
       })
       setUploadError(null)
+      setGenerationNotice(null)
     } catch (error) {
       console.error('Error processing reference images:', error)
       setUploadError(t('error.validation.imageProcessing'))
@@ -418,6 +421,7 @@ const VideoGenerateForm = ({
         setHeight(metadata.height)
       }
       setUploadError(null)
+      setGenerationNotice(null)
     } catch (error) {
       console.error('Error processing source video:', error)
       setUploadError('Failed to process source video.')
@@ -426,17 +430,20 @@ const VideoGenerateForm = ({
 
   const handleRemoveImage = () => {
     setUploadedImage(null)
+    setGenerationNotice(null)
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
   const removeReferenceImage = (index: number) => {
     setReferenceImages(prev => prev.filter((_, i) => i !== index))
+    setGenerationNotice(null)
   }
 
   const handleRemoveSourceVideo = () => {
     setSourceVideo(null)
     setSourceVideoSeconds(null)
     setSourceVideoName(null)
+    setGenerationNotice(null)
     if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
@@ -503,6 +510,7 @@ const VideoGenerateForm = ({
     setIsQueuing(false)
     setGeneratedVideo(null)
     setModerationPreviewImageUrl(null)
+    setGenerationNotice(null)
     setProgress(0)
 
     try {
@@ -540,6 +548,13 @@ const VideoGenerateForm = ({
         }
         if (response.status === 402 && errorData.code === 'INSUFFICIENT_POINTS') {
           setErrorModal(true, 'insufficient_points', errorData.error)
+          return
+        }
+        if (
+          (response.status === 403 || response.status === 422 || response.status === 503) &&
+          errorData.code === 'HAPPYHORSE_INPUT_MODERATION_FAILED'
+        ) {
+          setGenerationNotice(getVideoInputModerationFailureMessage(errorData?.moderation?.reason))
           return
         }
         if ((response.status === 403 || response.status === 422) && errorData.code === 'VIDEO_MODERATION_FAILED') {
@@ -867,6 +882,14 @@ const VideoGenerateForm = ({
             />
           )}
         </div>
+
+        {generationNotice && (
+          <div className="flex justify-end">
+            <p className="max-w-full text-right text-sm leading-5 text-red-600 sm:max-w-[80%]">
+              {generationNotice}
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-center">
           <button

@@ -26,7 +26,7 @@ import {
   type HappyHorseMediaInput,
   type HappyHorseResolution,
 } from '@/utils/happyHorseVideoApi'
-import { moderateVideoGenerationInput } from '@/utils/videoModerationFlow'
+import { moderateHappyHorseInputMedia, moderateVideoGenerationInput } from '@/utils/videoModerationFlow'
 
 export const maxDuration = 1500
 
@@ -309,6 +309,30 @@ export async function POST(request: Request) {
         },
         { status: 403 }
       )
+    }
+
+    if (modelConfig.provider === 'happyhorse') {
+      const mode = getHappyHorseMode(modelConfig)
+      const mediaModerationDecision = await moderateHappyHorseInputMedia({
+        firstFrameBase64OrDataUrl: mode === 'image-to-video' ? image || null : null,
+        referenceImagesBase64OrDataUrl:
+          mode === 'reference-to-video' || mode === 'video-edit' ? refs : [],
+        sourceVideoBase64OrDataUrl: mode === 'video-edit' ? sourceVideo || null : null,
+      })
+
+      if (!mediaModerationDecision.approved) {
+        return NextResponse.json(
+          {
+            error: mediaModerationDecision.reason === 'service_error'
+              ? 'Media moderation is temporarily unavailable. Please try again later.'
+              : 'The uploaded image or video did not pass moderation. Please replace it and try again.',
+            code: 'HAPPYHORSE_INPUT_MODERATION_FAILED',
+            moderation: mediaModerationDecision,
+            mediaId: null,
+          },
+          { status: mediaModerationDecision.reason === 'service_error' ? 503 : 403 }
+        )
+      }
     }
 
     let pointsCostForResponse = 0
