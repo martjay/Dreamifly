@@ -299,7 +299,9 @@ export async function POST(request: Request) {
       prompt: promptText,
     })
 
-    if (!inputModerationDecision.approved) {
+    const inputModerationLevel = inputModerationDecision.approved ? inputModerationDecision.visualRiskLevel : 'low'
+
+    if (!inputModerationDecision.approved && inputModerationDecision.reason !== 'service_error') {
       return NextResponse.json(
         {
           error: '内容未通过审核',
@@ -309,6 +311,11 @@ export async function POST(request: Request) {
         },
         { status: 403 }
       )
+    }
+    if (!inputModerationDecision.approved) {
+      console.warn(`[generate-video] [${requestId}] Prompt moderation service failed; allowing generation to continue`, {
+        reason: inputModerationDecision.reason,
+      })
     }
 
     if (modelConfig.provider === 'happyhorse') {
@@ -482,7 +489,7 @@ export async function POST(request: Request) {
           frameCount: videoFrameCount,
           ipAddress,
           referenceImages: referenceImagesForStorage,
-          moderationLevel: inputModerationDecision.visualRiskLevel,
+          moderationLevel: inputModerationLevel,
         },
         { skipModeration: true }
       )
@@ -505,8 +512,8 @@ export async function POST(request: Request) {
     const responseTime = (Date.now() - totalStartTime) / 1000
     return NextResponse.json({
       videoUrl,
-      moderation: inputModerationDecision.visualRiskLevel === 'medium'
-        ? { visualRiskLevel: inputModerationDecision.visualRiskLevel }
+      moderation: inputModerationLevel === 'medium'
+        ? { visualRiskLevel: inputModerationLevel }
         : undefined,
       responseTime: Math.round(responseTime * 100) / 100,
       pointsCost: pointsCostForResponse,

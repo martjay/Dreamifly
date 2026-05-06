@@ -619,7 +619,9 @@ export async function POST(request: Request) {
       prompt,
     })
 
-    if (!inputModerationDecision.approved) {
+    const inputModerationLevel = inputModerationDecision.approved ? inputModerationDecision.visualRiskLevel : 'low'
+
+    if (!inputModerationDecision.approved && inputModerationDecision.reason !== 'service_error') {
       return NextResponse.json(
         {
           error: '内容未通过审核',
@@ -629,6 +631,11 @@ export async function POST(request: Request) {
         },
         { status: 403 }
       )
+    }
+    if (!inputModerationDecision.approved) {
+      console.warn('[generate] Prompt moderation service failed; allowing generation to continue', {
+        reason: inputModerationDecision.reason,
+      })
     }
 
     // 对于已登录用户，在解析请求体后检查积分和额度
@@ -909,7 +916,7 @@ export async function POST(request: Request) {
             height,
             ipAddress: clientIP || undefined,
             referenceImages: images || [],
-            moderationLevel: inputModerationDecision.visualRiskLevel,
+            moderationLevel: inputModerationLevel,
           },
           { skipModeration: true }
         )
@@ -922,8 +929,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       imageUrl,
       moderation:
-        inputModerationDecision.visualRiskLevel === 'medium'
-          ? { visualRiskLevel: inputModerationDecision.visualRiskLevel }
+        inputModerationLevel === 'medium'
+          ? { visualRiskLevel: inputModerationLevel }
           : undefined,
     })
   } catch (error) {
