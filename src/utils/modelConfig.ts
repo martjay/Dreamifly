@@ -243,24 +243,43 @@ function withModelOssAssets(model: ModelConfig): ModelConfig {
   };
 }
 
+let availableModelsCache: ModelConfig[] | null = null;
+let availableModelsRequest: Promise<ModelConfig[]> | null = null;
+
 /**
  * 从API获取可用的模型列表（基于环境变量配置）
  * @returns Promise<ModelConfig[]> 可用的模型配置列表
  */
 export async function getAvailableModels(): Promise<ModelConfig[]> {
-  try {
-    const response = await fetch('/api/models');
-    if (!response.ok) {
-      throw new Error('Failed to fetch available models');
-    }
-    
-    const data = await response.json();
-    return data.models || [];
-  } catch (error) {
-    console.error('Error fetching available models:', error);
-    // 如果API调用失败，返回所有模型作为后备
-    return ALL_MODELS.map(withModelOssAssets);
+  if (availableModelsCache) {
+    return availableModelsCache;
   }
+
+  if (availableModelsRequest) {
+    return availableModelsRequest;
+  }
+
+  availableModelsRequest = (async () => {
+    try {
+      const response = await fetch('/api/models');
+      if (!response.ok) {
+        throw new Error('Failed to fetch available models');
+      }
+
+      const data = await response.json();
+      const models = data.models || [];
+      availableModelsCache = models;
+      return models;
+    } catch (error) {
+      console.error('Error fetching available models:', error);
+      // 如果API调用失败，返回所有模型作为后备
+      return ALL_MODELS.map(withModelOssAssets);
+    } finally {
+      availableModelsRequest = null;
+    }
+  })();
+
+  return availableModelsRequest;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createScopedT } from '@/lib/strings'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { getAvailableModels, filterModelsByImageCount, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification } from '@/utils/modelConfig'
+import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification } from '@/utils/modelConfig'
 import Toast from './Toast'
 
 type ModelWithAvailability = ModelConfig & { isAvailable: boolean };
@@ -67,6 +67,7 @@ export default function GenerateForm({
   const [progress, setProgress] = useState(0)
   const [estimatedTime, setEstimatedTime] = useState(0)
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
+  const [hasOpenedModelDropdown, setHasOpenedModelDropdown] = useState(false)
   const modelDropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -165,21 +166,30 @@ export default function GenerateForm({
 
   // 加载可用模型
   useEffect(() => {
+    let isCancelled = false;
+
     const loadModels = async () => {
       try {
         setModelsLoading(true);
         const models = await getAvailableModels();
+        if (isCancelled) return;
         setAvailableModels(models);
       } catch (error) {
+        if (isCancelled) return;
         console.error('Failed to load models:', error);
         // 如果加载失败，使用空数组
         setAvailableModels([]);
       } finally {
+        if (isCancelled) return;
         setModelsLoading(false);
       }
     };
 
     loadModels();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // 获取模型基础积分消耗
@@ -599,6 +609,11 @@ export default function GenerateForm({
 
   // 根据上传图片数量过滤可用模型
   const filteredModels: ModelWithAvailability[] = filterModelsByImageCount(uploadedImages.length, availableModels);
+  const selectedAvailableModel = filteredModels.find(m => m.id === model)
+  const selectedFallbackModel = getAllModels().find(m => m.id === model)
+  const selectedDisplayModel = selectedAvailableModel || selectedFallbackModel
+  const selectedModelImage = selectedDisplayModel?.image || '/models/Qwen-Image.jpg'
+  const selectedModelImageFallback = selectedDisplayModel?.imageFallback || '/models/Qwen-Image.jpg'
   const qualityThresholds = getModelThresholds(model)
   const supportsHighSteps = supportsStepsModification(model)
   const supportsHighResolutionOption = supportsResolutionModification(model)
@@ -791,25 +806,25 @@ export default function GenerateForm({
                   type="button"
                   onClick={() => {
                     if (!isGenerating && status !== 'loading') {
+                      setHasOpenedModelDropdown(true)
                       setIsModelDropdownOpen(!isModelDropdownOpen)
                     }
                   }}
                   className={`w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-2.5 text-left text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 flex items-center justify-between ${
-                    !filteredModels.find(m => m.id === model)?.isAvailable || isGenerating ? 'opacity-50 cursor-not-allowed' : ''
+                    (!modelsLoading && selectedAvailableModel && !selectedAvailableModel.isAvailable) || isGenerating ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   disabled={status === 'loading' || isGenerating}
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-6 rounded overflow-hidden flex-shrink-0">
                       <img 
-                        src={filteredModels.find(m => m.id === model)?.image} 
+                        src={selectedModelImage} 
                         alt={model} 
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          const fallback = filteredModels.find(m => m.id === model)?.imageFallback || '/models/Qwen-Image.jpg'
                           const target = e.target as HTMLImageElement
-                          if (target.getAttribute('src') !== fallback) {
-                            target.src = fallback
+                          if (target.getAttribute('src') !== selectedModelImageFallback) {
+                            target.src = selectedModelImageFallback
                           }
                         }}
                       />
@@ -828,8 +843,10 @@ export default function GenerateForm({
                   </svg>
                 </button>
                 
-                {isModelDropdownOpen && (
-                  <div className="absolute z-10 w-96 mt-2 bg-white/95 backdrop-blur-xl rounded-xl border border-orange-400/40 shadow-xl max-h-80 overflow-y-auto custom-scrollbar">
+                {hasOpenedModelDropdown && (
+                  <div className={`absolute z-10 w-96 mt-2 bg-white/95 backdrop-blur-xl rounded-xl border border-orange-400/40 shadow-xl max-h-80 overflow-y-auto custom-scrollbar ${
+                    isModelDropdownOpen ? '' : 'hidden'
+                  }`}>
                     {modelsLoading ? (
                       <div className="px-4 py-4 text-center text-gray-600">
                         {t('form.model.loading')}
