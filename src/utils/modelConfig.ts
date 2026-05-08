@@ -10,6 +10,7 @@ const MODEL_ENV_MAP = {
   "Qwen-Image": "Qwen_Image_URL",
   "Qwen-Image-Edit": "Qwen_Image_Edit_URL",
   "Wai-SDXL-V150": "Wai_SDXL_V150_URL",
+  "Wai-SDXL-V170": "Wai_SDXL_V170_URL",
   "Z-Image": "Z_IMAGE_URL",
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
@@ -39,6 +40,18 @@ export const ALL_MODELS: ModelConfig[] = [
   {
     id: "Wai-SDXL-V150",
     name: "Wai-SDXL-V150",
+    image: "/models/Wai-SDXL-V150.jpg",
+    homepageCover: "/models/homepageModelCover/wai.png",
+    description: "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
+    use_i2i: false,
+    use_t2i: true,
+    maxImages: 0,
+    tags: ["animeSpecialty"],
+    isRecommended: true
+  },
+  {
+    id: "Wai-SDXL-V170",
+    name: "Wai-SDXL-V170",
     image: "/models/Wai-SDXL-V150.jpg",
     homepageCover: "/models/homepageModelCover/wai.png",
     description: "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
@@ -316,6 +329,12 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
     highSteps: 30,          // 高步数30
     normalResolutionPixels: 1024 * 1024,      // 1048576
     highResolutionPixels: 1416 * 1416,       // 2005056
+  },
+  "Wai-SDXL-V170": {
+    normalSteps: 20,
+    highSteps: 30,
+    normalResolutionPixels: 1024 * 1024,
+    highResolutionPixels: 1416 * 1416,
   },
   // 其他模型默认配置（如果需要可以添加）
   "Flux-Krea": {

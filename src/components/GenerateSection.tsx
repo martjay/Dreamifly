@@ -432,6 +432,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         tags: ["chineseSupport"]
       },
       {
+        id: "Wai-SDXL-V170",
+        maxImages: 0,
+        tags: ["animeSpecialty"]
+      },
+      {
         id: "Z-Image",
         maxImages: 0,
         tags: ["chineseSupport", "fastGeneration"]
@@ -492,9 +497,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     const thresholds = getModelThresholds(model);
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
       if (steps !== thresholds.normalSteps && steps !== thresholds.highSteps) {
+        if (model === 'Wai-SDXL-V170') {
+          setSteps(steps >= thresholds.highSteps ? thresholds.highSteps : thresholds.normalSteps);
+        } else {
         setStepsError(`步数只能选择${thresholds.normalSteps}或${thresholds.highSteps}`);
         stepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         hasError = true;
+        }
       }
     }
     if (batch_size < 1 || batch_size > 2) {

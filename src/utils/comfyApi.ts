@@ -1,4 +1,4 @@
-import { hidreamFp8T2IWorkflow,  fluxDevT2IWorkflow, stableDiffusion3T2IWorkflow, fluxKreaT2IWorkflow, qwenImageT2IWorkflow, waiSDXLV150Workflow, zImageTurboT2IWorkflow, flux2T2IWorkflow, zImageT2IWorkflow } from "./t2iworkflow";
+import { hidreamFp8T2IWorkflow,  fluxDevT2IWorkflow, stableDiffusion3T2IWorkflow, fluxKreaT2IWorkflow, qwenImageT2IWorkflow, waiSDXLV150Workflow, waiSDXLV170Workflow, zImageTurboT2IWorkflow, flux2T2IWorkflow, zImageT2IWorkflow } from "./t2iworkflow";
 import { fluxI2IWorkflow, fluxKontextI2IMultiImageWorkflow, fluxKontextI2IWorkflow, QwenImageEdit2ImagesWorkflow, QwenImageEdit3ImagesWorkflow, QwenImageEditWorkflow } from "./i2iworkflow";
 const T2IModelMap = {
   "HiDream-full-fp8": hidreamFp8T2IWorkflow,
@@ -7,6 +7,7 @@ const T2IModelMap = {
   "Flux-Krea": fluxKreaT2IWorkflow,
   "Qwen-Image": qwenImageT2IWorkflow,
   "Wai-SDXL-V150": waiSDXLV150Workflow,
+  "Wai-SDXL-V170": waiSDXLV170Workflow,
   "Z-Image-Turbo": zImageTurboT2IWorkflow,
   "Flux-2": flux2T2IWorkflow,
   "Z-Image": zImageT2IWorkflow
@@ -92,6 +93,9 @@ export async function generateImage(params: GenerateParams): Promise<string> {
   }else if(params.model === 'Wai-SDXL-V150') {
     baseUrl = process.env.Wai_SDXL_V150_URL || ''
     setWaiSDXLV150T2IorkflowParams(workflow, params);
+  }else if(params.model === 'Wai-SDXL-V170') {
+    baseUrl = process.env.Wai_SDXL_V170_URL || ''
+    setWaiSDXLV170T2IorkflowParams(workflow, params);
   }else if(params.model === 'Z-Image-Turbo') {
     baseUrl = process.env.Z_Image_Turbo_URL || ''
     setZImageTurboT2IorkflowParams(workflow, params);
@@ -313,6 +317,19 @@ function setWaiSDXLV150T2IorkflowParams(workflow: any, params: GenerateParams) {
   workflow["6"].inputs.text = params.prompt;
   if (params.seed) {
     workflow["30"].inputs.seed = params.seed;
+  }
+  if (params.negative_prompt) {
+    workflow["7"].inputs.text = params.negative_prompt;
+  }
+}
+
+function setWaiSDXLV170T2IorkflowParams(workflow: any, params: GenerateParams) {
+  workflow["3"].inputs.steps = params.steps;
+  workflow["5"].inputs.width = params.width;
+  workflow["5"].inputs.height = params.height;
+  workflow["6"].inputs.text = params.prompt;
+  if (params.seed) {
+    workflow["3"].inputs.seed = params.seed;
   }
   if (params.negative_prompt) {
     workflow["7"].inputs.text = params.negative_prompt;

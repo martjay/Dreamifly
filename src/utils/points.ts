@@ -30,6 +30,7 @@ export async function getPointsConfig() {
   const envZImageTurboCost = parseInt(process.env.Z_IMAGE_TURBO_COST || '3', 10);
   const envQwenImageEditCost = parseInt(process.env.QWEN_IMAGE_EDIT_COST || '4', 10);
   const envWaiSdxlV150Cost = parseInt(process.env.WAI_SDXL_V150_COST || '2', 10);
+  const envWaiSdxlV170Cost = parseInt(process.env.WAI_SDXL_V170_COST || process.env.WAI_SDXL_V150_COST || '2', 10);
   const envWanVideoCost = parseInt(process.env.WAN_VIDEO_COST || '150', 10);
   const envGrokImagine1Cost = parseInt(process.env.GROK_IMAGINE_1_COST || '10', 10);
   const envGptImage2Cost = parseInt(process.env.GPT_IMAGE_2_COST || '10', 10);
@@ -48,6 +49,7 @@ export async function getPointsConfig() {
     zImageTurboCost: configData?.zImageTurboCost ?? envZImageTurboCost,
     qwenImageEditCost: configData?.qwenImageEditCost ?? envQwenImageEditCost,
     waiSdxlV150Cost: configData?.waiSdxlV150Cost ?? envWaiSdxlV150Cost,
+    waiSdxlV170Cost: configData?.waiSdxlV170Cost ?? configData?.waiSdxlV150Cost ?? envWaiSdxlV170Cost,
     wanVideoCost: configData?.wanVideoCost ?? envWanVideoCost,
     grokImagine1Cost: configData?.grokImagine1Cost ?? envGrokImagine1Cost,
     // These model costs intentionally do not use points_config fields.
@@ -104,6 +106,8 @@ export async function getModelBaseCost(modelId: string, resolution: HappyHorseRe
       return config.qwenImageEditCost;
     case 'Wai-SDXL-V150':
       return config.waiSdxlV150Cost;
+    case 'Wai-SDXL-V170':
+      return config.waiSdxlV170Cost;
     case 'Wan2.2-I2V-Lightning':
       return config.wanVideoCost;
     case 'grok-imagine-1.0':

@@ -87,6 +87,7 @@ const MODEL_COLORS: { [key: string]: string } = {
   'Qwen-Image': '#c2410c',            // 深橙红色 (orange-700)
   'Qwen-Image-Edit': '#f59e0b',       // 暖琥珀色 (amber-500)
   'Wai-SDXL-V150': '#ea580c',          // 橙红色 (orange-600)
+  'Wai-SDXL-V170': '#f97316',          // 主橙色 (orange-500)
 }
 
 // 备用颜色列表（暖色系，用于未知模型）

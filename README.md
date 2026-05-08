@@ -104,6 +104,7 @@ Qwen_Image_URL='https://your-qwen-api.com'
 Qwen_Image_Edit_URL='https://your-qwen-edit-api.com'
 Kontext_fp8_URL='https://your-kontext-api.com'
 Wai_SDXL_V150_URL='https://your-wai-sdxl-api.com'
+Wai_SDXL_V170_URL='https://your-wai-sdxl-v170-api.com'
 
 # LLM API 配置（用于提示词优化）
 # 新的提示词优化专用环境变量（推荐）

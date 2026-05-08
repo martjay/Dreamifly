@@ -588,6 +588,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     let prompt: string
     const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt } = body
+    let generationSteps = Number(steps)
+    if (model === 'Wai-SDXL-V170') {
+      generationSteps = generationSteps >= 30 ? 30 : 20
+    }
     prompt = originalPrompt
     // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
     currentModelId = model
@@ -729,7 +733,7 @@ export async function POST(request: Request) {
         
         if (baseCost !== null) {
           // 计算积分消耗
-          const pointsCost = calculateGenerationCost(baseCost, model, steps, width, height, hasQuota);
+          const pointsCost = calculateGenerationCost(baseCost, model, generationSteps, width, height, hasQuota);
           
           // 如果需要扣除积分（pointsCost > 0）
           if (pointsCost > 0) {
@@ -748,7 +752,7 @@ export async function POST(request: Request) {
             const deductResult = await deductPoints(
               userId,
               pointsCost,
-              `图像生成 - ${model} (步数: ${steps}, 分辨率: ${width}x${height})`
+              `图像生成 - ${model} (步数: ${generationSteps}, 分辨率: ${width}x${height})`
             );
             
             if (!deductResult) {
@@ -828,7 +832,7 @@ export async function POST(request: Request) {
     const thresholds = getModelThresholds(model);
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
       // 如果模型支持步数修改，验证步数是否在允许范围内
-      if (steps !== thresholds.normalSteps && steps !== thresholds.highSteps) {
+      if (generationSteps !== thresholds.normalSteps && generationSteps !== thresholds.highSteps) {
         return NextResponse.json({ 
           error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.` 
         }, { status: 400 })
@@ -848,7 +852,7 @@ export async function POST(request: Request) {
         prompt,
         width,
         height,
-        steps,
+        steps: generationSteps,
         seed: seed ? parseInt(seed) : undefined,
         batch_size,
         model,
