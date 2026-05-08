@@ -805,6 +805,13 @@ export default function GenerateForm({
                         src={filteredModels.find(m => m.id === model)?.image} 
                         alt={model} 
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const fallback = filteredModels.find(m => m.id === model)?.imageFallback || '/models/Qwen-Image.jpg'
+                          const target = e.target as HTMLImageElement
+                          if (target.getAttribute('src') !== fallback) {
+                            target.src = fallback
+                          }
+                        }}
                       />
                     </div>
                     <div className="min-w-0">
@@ -864,9 +871,9 @@ export default function GenerateForm({
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement
-                                // 如果图片加载失败，使用默认占位符
-                                if (!target.src.includes('data:image')) {
-                                  target.src = '/models/Qwen-Image.jpg' // 使用 Qwen-Image 作为默认图片
+                                const fallback = modelOption.imageFallback || '/models/Qwen-Image.jpg'
+                                if (target.getAttribute('src') !== fallback) {
+                                  target.src = fallback
                                 }
                               }}
                             />

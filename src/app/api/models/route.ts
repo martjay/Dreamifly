@@ -43,6 +43,8 @@ function getAvailableModels(): ModelConfig[] {
     return isModelConfigured(model.id);
   }).map(model => ({
     ...model,
+    image: getHomepageAsset(model.image),
+    imageFallback: model.image,
     homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
     homepageCoverFallback: model.homepageCover,
   }));

@@ -1,5 +1,7 @@
 // 模型配置管理工具
 
+import { getHomepageAsset } from './homepageAssets';
+
 // 模型环境变量映射
 const MODEL_ENV_MAP = {
   "HiDream-full-fp8": "HiDream_Fp8_URL",
@@ -24,6 +26,7 @@ export interface ModelConfig {
   id: string;
   name: string;
   image: string;
+  imageFallback?: string;
   homepageCover?: string; // 主页竖屏封面，默认为 /models/homepageModelCover/demo.jpg
   homepageCoverFallback?: string;
   description?: string; // 模型描述
@@ -230,6 +233,16 @@ export function isModelConfigured(modelId: string): boolean {
   return true;
 }
 
+function withModelOssAssets(model: ModelConfig): ModelConfig {
+  return {
+    ...model,
+    image: getHomepageAsset(model.image),
+    imageFallback: model.image,
+    homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
+    homepageCoverFallback: model.homepageCover,
+  };
+}
+
 /**
  * 从API获取可用的模型列表（基于环境变量配置）
  * @returns Promise<ModelConfig[]> 可用的模型配置列表
@@ -246,7 +259,7 @@ export async function getAvailableModels(): Promise<ModelConfig[]> {
   } catch (error) {
     console.error('Error fetching available models:', error);
     // 如果API调用失败，返回所有模型作为后备
-    return ALL_MODELS;
+    return ALL_MODELS.map(withModelOssAssets);
   }
 }
 
@@ -255,7 +268,7 @@ export async function getAvailableModels(): Promise<ModelConfig[]> {
  * @returns 所有模型配置列表
  */
 export function getAllModels(): ModelConfig[] {
-  return ALL_MODELS;
+  return ALL_MODELS.map(withModelOssAssets);
 }
 
 /**

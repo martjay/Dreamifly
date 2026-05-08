@@ -48,7 +48,13 @@ const client = new OSS({
   secure: true,
 });
 
+const modelCoverPaths = fs
+  .readdirSync(path.join(publicRoot, 'models'), { withFileTypes: true })
+  .filter((entry) => entry.isFile())
+  .map((entry) => `/models/${entry.name}`);
+
 const assetPaths = [
+  ...modelCoverPaths,
   '/images/gpt-image-2.png',
   '/models/homepageModelCover/demo.jpg',
   '/models/homepageModelCover/grok-imagine-1.0.png',
