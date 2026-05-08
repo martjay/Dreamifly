@@ -1,7 +1,45 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+
+const avatarFrameUrlCache = new Map<number, string | null>()
+const avatarFrameRequestCache = new Map<number, Promise<string | null>>()
+
+async function getAvatarFrameUrl(avatarFrameId: number): Promise<string | null> {
+  if (avatarFrameUrlCache.has(avatarFrameId)) {
+    return avatarFrameUrlCache.get(avatarFrameId) ?? null
+  }
+
+  const cachedRequest = avatarFrameRequestCache.get(avatarFrameId)
+  if (cachedRequest) {
+    return cachedRequest
+  }
+
+  const request = fetch(`/api/avatar-frame?frameId=${avatarFrameId}`)
+    .then(async (response) => {
+      if (!response.ok) return null
+
+      const data = await response.json()
+      const frameUrl =
+        typeof data.frameUrl === 'string' && data.frameUrl.trim() !== ''
+          ? data.frameUrl
+          : null
+
+      avatarFrameUrlCache.set(avatarFrameId, frameUrl)
+      return frameUrl
+    })
+    .catch((error) => {
+      console.error('Error fetching avatar frame:', error)
+      return null
+    })
+    .finally(() => {
+      avatarFrameRequestCache.delete(avatarFrameId)
+    })
+
+  avatarFrameRequestCache.set(avatarFrameId, request)
+  return request
+}
 
 interface AvatarWithFrameProps {
   avatar: string
@@ -11,11 +49,6 @@ interface AvatarWithFrameProps {
   alt?: string
 }
 
-/**
- * 带头像框的头像组件
- * 如果 avatarFrameId 为 null 或未提供，则不显示头像框
- * 当有头像框时，会自动隐藏黄色边框
- */
 export default function AvatarWithFrame({
   avatar,
   avatarFrameId,
@@ -27,48 +60,38 @@ export default function AvatarWithFrame({
   const [hasFrame, setHasFrame] = useState<boolean>(false)
 
   useEffect(() => {
+    let isCancelled = false
+
     const fetchFrame = async () => {
-      // 如果头像框ID为null或undefined，不显示头像框
       if (avatarFrameId === null || avatarFrameId === undefined) {
         setFrameUrl(null)
         setHasFrame(false)
         return
       }
 
-      try {
-        const response = await fetch(`/api/avatar-frame?frameId=${avatarFrameId}`)
-        if (response.ok) {
-          const data = await response.json()
-          // 如果返回的frameUrl为null或空，表示没有头像框
-          if (data.frameUrl && data.frameUrl.trim() !== '') {
-            setFrameUrl(data.frameUrl)
-            setHasFrame(true)
-          } else {
-            setFrameUrl(null)
-            setHasFrame(false)
-          }
-        } else {
-          setFrameUrl(null)
-          setHasFrame(false)
-        }
-      } catch (error) {
-        console.error('Error fetching avatar frame:', error)
-        setFrameUrl(null)
-        setHasFrame(false)
-      }
+      const nextFrameUrl = await getAvatarFrameUrl(avatarFrameId)
+      if (isCancelled) return
+
+      setFrameUrl(nextFrameUrl)
+      setHasFrame(Boolean(nextFrameUrl))
     }
 
     fetchFrame()
+
+    return () => {
+      isCancelled = true
+    }
   }, [avatarFrameId])
 
-  // 分离边框样式和其他样式
   const borderClasses: string[] = []
   const otherClasses: string[] = []
-  
+
   className.split(' ').forEach(cls => {
-    if (cls.match(/^border(-\d+)?$/) || 
-        cls.match(/^border-(orange|amber)-\d+/) || 
-        cls.match(/^border-(orange|amber)-\d+\/[\d.]+$/)) {
+    if (
+      cls.match(/^border(-\d+)?$/) ||
+      cls.match(/^border-(orange|amber)-\d+/) ||
+      cls.match(/^border-(orange|amber)-\d+\/[\d.]+$/)
+    ) {
       borderClasses.push(cls)
     } else if (cls.trim()) {
       otherClasses.push(cls)
@@ -78,20 +101,15 @@ export default function AvatarWithFrame({
   const containerClassName = otherClasses.join(' ').trim()
   const avatarBorderClassName = borderClasses.join(' ').trim()
 
-  // 如果有头像框，移除边框样式
-  const processedContainerClassName = hasFrame ? containerClassName : containerClassName
-  const processedAvatarClassName = hasFrame ? '' : avatarBorderClassName
-
-  // 如果没有头像框，直接显示头像，边框应用到头像上
   if (!hasFrame) {
     return (
-      <div className={processedContainerClassName ? `inline-block ${processedContainerClassName}` : 'inline-block'}>
+      <div className={containerClassName ? `inline-block ${containerClassName}` : 'inline-block'}>
         <Image
           src={avatar}
           alt={alt}
           width={size}
           height={size}
-          className={`rounded-full object-cover ${processedAvatarClassName}`}
+          className={`rounded-full object-cover ${avatarBorderClassName}`}
           unoptimized={avatar.startsWith('http')}
           onError={(e) => {
             const target = e.target as HTMLImageElement
@@ -104,10 +122,11 @@ export default function AvatarWithFrame({
     )
   }
 
-  // 如果有头像框，使用固定容器和缩小的头像
   return (
-    <div className={processedContainerClassName ? `relative inline-block ${processedContainerClassName}` : 'relative inline-block'} style={{ width: size, height: size }}>
-      {/* 头像 */}
+    <div
+      className={containerClassName ? `relative inline-block ${containerClassName}` : 'relative inline-block'}
+      style={{ width: size, height: size }}
+    >
       <div className="absolute inset-0 flex items-center justify-center">
         <Image
           src={avatar}
@@ -124,7 +143,7 @@ export default function AvatarWithFrame({
           }}
         />
       </div>
-      {/* 头像框 */}
+
       {frameUrl && (
         <Image
           src={frameUrl}
@@ -134,7 +153,6 @@ export default function AvatarWithFrame({
           className="absolute inset-0 object-contain pointer-events-none"
           unoptimized={frameUrl.startsWith('http')}
           onError={() => {
-            // 如果头像框加载失败，隐藏头像框
             setFrameUrl(null)
             setHasFrame(false)
           }}
@@ -143,4 +161,3 @@ export default function AvatarWithFrame({
     </div>
   )
 }
-
