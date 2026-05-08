@@ -795,12 +795,12 @@ export default function HomeClient() {
               </p>
               <div className="flex justify-center items-center gap-10 animate-fadeInUp animation-delay-200">
                 <Link
-                  href="https://gongjiyun.com"
+                  href="https://suanli.cn/"
                   target="_blank"
                   className="opacity-70 hover:opacity-100 transition-opacity transform hover:scale-105 duration-300"
                 >
                   <Image
-                    src="https://www.gongjiyun.com/_astro/logo.DdOt3OC5_1F0kb8.webp"
+                    src="https://web-assets.suanli.cn/website/cdn/logo.png"
                     alt={t('suanleme.gongji')}
                     width={150}
                     height={25}
