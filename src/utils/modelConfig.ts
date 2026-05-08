@@ -25,6 +25,7 @@ export interface ModelConfig {
   name: string;
   image: string;
   homepageCover?: string; // 主页竖屏封面，默认为 /models/homepageModelCover/demo.jpg
+  homepageCoverFallback?: string;
   description?: string; // 模型描述
   use_i2i: boolean;
   use_t2i: boolean;
@@ -52,8 +53,8 @@ export const ALL_MODELS: ModelConfig[] = [
   {
     id: "Wai-SDXL-V170",
     name: "Wai-SDXL-V170",
-    image: "/models/Wai-SDXL-V150.jpg",
-    homepageCover: "/models/homepageModelCover/wai.png",
+    image: "/models/Wai-SDXL-V170.jpg",
+    homepageCover: "/models/homepageModelCover/wai17.png",
     description: "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
     use_i2i: false,
     use_t2i: true,

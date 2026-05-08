@@ -52,6 +52,7 @@ export interface VideoModelConfig {
   description?: string
   image?: string
   homepageCover?: string
+  homepageCoverFallback?: string
   files?: VideoModelFiles
   tags?: string[]
   isRecommended?: boolean

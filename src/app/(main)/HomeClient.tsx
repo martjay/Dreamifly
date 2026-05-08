@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import community from './communityWorks'
 import SiteStats from '@/components/SiteStats'
 import { transferUrl } from '@/utils/locale'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 import { getAvailableModels } from '@/utils/modelConfig'
 import { getAvailableWorkflows } from '@/utils/workflowConfig'
 import { ALL_VIDEO_MODELS, type VideoModelConfig } from '@/utils/videoModelConfig'
@@ -23,30 +24,42 @@ interface FAQItem {
   a: string;
 }
 
-const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; thumbnailSrc: string }> = {
+const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; videoFallbackSrc: string; thumbnailSrc: string; thumbnailFallbackSrc: string }> = {
   'Wan2.2-I2V-Lightning': {
-    videoSrc: '/images/video-community/video-demo-8.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-8.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-8.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-8.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-8.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-8.png',
   },
   'grok-imagine-1.0-video': {
-    videoSrc: '/images/video-community/video-demo-10.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-10.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-10.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-10.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-10.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-10.png',
   },
   'happyhorse-1.0-t2v': {
-    videoSrc: '/images/video-community/video-demo-11.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-11.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-11.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-11.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-11.png',
   },
   'happyhorse-1.0-i2v': {
-    videoSrc: '/images/video-community/video-demo-5.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-5.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-5.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-5.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-5.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-5.png',
   },
   'happyhorse-1.0-r2v': {
-    videoSrc: '/images/video-community/video-demo-12.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-12.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-12.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-12.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-12.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-12.png',
   },
   'happyhorse-1.0-video-edit': {
-    videoSrc: '/images/video-community/video-demo-9.mp4',
-    thumbnailSrc: '/images/video-community/video-demo-9.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-9.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-9.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-9.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-9.png',
   },
 }
 
@@ -510,8 +523,12 @@ export default function HomeClient() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
                     {ALL_VIDEO_MODELS.map((videoModel, index) => {
                       const demo = VIDEO_MODEL_DEMOS[videoModel.id] || {
-                        videoSrc: '/images/video-community/video-demo-11.mp4',
-                        thumbnailSrc: videoModel.homepageCover || videoModel.image || '/images/video-community/video-demo-11.png',
+                        videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
+                        videoFallbackSrc: '/images/video-community/video-demo-11.mp4',
+                        thumbnailSrc: videoModel.homepageCover
+                          ? getHomepageAsset(videoModel.homepageCover)
+                          : getHomepageAsset(videoModel.image || '/images/video-community/video-demo-11.png'),
+                        thumbnailFallbackSrc: videoModel.homepageCover || videoModel.image || '/images/video-community/video-demo-11.png',
                       }
 
                       return (
@@ -520,7 +537,9 @@ export default function HomeClient() {
                             name={videoModel.name}
                             description={videoModel.description}
                             videoSrc={demo.videoSrc}
+                            videoFallbackSrc={demo.videoFallbackSrc}
                             thumbnailSrc={demo.thumbnailSrc}
+                            thumbnailFallbackSrc={demo.thumbnailFallbackSrc}
                             modelId={videoModel.id}
                             tags={getVideoModelTags(videoModel)}
                           />

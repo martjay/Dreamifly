@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ALL_MODELS, type ModelConfig } from '@/utils/modelConfig'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 
 // 模型环境变量映射（与 modelConfig.ts 保持一致）
 const MODEL_ENV_MAP = {
@@ -40,7 +41,11 @@ function getAvailableModels(): ModelConfig[] {
   return ALL_MODELS.filter(model => {
     // 检查是否配置了环境变量
     return isModelConfigured(model.id);
-  });
+  }).map(model => ({
+    ...model,
+    homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
+    homepageCoverFallback: model.homepageCover,
+  }));
 }
 
 export async function GET() {

@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 import { transferUrl } from '@/utils/locale'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
@@ -41,11 +43,13 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
   // 生成特征标签
   let featureTags: string[] = []
   let coverImage = ''
+  let fallbackCoverImage = ''
   let route = ''
 
   if (type === 'model') {
     const model = item as ModelConfig
     coverImage = model.homepageCover || '/models/homepageModelCover/demo.jpg'
+    fallbackCoverImage = model.homepageCoverFallback || '/models/homepageModelCover/demo.jpg'
     route = `/create?model=${encodeURIComponent(model.id)}`
     
     if (model.use_t2i) featureTags.push('文生图')
@@ -61,6 +65,7 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
   } else {
     const workflow = item as WorkflowConfig
     coverImage = workflow.homepageCover || '/workflows/homepageWorkflowCover/demo.jpg'
+    fallbackCoverImage = workflow.homepageCoverFallback || '/workflows/homepageWorkflowCover/demo.jpg'
     // 根据工作流ID添加tab参数
     const baseRoute = workflow.route || '/workflows'
     route = `${baseRoute}?tab=${workflow.id}`
@@ -69,6 +74,12 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
       featureTags = [...workflow.tags]
     }
   }
+
+  const [displayCoverImage, setDisplayCoverImage] = useState(getHomepageAsset(coverImage))
+
+  useEffect(() => {
+    setDisplayCoverImage(getHomepageAsset(coverImage))
+  }, [coverImage])
 
   return (
     <div className="relative group">
@@ -80,11 +91,16 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
         <div className="relative aspect-square rounded-2xl overflow-hidden shadow-xl border border-orange-400/30 mb-3">
           <div className="relative w-full h-full group-hover:scale-110 transition-transform duration-700 ease-out">
             <Image
-              src={coverImage}
+              src={displayCoverImage}
               alt={item.name}
               fill
               className="object-cover"
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              onError={() => {
+                if (displayCoverImage !== fallbackCoverImage) {
+                  setDisplayCoverImage(fallbackCoverImage)
+                }
+              }}
             />
           </div>
         </div>

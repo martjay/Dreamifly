@@ -2,13 +2,16 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 import { transferUrl } from '@/utils/locale'
 
 interface VideoToVideoPlazaCardProps {
   name: string
   description?: string
   videoSrc: string
+  videoFallbackSrc?: string
   thumbnailSrc: string
+  thumbnailFallbackSrc?: string
   modelId?: string
   tags?: string[]
 }
@@ -22,12 +25,22 @@ function getTagClassName(tag: string, index: number): string {
 export default function VideoToVideoPlazaCard({
   name,
   videoSrc,
+  videoFallbackSrc,
   thumbnailSrc,
+  thumbnailFallbackSrc,
   modelId = 'Wan2.2-I2V-Lightning',
   tags = ['图生视频', '支持中文'],
 }: VideoToVideoPlazaCardProps) {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
+  const [displayVideoSrc, setDisplayVideoSrc] = useState(getHomepageAsset(videoSrc))
+  const [displayThumbnailSrc, setDisplayThumbnailSrc] = useState(getHomepageAsset(thumbnailSrc))
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    setIsVideoLoaded(false)
+    setDisplayVideoSrc(getHomepageAsset(videoSrc))
+    setDisplayThumbnailSrc(getHomepageAsset(thumbnailSrc))
+  }, [videoSrc, thumbnailSrc, videoFallbackSrc, thumbnailFallbackSrc])
 
   // 组件挂载时自动播放视频
   useEffect(() => {
@@ -53,22 +66,34 @@ export default function VideoToVideoPlazaCard({
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
                 isVideoLoaded ? 'opacity-100' : 'opacity-0'
               }`}
-              src={videoSrc}
+              src={displayVideoSrc}
               muted
               loop
               autoPlay
               playsInline
               preload="auto"
               onLoadedData={() => setIsVideoLoaded(true)}
+              onError={() => {
+                const fallback = videoFallbackSrc || videoSrc
+                if (displayVideoSrc !== fallback) {
+                  setDisplayVideoSrc(fallback)
+                }
+              }}
             />
 
             {/* 缩略图作为加载占位符 */}
             {!isVideoLoaded && (
               <div className="absolute inset-0 bg-gray-200 animate-pulse">
                 <img
-                  src={thumbnailSrc}
+                  src={displayThumbnailSrc}
                   alt={name}
                   className="w-full h-full object-cover"
+                  onError={() => {
+                    const fallback = thumbnailFallbackSrc || thumbnailSrc
+                    if (displayThumbnailSrc !== fallback) {
+                      setDisplayThumbnailSrc(fallback)
+                    }
+                  }}
                 />
               </div>
             )}

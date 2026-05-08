@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ALL_WORKFLOWS, type WorkflowConfig } from '@/utils/workflowConfig'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 
 // 工作流环境变量映射
 const WORKFLOW_ENV_MAP = {
@@ -27,7 +28,11 @@ function getAvailableWorkflows(): WorkflowConfig[] {
   return ALL_WORKFLOWS.filter(workflow => {
     // 检查是否配置了环境变量
     return isWorkflowConfigured(workflow.id);
-  });
+  }).map(workflow => ({
+    ...workflow,
+    homepageCover: workflow.homepageCover ? getHomepageAsset(workflow.homepageCover) : workflow.homepageCover,
+    homepageCoverFallback: workflow.homepageCover,
+  }));
 }
 
 export async function GET() {
