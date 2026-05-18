@@ -27,7 +27,6 @@ COPY package.json pnpm-lock.yaml ./
 COPY public ./public
 COPY src ./src
 COPY drizzle ./drizzle
-COPY middleware.ts ./
 COPY eslint.config.mjs ./
 COPY .env ./
 COPY fonts ./fonts
@@ -62,7 +61,6 @@ COPY --from=builder  /app/package.json ./package.json
 
 # 复制必要的配置文件和脚本
 COPY --from=builder  /app/next.config.js ./
-COPY --from=builder  /app/middleware.ts ./
 COPY --from=builder  /app/scripts ./scripts
 
 # 将字体文件复制到系统字体目录并更新字体缓存

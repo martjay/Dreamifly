@@ -2,7 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 import { transferUrl } from '@/utils/locale'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
@@ -13,8 +14,7 @@ interface AIPlazaCardProps {
 }
 
 export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
+  const isFeaturedGptImage2 = type === 'model' && item.id === 'gpt-image-2'
 
   // 获取标签文本（仅用于模型）
   const getTagText = (tag: string) => {
@@ -43,11 +43,13 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
   // 生成特征标签
   let featureTags: string[] = []
   let coverImage = ''
+  let fallbackCoverImage = ''
   let route = ''
 
   if (type === 'model') {
     const model = item as ModelConfig
     coverImage = model.homepageCover || '/models/homepageModelCover/demo.jpg'
+    fallbackCoverImage = model.homepageCoverFallback || '/models/homepageModelCover/demo.jpg'
     route = `/create?model=${encodeURIComponent(model.id)}`
     
     if (model.use_t2i) featureTags.push('文生图')
@@ -63,6 +65,7 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
   } else {
     const workflow = item as WorkflowConfig
     coverImage = workflow.homepageCover || '/workflows/homepageWorkflowCover/demo.jpg'
+    fallbackCoverImage = workflow.homepageCoverFallback || '/workflows/homepageWorkflowCover/demo.jpg'
     // 根据工作流ID添加tab参数
     const baseRoute = workflow.route || '/workflows'
     route = `${baseRoute}?tab=${workflow.id}`
@@ -72,21 +75,32 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
     }
   }
 
+  const [displayCoverImage, setDisplayCoverImage] = useState(getHomepageAsset(coverImage))
+
+  useEffect(() => {
+    setDisplayCoverImage(getHomepageAsset(coverImage))
+  }, [coverImage])
+
   return (
     <div className="relative group">
       <Link
-        href={transferUrl(route, locale)}
+        href={transferUrl(route)}
         className="block"
       >
         {/* 图片卡片 */}
         <div className="relative aspect-square rounded-2xl overflow-hidden shadow-xl border border-orange-400/30 mb-3">
           <div className="relative w-full h-full group-hover:scale-110 transition-transform duration-700 ease-out">
             <Image
-              src={coverImage}
+              src={displayCoverImage}
               alt={item.name}
               fill
               className="object-cover"
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              onError={() => {
+                if (displayCoverImage !== fallbackCoverImage) {
+                  setDisplayCoverImage(fallbackCoverImage)
+                }
+              }}
             />
           </div>
         </div>
@@ -106,8 +120,15 @@ export default function AIPlazaCard({ item, type }: AIPlazaCardProps) {
               ))}
             </div>
           )}
-          <h3 className="text-base font-semibold text-gray-900 line-clamp-1">
-            {item.name}
+          <h3 className={isFeaturedGptImage2 ? 'flex min-w-0 items-center gap-1.5 text-base font-bold' : 'text-base font-semibold text-gray-900 line-clamp-1'}>
+            {isFeaturedGptImage2 && (
+              <span className="featured-gpt-badge shrink-0">
+                顶级
+              </span>
+            )}
+            <span className={isFeaturedGptImage2 ? 'gold-flow-text min-w-0 truncate' : undefined}>
+              {item.name}
+            </span>
           </h3>
         </div>
       </Link>

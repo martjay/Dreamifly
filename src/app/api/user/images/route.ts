@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getUserGeneratedImages } from '@/utils/userImageStorage'
+import { getUserGeneratedImages, getUserGeneratedImagesCount } from '@/utils/userImageStorage'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +12,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const images = await getUserGeneratedImages(session.user.id)
+    const limitParam = request.nextUrl.searchParams.get('limit')
+    const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : NaN
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : undefined
+
+    const [images, totalCount] = await Promise.all([
+      getUserGeneratedImages(session.user.id, limit),
+      getUserGeneratedImagesCount(session.user.id),
+    ])
     
     return NextResponse.json({
       success: true,
@@ -20,7 +27,9 @@ export async function GET(request: NextRequest) {
         ...img,
         createdAt: img.createdAt.toISOString(),
       })),
-      count: images.length,
+      count: totalCount,
+      returnedCount: images.length,
+      totalCount,
     })
   } catch (error) {
     console.error('Error fetching user images:', error)

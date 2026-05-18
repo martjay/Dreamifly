@@ -4,6 +4,7 @@ import { uploadToOSS } from './oss'
 import { eq } from 'drizzle-orm'
 import crypto from 'crypto'
 import { encodeMediaForStorage, decodeMediaFromStorage } from './mediaStorage'
+import type { VisualRiskLevel } from './visualModeration'
 
 /**
  * @deprecated 使用 encodeMediaForStorage 代替
@@ -45,6 +46,7 @@ export async function saveRejectedImage(
     fps?: number // 视频帧率
     frameCount?: number // 视频总帧数
     rejectionReason: 'image' | 'prompt' | 'both'
+    moderationLevel?: Exclude<VisualRiskLevel, 'low'>
     referenceImages?: string[] // 参考图URL数组（已上传到OSS的URL）
   }
 ): Promise<string> {
@@ -104,6 +106,7 @@ export async function saveRejectedImage(
     fps: metadata.fps || null,
     frameCount: metadata.frameCount || null,
     rejectionReason: metadata.rejectionReason,
+    moderationLevel: metadata.moderationLevel || null,
     referenceImages: metadata.referenceImages || [], // 保存参考图URL数组
     createdAt: new Date(),
     updatedAt: new Date(),

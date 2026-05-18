@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ALL_MODELS, type ModelConfig } from '@/utils/modelConfig'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 
 // 模型环境变量映射（与 modelConfig.ts 保持一致）
 const MODEL_ENV_MAP = {
@@ -11,10 +12,12 @@ const MODEL_ENV_MAP = {
   "Qwen-Image": "Qwen_Image_URL",
   "Qwen-Image-Edit": "Qwen_Image_Edit_URL",
   "Wai-SDXL-V150": "Wai_SDXL_V150_URL",
+  "Wai-SDXL-V170": "Wai_SDXL_V170_URL",
   "Z-Image": "Z_IMAGE_URL",
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
+  "gpt-image-2": "GPT_IMAGE_2_API_URL",
   "nano-banana-2": "REPLICATE_API_TOKEN"
 } as const;
 
@@ -38,7 +41,13 @@ function getAvailableModels(): ModelConfig[] {
   return ALL_MODELS.filter(model => {
     // 检查是否配置了环境变量
     return isModelConfigured(model.id);
-  });
+  }).map(model => ({
+    ...model,
+    image: getHomepageAsset(model.image),
+    imageFallback: model.image,
+    homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
+    homepageCoverFallback: model.homepageCover,
+  }));
 }
 
 export async function GET() {

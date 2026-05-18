@@ -1,6 +1,7 @@
 'use client'
+
+import { createScopedT } from '@/lib/strings'
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import {
   BoltIcon,
@@ -180,7 +181,7 @@ function formatNumber(num: number): string {
 }
 
 export default function SiteStats() {
-  const t = useTranslations('home.stats');
+  const t = createScopedT('home.stats')
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrOpen, setQrOpen] = useState(false);

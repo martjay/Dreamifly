@@ -32,7 +32,7 @@ function PaymentFailedContent() {
           返回首页
         </button>
         <button
-          onClick={() => router.push('/[locale]/pricing')}
+          onClick={() => router.push('/pricing')}
           className="px-4 py-2 rounded-lg bg-white border border-orange-200 text-orange-700 font-semibold shadow-sm hover:bg-orange-50 transition"
         >
           重新购买

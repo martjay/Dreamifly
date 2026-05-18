@@ -2,25 +2,45 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { getHomepageAsset } from '@/utils/homepageAssets'
 import { transferUrl } from '@/utils/locale'
 
 interface VideoToVideoPlazaCardProps {
   name: string
   description?: string
   videoSrc: string
+  videoFallbackSrc?: string
   thumbnailSrc: string
+  thumbnailFallbackSrc?: string
+  modelId?: string
+  tags?: string[]
+}
+
+function getTagClassName(tag: string, index: number): string {
+  if (tag === '支持音频') return 'bg-emerald-100 text-emerald-700'
+  if (tag === '支持中文') return 'bg-pink-100 text-pink-700'
+  return index === 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'
 }
 
 export default function VideoToVideoPlazaCard({
   name,
   videoSrc,
-  thumbnailSrc
+  videoFallbackSrc,
+  thumbnailSrc,
+  thumbnailFallbackSrc,
+  modelId = 'Wan2.2-I2V-Lightning',
+  tags = ['图生视频', '支持中文'],
 }: VideoToVideoPlazaCardProps) {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
+  const [displayVideoSrc, setDisplayVideoSrc] = useState(getHomepageAsset(videoSrc))
+  const [displayThumbnailSrc, setDisplayThumbnailSrc] = useState(getHomepageAsset(thumbnailSrc))
   const videoRef = useRef<HTMLVideoElement>(null)
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
+
+  useEffect(() => {
+    setIsVideoLoaded(false)
+    setDisplayVideoSrc(getHomepageAsset(videoSrc))
+    setDisplayThumbnailSrc(getHomepageAsset(thumbnailSrc))
+  }, [videoSrc, thumbnailSrc, videoFallbackSrc, thumbnailFallbackSrc])
 
   // 组件挂载时自动播放视频
   useEffect(() => {
@@ -34,7 +54,7 @@ export default function VideoToVideoPlazaCard({
   return (
     <div className="relative group">
       <Link
-        href={transferUrl('/create?tab=video&model=Wan2.2-I2V-Lightning', locale)}
+        href={transferUrl(`/create?tab=video&model=${encodeURIComponent(modelId)}`)}
         className="block"
       >
         {/* 视频卡片 */}
@@ -46,22 +66,34 @@ export default function VideoToVideoPlazaCard({
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
                 isVideoLoaded ? 'opacity-100' : 'opacity-0'
               }`}
-              src={videoSrc}
+              src={displayVideoSrc}
               muted
               loop
               autoPlay
               playsInline
               preload="auto"
               onLoadedData={() => setIsVideoLoaded(true)}
+              onError={() => {
+                const fallback = videoFallbackSrc || videoSrc
+                if (displayVideoSrc !== fallback) {
+                  setDisplayVideoSrc(fallback)
+                }
+              }}
             />
 
             {/* 缩略图作为加载占位符 */}
             {!isVideoLoaded && (
               <div className="absolute inset-0 bg-gray-200 animate-pulse">
                 <img
-                  src={thumbnailSrc}
+                  src={displayThumbnailSrc}
                   alt={name}
                   className="w-full h-full object-cover"
+                  onError={() => {
+                    const fallback = thumbnailFallbackSrc || thumbnailSrc
+                    if (displayThumbnailSrc !== fallback) {
+                      setDisplayThumbnailSrc(fallback)
+                    }
+                  }}
                 />
               </div>
             )}
@@ -74,12 +106,14 @@ export default function VideoToVideoPlazaCard({
         <div className="px-1">
           {/* 特征标签 - 位于标题上方 */}
           <div className="flex gap-1 flex-wrap mb-1.5">
-            <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap">
-              图生视频
-            </span>
-            <span className="px-1.5 py-0.5 bg-pink-100 text-pink-700 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap">
-              支持中文
-            </span>
+            {tags.map((tag, index) => (
+              <span
+                key={tag}
+                className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${getTagClassName(tag, index)}`}
+              >
+                {tag}
+              </span>
+            ))}
           </div>
           <h3 className="text-base font-semibold text-gray-900 line-clamp-1">
             {name}

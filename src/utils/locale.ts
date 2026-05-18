@@ -1,8 +1,4 @@
-import { ParamValue } from "next/dist/server/request/params";
-
-export function transferUrl(path:string, locale:ParamValue){
-    if(path.startsWith('/')){
-        return `/${locale}${path}`;
-    }
-    return `/${locale}/${path}`;
+/** 站内路径（无前缀 locale） */
+export function transferUrl(path: string): string {
+  return path.startsWith('/') ? path : `/${path}`
 }

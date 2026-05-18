@@ -87,7 +87,8 @@ export async function moderateAvatar(
       },
     ]
 
-    // 调用API进行审核
+    // 调用API进行审核（禁用流式输出和思考模式）
+    // chat_template_kwargs 为 Qwen 等模型专用参数，OpenAI SDK 类型未包含
     const response = await client.chat.completions.create({
       model: model,
       messages: [
@@ -96,7 +97,9 @@ export async function moderateAvatar(
           content: mediaContent,
         },
       ],
-    })
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
     // 解析返回结果
     const result = response.choices[0]?.message?.content?.trim().toLowerCase()

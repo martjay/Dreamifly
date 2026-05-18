@@ -2,7 +2,8 @@ import { db } from '@/db';
 import { userPoints, pointsConfig, user, userLimitConfig } from '@/db/schema';
 import { eq, and, gte, sql, inArray, isNotNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
-import { getModelThresholds } from '@/utils/modelConfig';
+import { getModelThresholds, isGptImage2Model } from '@/utils/modelConfig';
+import type { HappyHorseResolution } from '@/utils/happyHorseVideoApi';
 
 /**
  * 获取积分配置
@@ -29,9 +30,13 @@ export async function getPointsConfig() {
   const envZImageTurboCost = parseInt(process.env.Z_IMAGE_TURBO_COST || '3', 10);
   const envQwenImageEditCost = parseInt(process.env.QWEN_IMAGE_EDIT_COST || '4', 10);
   const envWaiSdxlV150Cost = parseInt(process.env.WAI_SDXL_V150_COST || '2', 10);
+  const envWaiSdxlV170Cost = parseInt(process.env.WAI_SDXL_V170_COST || process.env.WAI_SDXL_V150_COST || '2', 10);
   const envWanVideoCost = parseInt(process.env.WAN_VIDEO_COST || '150', 10);
   const envGrokImagine1Cost = parseInt(process.env.GROK_IMAGINE_1_COST || '10', 10);
+  const envGptImage2Cost = parseInt(process.env.GPT_IMAGE_2_COST || '10', 10);
   const envGrokVideoCost = parseInt(process.env.GROK_VIDEO_COST || '150', 10);
+  const envHappyHorseVideoCost720P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_720P || '150', 10);
+  const envHappyHorseVideoCost1080P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_1080P || '200', 10);
   const envNanoBanana2Cost = parseInt(process.env.NANO_BANANA_2_COST || '10', 10);
 
   return {
@@ -44,10 +49,15 @@ export async function getPointsConfig() {
     zImageTurboCost: configData?.zImageTurboCost ?? envZImageTurboCost,
     qwenImageEditCost: configData?.qwenImageEditCost ?? envQwenImageEditCost,
     waiSdxlV150Cost: configData?.waiSdxlV150Cost ?? envWaiSdxlV150Cost,
+    waiSdxlV170Cost: configData?.waiSdxlV170Cost ?? configData?.waiSdxlV150Cost ?? envWaiSdxlV170Cost,
     wanVideoCost: configData?.wanVideoCost ?? envWanVideoCost,
     grokImagine1Cost: configData?.grokImagine1Cost ?? envGrokImagine1Cost,
-    // 目前 points_config 表没有该字段，先仅使用环境变量作为默认值
+    // These model costs intentionally do not use points_config fields.
+    // Keep them env-only, matching nano-banana-2, to avoid extra schema churn.
+    gptImage2Cost: envGptImage2Cost,
     grokVideoCost: envGrokVideoCost,
+    happyHorseVideoCost720P: envHappyHorseVideoCost720P,
+    happyHorseVideoCost1080P: envHappyHorseVideoCost1080P,
     nanoBanana2Cost: envNanoBanana2Cost,
   };
 }
@@ -84,7 +94,7 @@ export async function getImageStorageConfig() {
  * @param modelId 模型ID
  * @returns 基础积分消耗，如果模型未配置则返回null
  */
-export async function getModelBaseCost(modelId: string): Promise<number | null> {
+export async function getModelBaseCost(modelId: string, resolution: HappyHorseResolution = '720P'): Promise<number | null> {
   const config = await getPointsConfig();
   
   switch (modelId) {
@@ -96,12 +106,22 @@ export async function getModelBaseCost(modelId: string): Promise<number | null> 
       return config.qwenImageEditCost;
     case 'Wai-SDXL-V150':
       return config.waiSdxlV150Cost;
+    case 'Wai-SDXL-V170':
+      return config.waiSdxlV170Cost;
     case 'Wan2.2-I2V-Lightning':
       return config.wanVideoCost;
     case 'grok-imagine-1.0':
       return config.grokImagine1Cost;
+    case 'gpt-image-2':
+    case 'gpt-image-2.0':
+      return config.gptImage2Cost;
     case 'grok-imagine-1.0-video':
       return config.grokVideoCost;
+    case 'happyhorse-1.0-t2v':
+    case 'happyhorse-1.0-i2v':
+    case 'happyhorse-1.0-r2v':
+    case 'happyhorse-1.0-video-edit':
+      return resolution === '1080P' ? config.happyHorseVideoCost1080P : config.happyHorseVideoCost720P;
     case 'nano-banana-2':
       return config.nanoBanana2Cost;
     default:
@@ -155,8 +175,8 @@ export function calculateGenerationCost(
   
   const totalCost = baseCost * multiplier;
 
-  // nano-banana-2 不享受免费额度减免：无论是否有额度，都扣除全部积分
-  if (modelId === 'nano-banana-2') {
+  // External paid image models do not use free quota offsets.
+  if (modelId === 'nano-banana-2' || isGptImage2Model(modelId)) {
     return totalCost
   }
 

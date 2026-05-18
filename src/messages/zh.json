@@ -1,18 +1,13 @@
 {
   "site": {
-    "title": "Dreamifly - 免费 AI 绘画/视频在线生成工具 | 一键生成动漫、插画、艺术图，多样化视频创作",
-    "description": "Dreamifly 提供免费 AI 绘画与视频生成服务，支持文生图、图生图、图生视频等多种创作方式，涵盖动漫、插画、写实等风格，无需注册即可免费使用，适合设计师与创作爱好者。"
+    "title": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
+    "description": "Dreamifly 提供免费在线 AI 绘画与视频生成服务，支持文生图、图生图、图生视频等多种创作方式，涵盖动漫、插画、写实等风格，无需注册即可快速体验，适合灵感探索、内容制作与创作爱好者使用。"
   },
   "home": {
     "hero": {
-      "titlePrefix": "简单易上手的",
+      "titlePrefix": "简单且免费的",
       "titleHighlight": "AI图像视频创作工具",
-      "subtitle": {
-        "prefix": "由多台家用电脑的闲置4090显卡，",
-        "highlight": "免费",
-        "suffix": "提供分布式算力支持。"
-      },
-      "description": "Dreamifly - 免费 AI 绘画/视频在线生成工具 | 一键生成动漫、插画、艺术图，多样化视频创作",
+      "description": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
       "startButton": "开始创作",
       "contactButton": "联系我们",
       "imageCaption": "AI艺术",
@@ -96,6 +91,7 @@
             "Qwen-Image": "Qwen-Image是阿里巴巴通义千问团队发布的首个图像生成基础模型，基于MMDiT架构，拥有20B参数并已开源。该模型不仅支持写实、动漫、赛博朋克等多种风格的图像生成与风格转换，还具备图像内容编辑、细节增强和文字添加等能力。Qwen-Image在文字渲染方面取得了进展，并能在编辑过程中保持非编辑区域的视觉细节和语义连贯性。",
             "Qwen-Image-Edit": "Qwen-Image-Edit是阿里巴巴通义千问团队开发的图像编辑模型，专门用于图像内容编辑和修改。该模型支持基于文本指令的图像编辑，能够精确理解编辑需求并保持图像的整体风格和细节。",
             "Wai-SDXL-V150": "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
+            "Wai-SDXL-V170": "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
             "Z-Image": "区别于 Turbo 的轻量化设计，Z-Image 深耕 Lumina2 架构，精准拿捏中文提示词细节。",
             "Z-Image-Turbo": "Z-Image-Turbo 是一个支持中文的快速文生图模型，基于 Lumina2 架构，能够快速生成高质量的图像，特别适合中文提示词输入。",
             "Flux-2": "Flux-2 是 Black Forest Labs 开发的最新文本到图像生成模型，采用改进的架构和更强大的 CLIP 编码器，能够生成更高质量、更细节丰富的图像。",
@@ -241,11 +237,11 @@
       "questions": [
         {
           "q": "什么是Dreamifly？",
-          "a": "Dreamifly是一个完全免费、基于多种AI绘画模型的在线文生图（text to image）、图生图（image to image）服务网站，优秀的AI设计绘图工具，支持现实、动漫、插画、3D等多风格的作品，请在此自由地发挥你的创意！"
+          "a": "Dreamifly 是一个基于多种 AI 绘画与视觉模型的在线文生图（text to image）、图生图（image to image）服务网站，也是优秀的 AI 设计绘图工具，支持现实、动漫、插画、3D 等多风格作品，可在此自由发挥创意。平台提供免费额度与基础体验，需要更高用量时可选购订阅套餐获取额外额度。"
         },
         {
-          "q": "Dreamifly是完全免费的吗？",
-          "a": "没错，我们提供完全免费的生图服务。"
+          "q": "Dreamifly 是免费的吗？",
+          "a": "可以免费使用：我们提供一定的免费生图额度，满足日常体验与创作。若你需要更多生成次数或更高配额，可通过订阅套餐购买额外额度。"
         },
         {
           "q": "Dreamifly能创作什么样的图像？",
@@ -257,7 +253,7 @@
         },
         {
           "q": "Dreamifly提供哪些模型？",
-          "a": "HiDream-I1满血版、Flux.1-Dev以及未来更多开源模型。"
+          "a": "当前接入的模型包括但不限于 Z-Image、Nano Banana2、Grok、wan2.2，以及 HiDream-I1 满血版、Flux.1-Dev 等，并会持续扩展与更新。"
         },
         {
           "q": "我需要创建一个帐户并登录才能使用 Dreamifly 吗？",
@@ -269,6 +265,7 @@
       "title": "社区",
       "subtitle": "探索其他用户创作的精彩作品，并从中获取灵感",
       "generateSame": "画同款",
+      "exploreNew": "进入新社区",
       "sharePrompt": {
         "title": "想分享你的绘画作品和创意提示词？",
         "description": "欢迎填写问卷，让更多人看到你的灵感！"
@@ -353,8 +350,40 @@
     "workflows": "工作流",
     "pricing": "会员订阅",
     "myWorks": "我的作品",
-    "aiPlaza": "AI广场",
-    "newYearWish": "新年许愿机"
+    "aiPlaza": "AI广场"
+  },
+  "communityPage": {
+    "heroTitle": "灵感社区",
+    "heroSubtitle": "搜索标签与提示词，发现最新、最热和随机涌现的创作灵感。",
+    "searchPlaceholder": "搜索标签或提示词，例如：动漫少女 / 校园风 / 糖果色",
+    "searchButton": "搜索",
+    "clearButton": "清除筛选",
+    "recommendTitle": "推荐标签",
+    "feedTitle": "社区作品",
+    "feedSubtitle": "快来看看其他人都在生成什么宝藏图片~",
+    "empty": "暂时没有符合条件的作品",
+    "loadMore": "加载更多",
+    "loading": "加载中...",
+    "sort": {
+      "latest": "最新",
+      "hot": "最热",
+      "random": "随机"
+    },
+    "tagMode": {
+      "latest": "最新标签",
+      "hot": "最热标签",
+      "random": "随机标签"
+    },
+    "mediaType": {
+      "all": "全部",
+      "image": "图片",
+      "video": "视频"
+    },
+    "activeFilter": {
+      "search": "搜索",
+      "tag": "标签"
+    },
+    "cta": "画同款"
   },
   "footer": {
     "copyright": "Dreamifly 版权所有"
@@ -452,15 +481,20 @@
     "title": "友链",
     "subtitle": "发现精彩的AI工具和平台",
     "description": "我们与优秀的AI工具平台合作，为您提供更多创作可能",
-    "anycomfy": {
-      "name": "AnyComfy",
-      "url": "anycomfy.com",
-      "description": "一个免费无限制的在线ComfyUI平台，轻松运行任何AI绘画工作流"
+    "loongxia": {
+      "name": "LoongXia",
+      "url": "loongxia.cn",
+      "description": "一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的QQ/微信/飞书专属机器人吧~"
     },
     "manbo": {
       "name": "曼波配音生成器",
       "url": "tools.dayun.cool/manbo",
       "description": "一个免费的在线曼波配音生成工具，轻松实现秒级AI曼波配音"
+    },
+    "aikjz": {
+      "name": "AI空间站",
+      "url": "ai-kjz.cn",
+      "description": "AI工具导航·AI教程·AI工作流·AI快讯，不用东找西找，你想要的AI工具都在这里"
     },
     "visitSite": "访问网站",
     "comingSoon": {
@@ -637,9 +671,24 @@
     "expiresAt": "会员到期时间",
     "delete": "删除",
     "deleting": "删除中...",
+    "generated": {
+      "title": "最近生成",
+      "description": "这里展示你最近生成并保存的图片与视频。"
+    },
+    "liked": {
+      "title": "收藏",
+      "description": "这里展示你在社区收藏过的作品。"
+    },
+    "sectionToggle": {
+      "expand": "展开查看全部",
+      "collapse": "收起",
+      "loading": "加载中...",
+      "showingPartial": "当前仅展示最近 {visible} / {total} 项",
+      "showingAll": "当前展示全部 {count} 项"
+    },
     "empty": {
       "title": "还没有保存任何作品",
-      "description": "生成图片后会自动保存到这里",
+      "description": "生成作品或在社区收藏后，会展示在这里",
       "button": "开始生成图片"
     }
   },
@@ -660,65 +709,6 @@
     "toast": {
       "accepted": "已同意下载协议",
       "failed": "操作失败，请重试"
-    }
-  },
-  "newYearWish": {
-    "title": "2026 新年许愿机",
-    "subtitle": "好运九宫格",
-    "description": "上传你的照片，让AI为你定制专属新年愿望图",
-    "selectFirst": {
-      "title": "选择首个新年愿望",
-      "subtitle": "听说放在首个的愿望更容易实现哦",
-      "refresh": "换一批"
-    },
-    "upload": {
-      "button": "选择我的福照",
-      "dragTip": "或拖拽图片到这里",
-      "fileTip": "支持 JPG、PNG 格式，建议正方形图片",
-      "uploading": "上传中...",
-      "error": "上传失败，请重试"
-    },
-    "generate": {
-      "button": "抽取我的新年好运",
-      "generating": "福星高照生成中...",
-      "progress": "正在生成第 {current}/{total} 张...",
-      "success": "生成成功！",
-      "error": "生成失败，请重试",
-      "retry": "重新生成"
-    },
-    "result": {
-      "title": "你的新年愿望九宫格",
-      "downloadButton": "一键保存九宫格",
-      "downloading": "下载中...",
-      "downloadHint": "可直接分享朋友圈",
-      "preview": "点击图片可放大查看"
-    },
-    "features": {
-      "title": "活动特色",
-      "free": "完全免费",
-      "freeDesc": "无需积分，不限次数",
-      "noLogin": "无需登录",
-      "noLoginDesc": "游客也可以使用",
-      "fast": "极速生成",
-      "fastDesc": "AI并发处理，快速出图",
-      "share": "一键分享",
-      "shareDesc": "朋友圈九宫格专属"
-    },
-    "steps": {
-      "title": "使用步骤",
-      "step1": "上传照片",
-      "step1Desc": "选择你的个人照片或头像",
-      "step2": "AI生成",
-      "step2Desc": "随机抽取8个新年愿望，AI智能生成",
-      "step3": "保存分享",
-      "step3Desc": "一键下载9张图片，分享朋友圈"
-    },
-    "tips": {
-      "title": "温馨提示",
-      "tip1": "建议上传正方形或接近正方形的照片，效果更佳",
-      "tip2": "生成过程约需30-60秒，请耐心等待",
-      "tip3": "每次随机抽取不同的愿望，可多次生成",
-      "tip4": "完全免费，无需登录，不限制使用次数"
     }
   }
 }

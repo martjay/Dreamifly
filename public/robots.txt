@@ -20,8 +20,8 @@ Disallow: /admin/
 Disallow: /private/
 Disallow: /internal/
 
-# Sitemap location (if you have one)
-# Sitemap: https://yourdomain.com/sitemap.xml
+# Sitemap location
+Sitemap: https://dreamifly.com/sitemap.xml
 
 # Crawl delay (optional - be respectful to server resources)
 Crawl-delay: 1 

@@ -1,26 +1,48 @@
 import type { MetadataRoute } from 'next'
 
-const locales = ['zh', 'zh-TW', 'en']
+export const revalidate = 3600
 
-// 公开页面及其优先级、更新频率
-const pages = [
-  { path: '',            priority: 1.0,  changeFrequency: 'daily'   as const },
-  { path: '/create',     priority: 0.9,  changeFrequency: 'weekly'  as const },
-  { path: '/workflows',  priority: 0.8,  changeFrequency: 'weekly'  as const },
-  { path: '/pricing',    priority: 0.7,  changeFrequency: 'monthly' as const },
-  { path: '/new-year-wish', priority: 0.5, changeFrequency: 'monthly' as const },
+const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://dreamifly.com').replace(/\/+$/, '')
+
+const publicRoutes: Array<{
+  path: string
+  changeFrequency: NonNullable<MetadataRoute.Sitemap[number]['changeFrequency']>
+  priority: number
+}> = [
+  {
+    path: '/',
+    changeFrequency: 'daily',
+    priority: 1,
+  },
+  {
+    path: '/create',
+    changeFrequency: 'daily',
+    priority: 0.9,
+  },
+  {
+    path: '/pricing',
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  },
+  {
+    path: '/workflows',
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  },
+  {
+    path: '/community',
+    changeFrequency: 'daily',
+    priority: 0.85,
+  },
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dreamifly.com'
-  const now = new Date()
+  const lastModified = new Date()
 
-  return locales.flatMap(locale =>
-    pages.map(({ path, priority, changeFrequency }) => ({
-      url: `${baseUrl}/${locale}${path}`,
-      lastModified: now,
-      changeFrequency,
-      priority,
-    }))
-  )
+  return publicRoutes.map(({ path, changeFrequency, priority }) => ({
+    url: `${baseUrl}${path}`,
+    lastModified,
+    changeFrequency,
+    priority,
+  }))
 }

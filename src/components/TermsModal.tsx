@@ -1,6 +1,7 @@
 'use client'
 
-import { useTranslations } from 'next-intl'
+
+import { createScopedT } from '@/lib/strings'
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,7 +12,7 @@ interface TermsModalProps {
 }
 
 export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
-  const t = useTranslations('auth.terms')
+  const t = createScopedT('auth.terms')
   const [markdownContent, setMarkdownContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')

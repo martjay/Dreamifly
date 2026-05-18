@@ -104,6 +104,7 @@ Qwen_Image_URL='https://your-qwen-api.com'
 Qwen_Image_Edit_URL='https://your-qwen-edit-api.com'
 Kontext_fp8_URL='https://your-kontext-api.com'
 Wai_SDXL_V150_URL='https://your-wai-sdxl-api.com'
+Wai_SDXL_V170_URL='https://your-wai-sdxl-v170-api.com'
 
 # LLM API 配置（用于提示词优化）
 # 新的提示词优化专用环境变量（推荐）
@@ -449,8 +450,8 @@ MIT License | © 2025 Dreamify Project
 
 我们与以下优秀 AI 工具平台合作，共同推动 AI 艺术生态发展：
 
-- **[AnyComfy](https://anycomfy.com)**  
-  一个免费、无限使用的在线 ComfyUI 平台，轻松运行任意 AI 绘画工作流。
+- **[LoongXia](https://loongxia.cn)**  
+  一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的 QQ/微信/飞书专属机器人吧~
 
 ---
 

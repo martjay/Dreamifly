@@ -1,20 +1,23 @@
+import { createScopedT } from '@/lib/strings'
 import { useState, useRef, useEffect } from 'react'
-import { useTranslations } from 'next-intl'
-import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import GenerateForm from './GenerateForm'
 import GeneratePreview from './GeneratePreview'
+import ModerationConsentModal from './ModerationConsentModal'
+import RestrictedMediaMask from './RestrictedMediaMask'
 import VideoGenerateForm from './VideoGenerateForm'
 import TabNavigation from './TabNavigation'
 import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
-import { getVideoModelById, calculateVideoResolution } from '@/utils/videoModelConfig'
+import { calculateVideoLayoutForAspectRatio, getVideoModelById } from '@/utils/videoModelConfig'
+import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GenerateSectionProps {
   communityWorks: { prompt: string }[];
@@ -22,6 +25,27 @@ interface GenerateSectionProps {
   initialModel?: string;
   activeTab?: 'generate' | 'video-generation';
   onTabChange?: (tab: 'generate' | 'video-generation') => void;
+}
+
+type ImagePreviewStatus = {
+  status: 'pending' | 'success' | 'error' | 'warning';
+  message: string;
+  moderationFailed?: boolean;
+  moderationLevel?: Exclude<VisualRiskLevel, 'low'>;
+  warningMessage?: string;
+  canReveal?: boolean;
+  revealed?: boolean;
+  mediaId?: string | null;
+  startTime?: number;
+  endTime?: number;
+}
+
+type VideoModerationState = {
+  warningMessage: string
+  moderationLevel: Exclude<VisualRiskLevel, 'low'>
+  revealed: boolean
+  canReveal: boolean
+  mediaId?: string | null
 }
 
 // 格式化时间（秒转为 MM:SS 或 HH:MM:SS）
@@ -37,32 +61,37 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${String(secs).padStart(2, '0')}`
 }
 
+function getInputModerationFailureMessage(reason?: string, mediaType: 'image' | 'video' = 'image') {
+  if (reason === 'prompt') return '提示词未通过审核，请调整后重试'
+  if (reason === 'image' || reason === 'video') {
+    return mediaType === 'video'
+      ? '参考图或源视频未通过审核，请更换后重试'
+      : '参考图未通过审核，请更换后重试'
+  }
+  if (reason === 'service_error') return '审核服务暂时不可用，请稍后重试'
+  return '内容未通过审核，请调整后重试'
+}
+
 const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
-  const t = useTranslations('home.generate')
-  const tHome = useTranslations('home')
+  const t = createScopedT('home.generate')
+  const tHome = createScopedT('home')
+  const router = useRouter()
   const { data: session, isPending } = useSession()
   const { refreshPoints } = usePoints()
-  const params = useParams()
-  const locale = (params?.locale as string) || 'zh'
+  const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [width, setWidth] = useState(1024);
   const [height, setHeight] = useState(1024);
   // 初始步数根据初始模型配置设置（如果提供了initialModel，使用它的配置；否则使用默认模型）
-  const initialModelForSteps = initialModel || 'Z-Image';
+  const initialModelForSteps = defaultImageModel;
   const initialModelThresholds = getModelThresholds(initialModelForSteps);
   const [steps, setSteps] = useState(initialModelThresholds.normalSteps || 10);
   const [batch_size, setBatchSize] = useState(1);
-  const [model, setModel] = useState(initialModel || 'Z-Image');
+  const [model, setModel] = useState(defaultImageModel);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-  const [imageStatuses, setImageStatuses] = useState<Array<{
-    status: 'pending' | 'success' | 'error';
-    message: string;
-    startTime?: number;
-    endTime?: number;
-  }>>([]);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(true);
+  const [imageStatuses, setImageStatuses] = useState<ImagePreviewStatus[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -82,11 +111,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [videoModel, setVideoModel] = useState('Wan2.2-I2V-Lightning');
   const [uploadedVideoImage, setUploadedVideoImage] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [videoModerationState, setVideoModerationState] = useState<VideoModerationState | null>(null);
   const [isVideoGenerating, setIsVideoGenerating] = useState(false);
   const [isVideoQueuing, setIsVideoQueuing] = useState(false);
   const [videoGenerationStartTime, setVideoGenerationStartTime] = useState<number | null>(null);
   const [videoGenerationDuration, setVideoGenerationDuration] = useState<number | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const [showModerationConsentModal, setShowModerationConsentModal] = useState(false)
+  const [pendingRevealTarget, setPendingRevealTarget] = useState<
+    | { type: 'image'; index: number; mediaId?: string | null }
+    | { type: 'video'; mediaId?: string | null }
+    | null
+  >(null)
 
   // 监听视频生成状态，记录开始时间
   useEffect(() => {
@@ -117,13 +153,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   useEffect(() => {
     if (activeTab !== 'video-generation') return
     if (!initialModel) return
-    if (videoModel === initialModel) return
 
     const videoConfig = getVideoModelById(initialModel)
     if (videoConfig) {
       setVideoModel(initialModel)
     }
-  }, [activeTab, initialModel, videoModel])
+  }, [activeTab, initialModel])
+
+  const handleVideoModelChange = (nextModel: string) => {
+    setVideoModel(nextModel)
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', 'video')
+    params.set('model', nextModel)
+    const query = params.toString()
+    router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
+  }
 
   // 监听视频参考图片就绪事件
   useEffect(() => {
@@ -146,9 +193,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               // 根据宽高比计算视频分辨率（保持总像素不变）
               const modelConfig = getVideoModelById(videoModelRef.current)
               if (modelConfig) {
-                const resolution = calculateVideoResolution(modelConfig, imageAspectRatio)
-                setVideoWidth(resolution.width)
-                setVideoHeight(resolution.height)
+                const layout = calculateVideoLayoutForAspectRatio(modelConfig, imageAspectRatio)
+                setVideoAspectRatio(layout.aspectRatio)
+                setVideoWidth(layout.width)
+                setVideoHeight(layout.height)
               }
 
               // 设置上传的图片
@@ -180,9 +228,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         // 根据宽高比计算视频分辨率（保持总像素不变）
         const modelConfig = getVideoModelById(videoModelRef.current)
         if (modelConfig) {
-          const resolution = calculateVideoResolution(modelConfig, imageAspectRatio)
-          setVideoWidth(resolution.width)
-          setVideoHeight(resolution.height)
+          const layout = calculateVideoLayoutForAspectRatio(modelConfig, imageAspectRatio)
+          setVideoAspectRatio(layout.aspectRatio)
+          setVideoWidth(layout.width)
+          setVideoHeight(layout.height)
         }
 
         // 设置上传的图片
@@ -261,6 +310,83 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
   }, [generatedImageToSetAsReference]);
 
+  const requestRevealRestrictedImage = (index: number) => {
+    const status = imageStatuses[index]
+    if (!status || status.moderationLevel !== 'medium') return
+
+    setPendingRevealTarget({ type: 'image', index, mediaId: status.mediaId })
+    setShowModerationConsentModal(true)
+  }
+
+  const requestRevealRestrictedVideo = () => {
+    if (!videoModerationState || videoModerationState.moderationLevel !== 'medium') return
+
+    setPendingRevealTarget({ type: 'video', mediaId: videoModerationState.mediaId })
+    setShowModerationConsentModal(true)
+  }
+
+  const closeModerationConsentModal = () => {
+    setShowModerationConsentModal(false)
+    setPendingRevealTarget(null)
+  }
+
+  const confirmRevealRestrictedMedia = async () => {
+    if (!pendingRevealTarget) return
+
+    try {
+      if (pendingRevealTarget.mediaId) {
+        const response = await fetch(`/api/user/images/${pendingRevealTarget.mediaId}/moderation-view`, {
+          method: 'POST',
+        })
+
+        if (!response.ok) {
+          throw new Error('保存查看确认失败')
+        }
+      }
+
+      if (pendingRevealTarget.type === 'image') {
+        setImageStatuses((prev) =>
+          prev.map((status, index) =>
+            index === pendingRevealTarget.index
+              ? { ...status, revealed: true }
+              : status
+          )
+        )
+      } else {
+        setVideoModerationState((prev) => (prev ? { ...prev, revealed: true } : prev))
+      }
+    } catch (error) {
+      console.error('确认查看受限内容失败:', error)
+    } finally {
+      closeModerationConsentModal()
+    }
+  }
+
+  const refreshPostGenerationState = async () => {
+    if (!session?.user) return
+
+    refreshPoints().catch(err => {
+      console.error('Failed to refresh points:', err);
+    });
+
+    try {
+      const token = await generateDynamicTokenWithServerTime();
+      const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
+        setHasQuota(quota);
+      }
+    } catch (error) {
+      console.error('Failed to refresh quota:', error);
+    }
+  }
+
   const handleGenerate = async () => {
     let hasError = false;
     setStepsError(null);
@@ -306,6 +432,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         tags: ["chineseSupport"]
       },
       {
+        id: "Wai-SDXL-V170",
+        maxImages: 0,
+        tags: ["animeSpecialty"]
+      },
+      {
         id: "Z-Image",
         maxImages: 0,
         tags: ["chineseSupport", "fastGeneration"]
@@ -318,6 +449,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       {
         id: "grok-imagine-1.0",
         maxImages: 0,
+        tags: ["chineseSupport", "fastGeneration"]
+      },
+      {
+        id: "gpt-image-2",
+        maxImages: 1,
         tags: ["chineseSupport", "fastGeneration"]
       }
     ];
@@ -361,9 +497,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     const thresholds = getModelThresholds(model);
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
       if (steps !== thresholds.normalSteps && steps !== thresholds.highSteps) {
+        if (model === 'Wai-SDXL-V170') {
+          setSteps(steps >= thresholds.highSteps ? thresholds.highSteps : thresholds.normalSteps);
+        } else {
         setStepsError(`步数只能选择${thresholds.normalSteps}或${thresholds.highSteps}`);
         stepsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         hasError = true;
+        }
       }
     }
     if (batch_size < 1 || batch_size > 2) {
@@ -402,12 +542,25 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
     // 判断是否需要间隔发送请求（登录用户且batch_size > 1）
     const shouldStaggerRequests = authStatus === 'authenticated' && batch_size > 1;
+    let inputModerationFailureMessage: string | null = null;
     
     const requests = Array(batch_size).fill(null).map((_, index) => {
       const startTime = Date.now();
 
       const makeRequest = async () => {
         try {
+          if (inputModerationFailureMessage) {
+            setImageStatuses(prev => {
+              const newStatuses = [...prev];
+              newStatuses[index] = ({
+                status: 'error',
+                message: inputModerationFailureMessage as string
+              });
+              return newStatuses;
+            });
+            return;
+          }
+
           // 如果是登录用户且需要间隔发送，第一个请求后等待0秒
           if (shouldStaggerRequests && index > 0) {
             await new Promise(resolve => setTimeout(resolve, 0 * index));
@@ -436,6 +589,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           });
 
           // 检查是否是401未登录错误（图改图模型限制）
+          if (inputModerationFailureMessage) {
+            setImageStatuses(prev => {
+              const newStatuses = [...prev];
+              newStatuses[index] = ({
+                status: 'error',
+                message: inputModerationFailureMessage as string
+              });
+              return newStatuses;
+            });
+            return;
+          }
+
           if (res.status === 401) {
             const errorData = await res.json().catch(() => ({}));
             if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I') {
@@ -493,11 +658,69 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             throw new Error(isDailyLimit ? 'DAILY_LIMIT' : 'CONCURRENCY_LIMIT');
           }
 
-          if (res.status !== 200) {
+          // 审核未通过：非 2xx，但响应体包含 imageUrl 供前端加遮罩展示
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            if (errorData?.code === 'MODERATION_FAILED' && !errorData?.imageUrl) {
+              const message = inputModerationFailureMessage || getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
+              inputModerationFailureMessage = message
+              setIsGenerating(false);
+              setImageStatuses(prev => {
+                return prev.map((status) => (
+                  status.status === 'pending'
+                    ? { status: 'error', message }
+                    : status
+                ));
+              });
+              return;
+            }
+            if (errorData?.code === 'MODERATION_FAILED' && errorData?.imageUrl) {
+              const dataUrl = errorData.imageUrl as string;
+              const moderationLevel = errorData?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined
+              const isVisualRestricted = moderationLevel === 'high'
+              const warningMessage = moderationLevel
+                ? getModerationWarning(moderationLevel, 'image')
+                : '内容未通过审核'
+              const imageLoadPromise = new Promise<void>((resolve) => {
+                const img = new window.Image();
+                img.onload = () => {
+                  const endTime = Date.now();
+                  const duration = ((endTime - startTime) / 1000).toFixed(1);
+                  images[index] = dataUrl;
+                  setGeneratedImages([...images]);
+                  setImageStatuses(prev => {
+                    const newStatuses = [...prev];
+                    newStatuses[index] = ({
+                      status: moderationLevel ? 'warning' : 'success',
+                      message: isVisualRestricted
+                        ? `高风险内容已遮罩（${duration}s）`
+                        : `${t('preview.completed')} (${duration}s)`,
+                      moderationFailed: Boolean(moderationLevel),
+                      moderationLevel,
+                      warningMessage: moderationLevel ? warningMessage : undefined,
+                      canReveal: false,
+                      revealed: !isVisualRestricted,
+                      mediaId: null,
+                      startTime,
+                      endTime
+                    });
+                    return newStatuses;
+                  });
+                  if (!isVisualRestricted) {
+                    refreshPostGenerationState();
+                  }
+                  resolve();
+                };
+                img.src = dataUrl;
+              });
+              await imageLoadPromise;
+              return;
+            }
             throw new Error(`HTTP error! status: ${res.status}`);
           }
 
           const data = await res.json();
+          const moderationLevel = data?.moderation?.visualRiskLevel as Exclude<VisualRiskLevel, 'low'> | undefined
           // Create a new promise to track image loading
           const imageLoadPromise = new Promise<void>((resolve) => {
             const img = new window.Image();
@@ -509,40 +732,20 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               setImageStatuses(prev => {
                 const newStatuses = [...prev];
                 newStatuses[index] = ({
-                  status: 'success',
+                  status: moderationLevel === 'medium' ? 'warning' : 'success',
                   message: `${t('preview.completed')} (${duration}s)`,
+                  moderationFailed: moderationLevel === 'medium',
+                  moderationLevel,
+                  warningMessage: moderationLevel ? getModerationWarning(moderationLevel, 'image') : undefined,
+                  canReveal: false,
+                  revealed: true,
                   startTime,
                   endTime
                 });
                 return newStatuses;
               });
-              
-              // 刷新积分显示和额度信息（如果用户已登录）
-              if (session?.user) {
-                refreshPoints().catch(err => {
-                  console.error('Failed to refresh points:', err);
-                });
-                // 刷新额度信息
-                const refreshQuota = async () => {
-                  try {
-                    const token = await generateDynamicTokenWithServerTime();
-                    const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-                      headers: {
-                        'Authorization': `Bearer ${token}`
-                      }
-                    });
-                    if (response.ok) {
-                      const data = await response.json();
-                      const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-                      setHasQuota(quota);
-                    }
-                  } catch (error) {
-                    console.error('Failed to refresh quota:', error);
-                  }
-                };
-                refreshQuota();
-              }
-              
+
+              refreshPostGenerationState();
               resolve();
             };
             img.src = data.imageUrl;
@@ -611,12 +814,22 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
 
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const hideImageRatioSelector = isGptImage2Model(model);
   // 高分辨率开关状态（独立控制，不受图片比例影响）
   const [isHighResolution, setIsHighResolution] = useState(false);
 
   // 切换到 grok-imagine-1.0 时，若当前比例不在支持列表内，重置为 1:1
   useEffect(() => {
     if (model === 'grok-imagine-1.0' && !GROK_ALLOWED_RATIOS.includes(aspectRatio)) {
+      setAspectRatio('1:1');
+      setWidth(1024);
+      setHeight(1024);
+      setIsHighResolution(false);
+    }
+  }, [model, aspectRatio]);
+
+  useEffect(() => {
+    if (isGptImage2Model(model) && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
       setAspectRatio('1:1');
       setWidth(1024);
       setHeight(1024);
@@ -639,7 +852,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setAspectRatio(ratio);
 
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
-    if (model === 'grok-imagine-1.0') {
+    if (model === 'grok-imagine-1.0' || isGptImage2Model(model)) {
       const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
       setWidth(size.width);
       setHeight(size.height);
@@ -813,8 +1026,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       // 计算有额度时需要扣除的积分（总消耗 - 基础消耗）
       if (totalCostWithBatch !== null && hasQuota !== null) {
         const baseCostWithBatch = modelBaseCost * batch_size;
-        // nano-banana-2 不享受额度减免：始终展示全额消耗
-        if (model === 'nano-banana-2') {
+        // 独立计费模型不享受额度减免：始终展示全额消耗
+        if (model === 'nano-banana-2' || isGptImage2Model(model)) {
           setEstimatedCost(totalCostWithBatch);
         } else if (hasQuota) {
           // 有额度：显示额外消耗（总消耗 - 基础消耗）
@@ -869,11 +1082,45 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   aspectRatio={aspectRatio}
                   onRatioChange={handleRatioChange}
                   model={model}
+                  hideRatioSelector={hideImageRatioSelector}
                   selectedStyle={selectedStyle}
                   onStyleChange={setSelectedStyle}
                   isQueuing={isQueuing}
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
+                  extraContent={
+                    <div className="lg:hidden pt-2">
+                      <GenerateForm
+                        width={width}
+                        setWidth={setWidth}
+                        height={height}
+                        setHeight={setHeight}
+                        steps={steps}
+                        setSteps={setSteps}
+                        batch_size={batch_size}
+                        setBatchSize={setBatchSize}
+                        model={model}
+                        setModel={setModel}
+                        status={authStatus}
+                        promptRef={promptRef}
+                        communityWorks={communityWorks}
+                        isGenerating={isGenerating}
+                        uploadedImages={uploadedImages}
+                        setUploadedImages={setUploadedImages}
+                        stepsError={stepsError}
+                        batchSizeError={batchSizeError}
+                        imageCountError={imageCountError}
+                        batchSizeRef={batchSizeRef}
+                        generatedImageToSetAsReference={generatedImageToSetAsReference}
+                        setIsQueuing={setIsQueuing}
+                        isHighResolution={isHighResolution}
+                        setIsHighResolution={setIsHighResolution}
+                        aspectRatio={aspectRatio}
+                        setAspectRatio={setAspectRatio}
+                        embedded
+                      />
+                    </div>
+                  }
                 />
               </div>
             </div>
@@ -884,7 +1131,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         {activeTab === 'generate' ? (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* 左侧表单区域 */}
-            <div className="order-1 lg:order-1 lg:col-span-2 animate-fadeInUp h-fit z-10">
+            <div className="hidden lg:block order-1 lg:order-1 lg:col-span-2 animate-fadeInUp h-fit z-10">
               <div className="transition-all duration-500 ease-in-out">
                 <div className="animate-fadeInUp">
                   <GenerateForm
@@ -899,9 +1146,6 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     model={model}
                     setModel={setModel}
                     status={authStatus}
-                    onGenerate={handleGenerate}
-                    isAdvancedOpen={isAdvancedOpen}
-                    setIsAdvancedOpen={setIsAdvancedOpen}
                     promptRef={promptRef}
                     communityWorks={communityWorks}
                     isGenerating={isGenerating}
@@ -931,6 +1175,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 isGenerating={isGenerating}
                 setZoomedImage={setZoomedImage}
                 onSetAsReference={handleSetGeneratedImageAsReference}
+                onRevealRestrictedImage={requestRevealRestrictedImage}
               />
             </div>
           </div>
@@ -956,21 +1201,47 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         aspectRatio={videoAspectRatio}
                         setAspectRatio={setVideoAspectRatio}
                         model={videoModel}
-                        setModel={setVideoModel}
+                        setModel={handleVideoModelChange}
                         uploadedImage={uploadedVideoImage}
                         setUploadedImage={setUploadedVideoImage}
                         generatedVideo={generatedVideo}
                         setGeneratedVideo={setGeneratedVideo}
+                        onModerationFailed={(payload) => {
+                          const moderationLevel = payload.moderation?.visualRiskLevel
+                          if (!moderationLevel) {
+                            return
+                          }
+
+                          setGeneratedVideo(payload.videoUrl || null)
+                          setVideoModerationState({
+                            moderationLevel,
+                            warningMessage: getModerationWarning(moderationLevel, 'video'),
+                            revealed: moderationLevel === 'medium',
+                            canReveal: false,
+                            mediaId: payload.mediaId || null,
+                          })
+                        }}
                         isGenerating={isVideoGenerating}
                         setIsGenerating={setIsVideoGenerating}
                         isQueuing={isVideoQueuing}
                         setIsQueuing={setIsVideoQueuing}
-                        onGenerate={() => {
+                        onGenerate={(_, moderation) => {
                           // 计算视频生成耗时
                           if (videoGenerationStartTime) {
                             const duration = (Date.now() - videoGenerationStartTime) / 1000 // 转换为秒
                             setVideoGenerationDuration(duration)
                           }
+                          const moderationLevel = moderation?.visualRiskLevel
+                          setVideoModerationState(
+                            moderationLevel === 'medium'
+                              ? {
+                                  moderationLevel,
+                                  warningMessage: getModerationWarning(moderationLevel, 'video'),
+                                  revealed: true,
+                                  canReveal: false,
+                                }
+                              : null
+                          )
                         }}
                         setErrorModal={(show, type, message) => {
                           console.log('GenerateSection - setErrorModal called:', { show, type, message })
@@ -1016,7 +1287,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         <video
                           ref={videoRef}
                           src={generatedVideo}
-                          className="w-full h-full rounded-xl shadow-lg border border-orange-400/30 object-contain"
+                          className={`w-full h-full rounded-xl shadow-lg border border-orange-400/30 object-contain transition-all ${
+                            videoModerationState && !videoModerationState.revealed ? 'scale-[1.02] blur-xl brightness-75' : ''
+                          }`}
                           autoPlay
                           muted={isVideoMuted}
                           playsInline
@@ -1044,8 +1317,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             console.error('Video load error:', e);
                           }}
                         />
+                        {videoModerationState && (
+                          <RestrictedMediaMask
+                            level={videoModerationState.moderationLevel}
+                            warning={videoModerationState.warningMessage}
+                            revealed={videoModerationState.revealed}
+                            canReveal={videoModerationState.canReveal && !videoModerationState.revealed}
+                            onReveal={requestRevealRestrictedVideo}
+                          />
+                        )}
                         
                         {/* 右上角下载按钮 - 常驻显示 */}
+                        {!videoModerationState?.moderationLevel || videoModerationState.revealed ? (
                         <div className="absolute top-2 right-2 z-20">
                           <button
                             onClick={(e) => {
@@ -1070,6 +1353,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             </div>
                           </button>
                         </div>
+                        ) : null}
                         
                         {/* 控制栏 */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 rounded-b-xl">
@@ -1079,6 +1363,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (videoModerationState && !videoModerationState.revealed) {
+                                  return;
+                                }
                                 if (videoRef.current) {
                                   if (isVideoPlaying) {
                                     videoRef.current.pause();
@@ -1112,6 +1399,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (videoModerationState && !videoModerationState.revealed) {
+                                    return;
+                                  }
                                   const nextMuted = !isVideoMuted;
                                   setIsVideoMuted(nextMuted);
                                   if (videoRef.current) {
@@ -1136,17 +1426,19 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                               </button>
 
                               {/* 全屏按钮 */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setZoomedVideo(generatedVideo);
-                                }}
-                                className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
-                              >
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
-                              </button>
+                              {!videoModerationState?.moderationLevel || videoModerationState.revealed ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setZoomedVideo(generatedVideo);
+                                  }}
+                                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
+                                >
+                                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                  </svg>
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -1245,7 +1537,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             {errorType === 'insufficient_points' ? (
               <div className="flex flex-col gap-3">
                 <Link
-                  href={transferUrl('/pricing', locale)}
+                  href={transferUrl('/pricing')}
                   onClick={closeErrorModal}
                   className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
                 >
@@ -1314,6 +1606,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           </div>
         </div>
       )}
+
+      <ModerationConsentModal
+        open={showModerationConsentModal}
+        message={MEDIUM_RISK_CONFIRM_MESSAGE}
+        onClose={closeModerationConsentModal}
+        onConfirm={confirmRevealRestrictedMedia}
+      />
 
       {/* 图片放大模态框 */}
       {zoomedImage && (

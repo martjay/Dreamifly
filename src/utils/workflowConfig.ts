@@ -5,6 +5,7 @@ export interface WorkflowConfig {
   name: string;
   description?: string;
   homepageCover?: string; // 主页竖屏封面，默认为 /workflows/homepageWorkflowCover/demo.jpg
+  homepageCoverFallback?: string;
   tags?: string[];
   route?: string; // 路由路径，默认为 /workflows
 }

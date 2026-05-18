@@ -1,9 +1,9 @@
-import { useTranslations } from 'next-intl'
-import { useState, useRef, useEffect } from 'react';
+import { createScopedT } from '@/lib/strings'
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import Image from 'next/image';
 import { styleOptions } from './StyleTransferForm';
 import LoginHint from './LoginHint';
-import { GROK_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS } from '@/utils/modelConfig';
+import { GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, isGptImage2Model } from '@/utils/modelConfig';
 
 interface PromptInputProps {
   prompt: string;
@@ -25,6 +25,8 @@ interface PromptInputProps {
   estimatedCost?: number | null;
   extraCost?: number | null;
   model?: string;
+  hideRatioSelector?: boolean;
+  extraContent?: ReactNode;
 }
 
 const PromptInput = ({
@@ -45,9 +47,11 @@ const PromptInput = ({
   isQueuing = false,
   estimatedCost = null,
   extraCost = null,
-  model
+  model,
+  hideRatioSelector = false,
+  extraContent
 }: PromptInputProps) => {
-  const t = useTranslations('home.generate')
+  const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
   const [isStyleOpen, setIsStyleOpen] = useState(false);
   const [isNegativePromptEnabled, setIsNegativePromptEnabled] = useState(false);
@@ -73,11 +77,20 @@ const PromptInput = ({
     };
   }, [isStyleOpen, isRatioOpen]);
 
+  const shouldShowRatioSelector = !hideRatioSelector && !isGptImage2Model(model);
   const ratios = model === 'grok-imagine-1.0'
     ? GROK_ALLOWED_RATIOS
+    : isGptImage2Model(model)
+      ? GPT_IMAGE_2_ALLOWED_RATIOS
     : model === 'nano-banana-2'
       ? NANO_BANANA_ALLOWED_RATIOS
       : ['10:3', '16:9', '3:2', '5:4','7:4', '1:1', '4:7', '4:5', '2:3', '9:16'];
+
+  useEffect(() => {
+    if (!shouldShowRatioSelector) {
+      setIsRatioOpen(false);
+    }
+  }, [shouldShowRatioSelector]);
 
   return (
     <div>
@@ -85,7 +98,7 @@ const PromptInput = ({
         <img src="/form/prompt.svg" alt="Prompt" className="w-4 h-4 mr-1.5 text-gray-800 [&>path]:fill-current" />
         {t('form.prompt.label')}
       </label>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:gap-4">
         <textarea
           id="prompt"
           value={prompt}
@@ -96,7 +109,7 @@ const PromptInput = ({
         />
 
         {/* 负面提示词 Toggle Switch */}
-        <div className="flex items-center justify-between py-2">
+        <div className="flex items-center justify-between py-1.5 sm:py-2">
           <label htmlFor="negative-prompt-toggle" className="flex items-center text-xs font-medium text-gray-800">
             <img src="/form/prompt.svg" alt="Negative Prompt" className="w-4 h-4 mr-1.5 text-gray-800 [&>path]:fill-current" />
             负面提示词
@@ -105,14 +118,14 @@ const PromptInput = ({
             type="button"
             id="negative-prompt-toggle"
             onClick={() => setIsNegativePromptEnabled(!isNegativePromptEnabled)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:ring-offset-2 ${
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:ring-offset-2 sm:h-6 sm:w-11 ${
               isNegativePromptEnabled ? 'bg-amber-400' : 'bg-gray-200'
             }`}
             disabled={isGenerating}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                isNegativePromptEnabled ? 'translate-x-6' : 'translate-x-1'
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform sm:h-4 sm:w-4 ${
+                isNegativePromptEnabled ? 'translate-x-5 sm:translate-x-6' : 'translate-x-0.5 sm:translate-x-1'
               }`}
             />
           </button>
@@ -131,12 +144,43 @@ const PromptInput = ({
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row md:justify-between gap-3 items-stretch md:items-center">
-          <div className="flex gap-2 md:gap-3">
+        <div className="grid grid-cols-2 gap-2.5 md:hidden">
+          <button
+            type="button"
+            onClick={onRandomPrompt}
+            className="min-h-9 px-3 py-2 text-[13px] rounded-lg bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 flex items-center justify-center"
+            disabled={isGenerating}
+          >
+            <svg className="w-3.5 h-3.5 mr-1 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            {t('form.randomPrompt')}
+          </button>
+          <button
+            type="button"
+            onClick={onOptimizePrompt}
+            className="min-h-9 px-3 py-2 text-[13px] rounded-lg bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 flex items-center justify-center"
+            disabled={isGenerating || isOptimizing || !prompt.trim()}
+          >
+            <svg className="w-3.5 h-3.5 mr-1 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+            </svg>
+            {isOptimizing ? t('form.optimizingPrompt') || 'Optimizing...' : t('form.optimizePrompt')}
+          </button>
+        </div>
+
+        {extraContent && (
+          <div className="pt-0.5">
+            {extraContent}
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row md:justify-between gap-3 md:gap-4 items-stretch md:items-center">
+          <div className="flex gap-3 md:gap-3 flex-wrap justify-center md:justify-start">
             <button
               type="button"
               onClick={onRandomPrompt}
-              className="px-2 py-1 text-xs md:px-3 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
+              className="hidden md:flex px-3 py-2 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap items-center"
               disabled={isGenerating}
             >
               <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -147,10 +191,10 @@ const PromptInput = ({
             <button
               type="button"
               onClick={() => setIsStyleOpen(!isStyleOpen)}
-              className="px-3 py-1 text-xs md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative"
+              className={`${shouldShowRatioSelector ? 'w-[calc(50%-0.375rem)]' : 'w-full'} min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative`}
               disabled={isGenerating}
             >
-              <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 md:mr-1.5 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
               </svg>
               {selectedStyle || t('form.styleButton')}
@@ -189,43 +233,45 @@ const PromptInput = ({
                 ))}
               </div>
             </button>
-            <div
-              onClick={() => setIsRatioOpen(!isRatioOpen)}
-              className="px-3 py-1 text-xs md:px-4 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center relative cursor-pointer"
-              tabIndex={0}
-              role="button"
-              aria-disabled={isGenerating}
-            >
-              <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
-              </svg>
-              {aspectRatio}
-              {isRatioOpen && (
-                <div ref={ratioDropdownRef} className="absolute top-full left-0 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 min-w-[150px] z-50">
-                  {ratios.map(r => {
-                    const [rw, rh] = r.split(':').map(Number);
-                    const isHorizontal = rw >= rh;
-                    const rectWidth = 20;
-                    const rectHeight = isHorizontal ? Math.round(rectWidth * rh / rw) : Math.round(rectWidth * rw / rh);
-                    const rectStyle = isHorizontal ? {width: `${rectWidth}px`, height: `${rectHeight}px`} : {width: `${rectHeight}px`, height: `${rectWidth}px`};
-                    return (
-                      <div
-                        key={r}
-                        onClick={() => { onRatioChange(r); setIsRatioOpen(false); }}
-                        className="flex items-center px-3 py-2 text-sm text-gray-900 hover:bg-gray-100/50 w-full rounded-lg cursor-pointer"
-                      >
-                        <div className="bg-amber-400/40 mr-2" style={rectStyle}></div>
-                        {r}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {shouldShowRatioSelector && (
+              <div
+                onClick={() => setIsRatioOpen(!isRatioOpen)}
+                className="w-[calc(50%-0.375rem)] min-h-9 px-3 py-2 text-[13px] md:w-auto md:px-4 md:py-2 md:text-sm rounded-lg md:rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center justify-center relative cursor-pointer"
+                tabIndex={0}
+                role="button"
+                aria-disabled={isGenerating}
+              >
+                <svg className="w-3.5 h-3.5 mr-1 md:w-4 md:h-4 md:mr-1.5 text-orange-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
+                </svg>
+                {aspectRatio}
+                {isRatioOpen && (
+                  <div ref={ratioDropdownRef} className="absolute top-full left-0 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 min-w-[150px] z-50">
+                    {ratios.map(r => {
+                      const [rw, rh] = r.split(':').map(Number);
+                      const isHorizontal = rw >= rh;
+                      const rectWidth = 20;
+                      const rectHeight = isHorizontal ? Math.round(rectWidth * rh / rw) : Math.round(rectWidth * rw / rh);
+                      const rectStyle = isHorizontal ? {width: `${rectWidth}px`, height: `${rectHeight}px`} : {width: `${rectHeight}px`, height: `${rectWidth}px`};
+                      return (
+                        <div
+                          key={r}
+                          onClick={() => { onRatioChange(r); setIsRatioOpen(false); }}
+                          className="flex items-center px-3 py-2 text-sm text-gray-900 hover:bg-gray-100/50 w-full rounded-lg cursor-pointer"
+                        >
+                          <div className="bg-amber-400/40 mr-2" style={rectStyle}></div>
+                          {r}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={onOptimizePrompt}
-              className="px-2 py-1 text-xs md:px-3 md:py-2 md:text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap flex items-center"
+              className="hidden md:flex px-3 py-2 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap items-center"
               disabled={isGenerating || isOptimizing || !prompt.trim()}
             >
               <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

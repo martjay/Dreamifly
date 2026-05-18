@@ -38,27 +38,6 @@ body:has(.admin-page) footer {
   --input: #e5e7eb;
 }
 
-/* ===== 春节主题 ===== */
-.new-year-theme {
-  --primary: #C53030;
-  --primary-foreground: #ffffff;
-  --secondary: #B7791F;
-  --secondary-foreground: #ffffff;
-  --accent: #D69E2E;
-  --accent-foreground: #ffffff;
-  --destructive: #E53E3E;
-  --destructive-foreground: #ffffff;
-  --ring: #C53030;
-  --background: #FFFAF0;
-  --foreground: #1C1917;
-  --card: #ffffff;
-  --card-foreground: #292524;
-  --muted: #FEF3C7;
-  --muted-foreground: #78716C;
-  --border: #FCA5A5;
-  --input: #FECACA;
-}
-
 @layer base {
   body {
     @apply min-h-screen bg-gradient-to-b from-gray-50 via-gray-100 to-gray-50 text-gray-900;
@@ -141,6 +120,43 @@ body:has(.admin-page) footer {
     animation: flow-delayed 2s ease-in-out infinite;
   }
 
+  .gold-flow-text {
+    display: inline-block;
+    color: #b45309;
+    background: linear-gradient(
+      110deg,
+      #8a4f00 0%,
+      #d97706 18%,
+      #fde68a 34%,
+      #fff7c2 44%,
+      #f59e0b 56%,
+      #a16207 76%,
+      #fbbf24 100%
+    );
+    background-size: 220% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: goldTextFlow 2.4s linear infinite;
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.28);
+  }
+
+  .featured-gpt-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border: 1px solid rgba(245, 158, 11, 0.55);
+    border-radius: 9999px;
+    background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(245, 158, 11, 0.2));
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.22);
+    color: #92400e;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
   @keyframes fadeInUp {
     from {
       opacity: 0;
@@ -211,6 +227,15 @@ body:has(.admin-page) footer {
     100% {
       transform: translateX(100%);
       opacity: 0;
+    }
+  }
+
+  @keyframes goldTextFlow {
+    0% {
+      background-position: 220% center;
+    }
+    100% {
+      background-position: -220% center;
     }
   }
 

@@ -1,4 +1,4 @@
-import { pgTable, timestamp, integer, text, boolean, real, serial, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, integer, text, boolean, real, serial, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const siteStats = pgTable('site_stats', {
@@ -103,15 +103,6 @@ export const userLimitConfig = pgTable("user_limit_config", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// IP并发记录表
-export const ipConcurrency = pgTable("ip_concurrency", {
-  ipAddress: text("ip_address").primaryKey(), // IP地址作为主键
-  currentConcurrency: integer("current_concurrency").default(0).notNull(), // 当前并发量
-  maxConcurrency: integer("max_concurrency"), // 最大并发量，null表示不限（管理员）
-  updatedAt: timestamp("updated_at").defaultNow().notNull(), // 最后更新时间
-  createdAt: timestamp("created_at").defaultNow().notNull(), // 创建时间
-});
-
 // IP黑名单表
 export const ipBlacklist = pgTable("ip_blacklist", {
   id: text("id").primaryKey(), // 使用UUID作为主键
@@ -186,6 +177,7 @@ export const pointsConfig = pgTable("points_config", {
   zImageTurboCost: integer("z_image_turbo_cost"), // Z-Image-Turbo模型积分消耗，null表示使用环境变量
   qwenImageEditCost: integer("qwen_image_edit_cost"), // Qwen-Image-Edit模型积分消耗，null表示使用环境变量
   waiSdxlV150Cost: integer("wai_sdxl_v150_cost"), // Wai-SDXL-V150模型积分消耗，null表示使用环境变量
+  waiSdxlV170Cost: integer("wai_sdxl_v170_cost"), // Wai-SDXL-V170模型积分消耗，null表示使用环境变量
   wanVideoCost: integer("wan_video_cost"), // Wan视频模型积分消耗，null表示使用环境变量
   grokImagine1Cost: integer("grok_imagine_1_cost"), // grok-imagine-1.0模型积分消耗，null表示使用环境变量
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -278,11 +270,59 @@ export const userGeneratedImages = pgTable("user_generated_images", {
   userNickname: text("user_nickname"), // 用户昵称
   avatarFrameId: integer("avatar_frame_id"), // 头像框ID
   referenceImages: jsonb("reference_images").$type<string[]>().default([]), // 参考图片URL数组（加密存储）
+  moderationLevel: text("moderation_level").default('low').notNull(), // 视觉审核风险等级：low | medium | high
+  manualReviewStatus: text("manual_review_status").default('pending').notNull(), // 人工审核状态：pending | approved | rejected
+  manualReviewedAt: timestamp("manual_reviewed_at"), // 人工审核时间
+  manualReviewedBy: text("manual_reviewed_by"), // 人工审核人ID
   nsfw: boolean("nsfw").default(false).notNull(), // 是否为 NSFW 内容，true 表示不适合在社区展示
   reportCount: integer("report_count").default(0).notNull(), // 被普通用户举报的次数（优质用户和管理员举报不计入）
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// 社区标签表
+export const communityTag = pgTable("community_tag", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  usageCount: integer("usage_count").default(0).notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  nameUnique: uniqueIndex("community_tag_name_unique").on(table.name),
+  slugUnique: uniqueIndex("community_tag_slug_unique").on(table.slug),
+}));
+
+// 社区媒体与标签关联表
+export const communityMediaTag = pgTable("community_media_tag", {
+  id: text("id").primaryKey(),
+  mediaId: text("media_id")
+    .notNull()
+    .references(() => userGeneratedImages.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => communityTag.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  mediaTagUnique: uniqueIndex("community_media_tag_media_tag_unique").on(table.mediaId, table.tagId),
+}));
+
+// 中风险内容查看确认记录表
+export const mediaViewConsent = pgTable("media_view_consent", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  imageId: text("image_id")
+    .notNull()
+    .references(() => userGeneratedImages.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userImageUnique: uniqueIndex("media_view_consent_user_image_unique").on(table.userId, table.imageId),
+}));
 
 // 举报记录表
 export const imageReports = pgTable("image_reports", {
@@ -294,6 +334,21 @@ export const imageReports = pgTable("image_reports", {
   createdAt: timestamp("created_at").defaultNow().notNull(), // 举报时间
   updatedAt: timestamp("updated_at").defaultNow().notNull(), // 更新时间
 });
+
+// 社区点赞收藏表
+export const communityLike = pgTable("community_like", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  imageId: text("image_id")
+    .notNull()
+    .references(() => userGeneratedImages.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userImageUnique: uniqueIndex("community_like_user_image_unique").on(table.userId, table.imageId),
+}));
 
 // 未通过审核图片表
 export const rejectedImages = pgTable("rejected_images", {
@@ -310,6 +365,7 @@ export const rejectedImages = pgTable("rejected_images", {
   fps: integer("fps"), // 视频帧率，仅视频类型有效
   frameCount: integer("frame_count"), // 视频总帧数，仅视频类型有效
   rejectionReason: text("rejection_reason"), // 拒绝原因：'image' | 'prompt' | 'both'
+  moderationLevel: text("moderation_level"), // 视觉审核风险等级：medium | high，提示词拦截时可为空
   referenceImages: jsonb("reference_images").$type<string[]>().default([]), // 参考图片URL数组（加密存储）
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

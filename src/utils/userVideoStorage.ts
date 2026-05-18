@@ -4,6 +4,8 @@ import { eq, asc } from 'drizzle-orm'
 import { uploadToOSS, deleteFromOSS } from './oss'
 import { getImageStorageConfig } from './points'
 import { encodeMediaForStorage } from './mediaStorage'
+import type { VisualRiskLevel } from './visualModeration'
+import { ensureCommunityTagsForSavedMedia } from './communityTags'
 
 /**
  * 检查用户是否为订阅用户（实时检查）
@@ -99,6 +101,13 @@ export async function saveUserGeneratedVideo(
     frameCount?: number // 视频总帧数
     ipAddress?: string // 客户端IP地址（用于未登录用户记录）
     referenceImages?: string[] // 参考图的base64数组（不包含data:image前缀）
+    moderationLevel?: VisualRiskLevel
+  },
+  options?: {
+    /**
+     * 已在上层完成审核时可跳过（例如：生成接口同步审核通过后再保存）
+     */
+    skipModeration?: boolean
   }
 ): Promise<string> {
   // 1. 检查是否为管理员（管理员不记录未通过审核的视频，但可以保存通过的视频）
@@ -132,31 +141,23 @@ export async function saveUserGeneratedVideo(
   // 4.5 编码视频（统一使用加密存储，避免OSS审核）
   const encodedBuffer = encodeMediaForStorage(buffer)
   
-  // 5. 审核（仅提示词审核）
-  const moderationBaseUrl = process.env.AVATAR_MODERATION_BASE_URL
-  const moderationApiKey = process.env.AVATAR_MODERATION_API_KEY || ''
-  const moderationModel = process.env.AVATAR_MODERATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8'
-  const promptModerationPrompt = process.env.PROMPT_MODERATION_PROMPT || 
-    '请判断以下视频生成提示词是否可以在公共场所使用，评判标准包括但不限于不应该包含"黄色"、"血腥"、"暴力"、"政治敏感"等内容，你只需输出是或者否即可。提示词：{prompt}'
-  
-  if (moderationBaseUrl) {
-    // 5.1 提示词审核（如果提供了提示词）
-    let promptApproved = true
-    if (metadata?.prompt && metadata.prompt.trim()) {
-      const { moderatePrompt } = await import('./imageModeration')
-      promptApproved = await moderatePrompt(
-        metadata.prompt,
-        moderationBaseUrl,
-        moderationApiKey,
-        moderationModel,
-        promptModerationPrompt
-      )
-      
-      if (!promptApproved) {
+  // 5. 审核（提示词/视频内容）——如上层已同步审核通过，可跳过
+  if (!options?.skipModeration) {
+    const { moderateGeneratedVideoOutput } = await import('./videoModerationFlow')
+
+    // 需要参考图才能执行视频内容审核（本流程生成视频一定有参考图）
+    const referenceImage = metadata?.referenceImages?.[0]
+    if (referenceImage) {
+      const decision = await moderateGeneratedVideoOutput({
+        prompt: metadata?.prompt,
+        referenceImageBase64OrDataUrl: referenceImage,
+      })
+
+      if (!decision.approved) {
         // 保存未通过审核的视频
         try {
           const { saveRejectedImage } = await import('./rejectedImageStorage')
-          
+
           // 先保存参考图（如果有）
           let referenceImageUrls: string[] = []
           if (metadata?.referenceImages && metadata.referenceImages.length > 0) {
@@ -167,7 +168,9 @@ export async function saveUserGeneratedVideo(
               console.error('保存未通过审核视频的参考图失败:', error)
             }
           }
-          
+
+          const rejectionReason = decision.reason === 'prompt' ? 'prompt' : decision.reason === 'video' ? 'image' : 'both'
+
           await saveRejectedImage(buffer, {
             userId: userId || null,
             ipAddress: metadata?.ipAddress,
@@ -179,22 +182,13 @@ export async function saveUserGeneratedVideo(
             duration: metadata?.duration,
             fps: metadata?.fps,
             frameCount: metadata?.frameCount,
-            rejectionReason: 'prompt',
+            rejectionReason,
             referenceImages: referenceImageUrls,
-          })
-          
-          // 记录审核未通过，但不抛出错误
-          // 这样视频仍然可以返回给用户，但会被保存到 rejectedImageStorage
-          console.warn(`[视频保存] 提示词审核未通过，视频已保存到 rejectedImageStorage:`, {
-            userId: userId || 'anonymous',
-            prompt: metadata?.prompt?.substring(0, 50),
           })
         } catch (error) {
           console.error('保存未通过审核视频失败:', error)
         }
-        // 审核失败时，直接返回，不继续执行正常的保存流程
-        // 返回空字符串，因为调用方是异步后台任务，不关心返回值
-        // 这样视频只会保存到 rejectedImageStorage，不会保存到正常数据库
+
         return ''
       }
     }
@@ -298,6 +292,11 @@ export async function saveUserGeneratedVideo(
       mediaType: 'video', // 明确指定为视频类型
       prompt: metadata?.prompt,
       model: metadata?.model,
+      moderationLevel: metadata?.moderationLevel || 'low',
+      manualReviewStatus: 'pending',
+      manualReviewedAt: null,
+      manualReviewedBy: null,
+      nsfw: metadata?.moderationLevel ? metadata.moderationLevel !== 'low' : false,
       width: metadata?.width,
       height: metadata?.height,
       duration: metadata?.duration,
@@ -310,6 +309,12 @@ export async function saveUserGeneratedVideo(
       referenceImages: referenceImageUrls, // 保存参考图URL数组
       createdAt: new Date(),
       updatedAt: new Date(),
+    })
+
+    void ensureCommunityTagsForSavedMedia({
+      mediaId: videoId,
+      prompt: metadata?.prompt,
+      referenceImageBase64: metadata?.referenceImages?.[0] || null,
     })
 
     // 10. 自动清理超出数量的旧媒体（图片+视频，从前往后删除，保留最新的）

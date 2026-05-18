@@ -2,11 +2,12 @@
   "name": "dreamifly",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "node scripts/reset-concurrency-on-startup.js && next dev",
+    "dev": "next dev",
     "build": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch(e) {}\" && next build",
     "build:clean": "rimraf .next && next build",
-    "start": "node scripts/reset-concurrency-on-startup.js && next start",
+    "start": "next start",
     "lint": "next lint",
     "fix-terms": "node scripts/fix-markdown-punctuation.js"
   },
@@ -30,8 +31,6 @@
     "http2-wrapper": "^2.2.1",
     "lucide-react": "^0.564.0",
     "next": "15.2.6",
-    "next-intl": "^4.0.2",
-    "next-umami": "^1.0.0",
     "openai": "^6.8.1",
     "pg": "^8.16.0",
     "postcss": "^8.4.35",

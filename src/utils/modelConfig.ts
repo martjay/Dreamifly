@@ -1,5 +1,7 @@
 // 模型配置管理工具
 
+import { getHomepageAsset } from './homepageAssets';
+
 // 模型环境变量映射
 const MODEL_ENV_MAP = {
   "HiDream-full-fp8": "HiDream_Fp8_URL",
@@ -10,10 +12,12 @@ const MODEL_ENV_MAP = {
   "Qwen-Image": "Qwen_Image_URL",
   "Qwen-Image-Edit": "Qwen_Image_Edit_URL",
   "Wai-SDXL-V150": "Wai_SDXL_V150_URL",
+  "Wai-SDXL-V170": "Wai_SDXL_V170_URL",
   "Z-Image": "Z_IMAGE_URL",
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
+  "gpt-image-2": "GPT_IMAGE_2_API_URL",
   "nano-banana-2": "REPLICATE_API_TOKEN"
 } as const;
 
@@ -22,7 +26,9 @@ export interface ModelConfig {
   id: string;
   name: string;
   image: string;
+  imageFallback?: string;
   homepageCover?: string; // 主页竖屏封面，默认为 /models/homepageModelCover/demo.jpg
+  homepageCoverFallback?: string;
   description?: string; // 模型描述
   use_i2i: boolean;
   use_t2i: boolean;
@@ -40,6 +46,18 @@ export const ALL_MODELS: ModelConfig[] = [
     name: "Wai-SDXL-V150",
     image: "/models/Wai-SDXL-V150.jpg",
     homepageCover: "/models/homepageModelCover/wai.png",
+    description: "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
+    use_i2i: false,
+    use_t2i: true,
+    maxImages: 0,
+    tags: ["animeSpecialty"],
+    isRecommended: true
+  },
+  {
+    id: "Wai-SDXL-V170",
+    name: "Wai-SDXL-V170",
+    image: "/models/Wai-SDXL-V170.jpg",
+    homepageCover: "/models/homepageModelCover/wai17.png",
     description: "一个基于SDXL、光辉系列的第三方社区模型，特长动漫类角色的绘制。",
     use_i2i: false,
     use_t2i: true,
@@ -173,6 +191,18 @@ export const ALL_MODELS: ModelConfig[] = [
     requiresLogin: true
   },
   {
+    id: "gpt-image-2",
+    name: "GPT-image-2",
+    image: "/images/gpt-image-2.png",
+    homepageCover: "/images/gpt-image-2.png",
+    description: "GPT-image-2 supports text-to-image generation and single-image editing with Chinese prompts.",
+    use_i2i: true,
+    use_t2i: true,
+    maxImages: 1,
+    tags: ["chineseSupport"],
+    requiresLogin: true
+  },
+  {
     id: "nano-banana-2",
     name: "Nano Banana 2",
     image: "/models/nano-banana-2.jpg",
@@ -203,24 +233,53 @@ export function isModelConfigured(modelId: string): boolean {
   return true;
 }
 
+function withModelOssAssets(model: ModelConfig): ModelConfig {
+  return {
+    ...model,
+    image: getHomepageAsset(model.image),
+    imageFallback: model.image,
+    homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
+    homepageCoverFallback: model.homepageCover,
+  };
+}
+
+let availableModelsCache: ModelConfig[] | null = null;
+let availableModelsRequest: Promise<ModelConfig[]> | null = null;
+
 /**
  * 从API获取可用的模型列表（基于环境变量配置）
  * @returns Promise<ModelConfig[]> 可用的模型配置列表
  */
 export async function getAvailableModels(): Promise<ModelConfig[]> {
-  try {
-    const response = await fetch('/api/models');
-    if (!response.ok) {
-      throw new Error('Failed to fetch available models');
-    }
-    
-    const data = await response.json();
-    return data.models || [];
-  } catch (error) {
-    console.error('Error fetching available models:', error);
-    // 如果API调用失败，返回所有模型作为后备
-    return ALL_MODELS;
+  if (availableModelsCache) {
+    return availableModelsCache;
   }
+
+  if (availableModelsRequest) {
+    return availableModelsRequest;
+  }
+
+  availableModelsRequest = (async () => {
+    try {
+      const response = await fetch('/api/models');
+      if (!response.ok) {
+        throw new Error('Failed to fetch available models');
+      }
+
+      const data = await response.json();
+      const models = data.models || [];
+      availableModelsCache = models;
+      return models;
+    } catch (error) {
+      console.error('Error fetching available models:', error);
+      // 如果API调用失败，返回所有模型作为后备
+      return ALL_MODELS.map(withModelOssAssets);
+    } finally {
+      availableModelsRequest = null;
+    }
+  })();
+
+  return availableModelsRequest;
 }
 
 /**
@@ -228,7 +287,7 @@ export async function getAvailableModels(): Promise<ModelConfig[]> {
  * @returns 所有模型配置列表
  */
 export function getAllModels(): ModelConfig[] {
-  return ALL_MODELS;
+  return ALL_MODELS.map(withModelOssAssets);
 }
 
 /**
@@ -304,6 +363,12 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
     normalResolutionPixels: 1024 * 1024,      // 1048576
     highResolutionPixels: 1416 * 1416,       // 2005056
   },
+  "Wai-SDXL-V170": {
+    normalSteps: 20,
+    highSteps: 30,
+    normalResolutionPixels: 1024 * 1024,
+    highResolutionPixels: 1416 * 1416,
+  },
   // 其他模型默认配置（如果需要可以添加）
   "Flux-Krea": {
     normalSteps: 10,
@@ -353,6 +418,18 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
     normalResolutionPixels: null,
     highResolutionPixels: null,
   },
+  "gpt-image-2": {
+    normalSteps: null,
+    highSteps: null,
+    normalResolutionPixels: null,
+    highResolutionPixels: null,
+  },
+  "gpt-image-2.0": {
+    normalSteps: null,
+    highSteps: null,
+    normalResolutionPixels: null,
+    highResolutionPixels: null,
+  },
   "nano-banana-2": {
     normalSteps: null,
     highSteps: null,
@@ -372,6 +449,14 @@ export const GROK_RATIO_SIZES: Record<string, { width: number; height: number }>
 
 /** grok-imagine-1.0 支持的比例列表 */
 export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
+
+export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
+export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
+
+export function isGptImage2Model(modelId?: string | null): boolean {
+  const normalizedModelId = modelId?.trim().toLowerCase();
+  return Boolean(normalizedModelId && GPT_IMAGE_2_MODEL_IDS.includes(normalizedModelId as typeof GPT_IMAGE_2_MODEL_IDS[number]));
+}
 
 /**
  * nano-banana-2 支持的比例列表
@@ -436,6 +521,10 @@ export function supportsResolutionModification(modelId: string): boolean {
  * @returns 是否仅限登录用户
  */
 export function isLoginRequiredModel(modelId: string): boolean {
+  if (isGptImage2Model(modelId)) {
+    return true;
+  }
+
   const model = ALL_MODELS.find(m => m.id === modelId);
   return model?.requiresLogin === true;
 }

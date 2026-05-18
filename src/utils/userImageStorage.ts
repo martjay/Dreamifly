@@ -1,10 +1,12 @@
 import { db } from '@/db'
 import { userGeneratedImages, user } from '@/db/schema'
-import { eq, asc, desc, sql, and } from 'drizzle-orm'
+import { eq, asc, desc, sql, and, inArray } from 'drizzle-orm'
 import { uploadToOSS, deleteFromOSS } from './oss'
-import { moderateGeneratedImage } from './imageModeration'
 import { getImageStorageConfig } from './points'
 import { encodeMediaForStorage } from './mediaStorage'
+import { getMediaViewConsentMap } from './mediaViewConsent'
+import type { VisualRiskLevel } from './visualModeration'
+import { ensureCommunityTagsForSavedMedia } from './communityTags'
 
 /**
  * 检查用户是否为订阅用户（实时检查）
@@ -98,6 +100,13 @@ export async function saveUserGeneratedImage(
     height?: number
     ipAddress?: string // 客户端IP地址（用于未登录用户记录）
     referenceImages?: string[] // 参考图的base64数组（不包含data:image前缀）
+    moderationLevel?: VisualRiskLevel
+  },
+  options?: {
+    /**
+     * 已在上层完成审核时可跳过（例如：生成接口同步审核通过后再保存）
+     */
+    skipModeration?: boolean
   }
 ): Promise<string> {
   // 1. 检查是否为管理员（管理员不记录未通过审核的图片，但可以保存通过的图片）
@@ -132,30 +141,20 @@ export async function saveUserGeneratedImage(
   const encodedBuffer = encodeMediaForStorage(buffer)
   
   // 5. 审核（图片和提示词都需要通过）
-  const moderationBaseUrl = process.env.AVATAR_MODERATION_BASE_URL
-  const moderationApiKey = process.env.AVATAR_MODERATION_API_KEY || ''
-  const moderationModel = process.env.AVATAR_MODERATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8'
-  const imageModerationPrompt = process.env.GENERATED_IMAGE_MODERATION_PROMPT || 
-    '请判断图片的内容与文字是否可以在公共场所展示，评判标准包括但不限于不应该包含"黄色"、"血腥"、"过于夸张的暴力场景"，你只需输出是或者否即可'
-  const promptModerationPrompt = process.env.PROMPT_MODERATION_PROMPT || 
-    '请判断以下图片生成提示词是否可以在公共场所使用，评判标准包括但不限于不应该包含"黄色"、"血腥"、"暴力"、"政治敏感"等内容，你只需输出是或者否即可。提示词：{prompt}'
-  
-  if (moderationBaseUrl) {
-    // 3.1 图片审核
-    const imageApproved = await moderateGeneratedImage(
-      buffer,
-      'generated-image.png',
-      moderationBaseUrl,
-      moderationApiKey,
-      moderationModel,
-      imageModerationPrompt
-    )
-    
-    if (!imageApproved) {
+  if (!options?.skipModeration) {
+    const { moderateGeneratedOutput } = await import('./moderationFlow')
+
+    const decision = await moderateGeneratedOutput({
+      imageBuffer: buffer,
+      prompt: metadata?.prompt,
+      hasReferenceImages: Boolean(metadata?.referenceImages && metadata.referenceImages.length > 0),
+    })
+
+    if (!decision.approved) {
       // 保存未通过审核的图片
       try {
         const { saveRejectedImage } = await import('./rejectedImageStorage')
-        
+
         // 先保存参考图（如果有）
         let referenceImageUrls: string[] = []
         if (metadata?.referenceImages && metadata.referenceImages.length > 0) {
@@ -166,7 +165,10 @@ export async function saveUserGeneratedImage(
             console.error('保存未通过审核图片的参考图失败:', error)
           }
         }
-        
+
+        const rejectionReason =
+          decision.reason === 'prompt' ? 'prompt' : decision.reason === 'image' ? 'image' : 'both'
+
         await saveRejectedImage(buffer, {
           userId: userId || null,
           ipAddress: metadata?.ipAddress,
@@ -174,62 +176,14 @@ export async function saveUserGeneratedImage(
           model: metadata?.model,
           width: metadata?.width,
           height: metadata?.height,
-          rejectionReason: 'image',
+          rejectionReason,
           referenceImages: referenceImageUrls,
         })
       } catch (error) {
         console.error('保存未通过审核图片失败:', error)
       }
-      throw new Error('图片审核未通过，无法保存')
+      throw new Error('审核未通过，无法保存')
     }
-    
-    // 3.2 提示词审核（如果提供了提示词）
-    let promptApproved = true
-    if (metadata?.prompt && metadata.prompt.trim()) {
-      const { moderatePrompt } = await import('./imageModeration')
-      promptApproved = await moderatePrompt(
-        metadata.prompt,
-        moderationBaseUrl,
-        moderationApiKey,
-        moderationModel,
-        promptModerationPrompt
-      )
-      
-      if (!promptApproved) {
-        // 保存未通过审核的图片
-        try {
-          const { saveRejectedImage } = await import('./rejectedImageStorage')
-          
-          // 先保存参考图（如果有）
-          let referenceImageUrls: string[] = []
-          if (metadata?.referenceImages && metadata.referenceImages.length > 0) {
-            try {
-              const { saveReferenceImages } = await import('./referenceImageStorage')
-              referenceImageUrls = await saveReferenceImages(metadata.referenceImages)
-            } catch (error) {
-              console.error('保存未通过审核图片的参考图失败:', error)
-            }
-          }
-          
-          await saveRejectedImage(buffer, {
-            userId: userId || null,
-            ipAddress: metadata?.ipAddress,
-            prompt: metadata?.prompt,
-            model: metadata?.model,
-            width: metadata?.width,
-            height: metadata?.height,
-            rejectionReason: 'prompt',
-            referenceImages: referenceImageUrls,
-          })
-        } catch (error) {
-          console.error('保存未通过审核图片失败:', error)
-        }
-        throw new Error('提示词审核未通过，无法保存')
-      }
-    }
-    
-    // 如果图片和提示词都通过了，但之前图片审核失败过（理论上不会到这里，但为了完整性）
-    // 这里不需要额外处理，因为如果图片审核失败，已经在上面的 if 中 throw 了
   }
   
   // 6. 审核通过后，保存参考图到OSS（如果有参考图）
@@ -331,6 +285,11 @@ export async function saveUserGeneratedImage(
       model: metadata?.model,
       width: metadata?.width,
       height: metadata?.height,
+      moderationLevel: metadata?.moderationLevel || 'low',
+      manualReviewStatus: 'pending',
+      manualReviewedAt: null,
+      manualReviewedBy: null,
+      nsfw: metadata?.moderationLevel ? metadata.moderationLevel !== 'low' : false,
       userRole,
       userAvatar,
       userNickname,
@@ -338,6 +297,12 @@ export async function saveUserGeneratedImage(
       referenceImages: referenceImageUrls, // 保存参考图URL数组
       createdAt: new Date(),
       updatedAt: new Date(),
+    })
+
+    void ensureCommunityTagsForSavedMedia({
+      mediaId: imageId,
+      prompt: metadata?.prompt,
+      imageBuffer: buffer,
     })
     
     // 10. 自动清理超出数量的旧媒体（图片+视频，从前往后删除，保留最新的）
@@ -360,6 +325,8 @@ export async function getUserGeneratedImages(
   mediaType?: string | null
   prompt?: string | null
   model?: string | null
+  moderationLevel?: string | null
+  hasViewConsent: boolean
   width?: number | null
   height?: number | null
   duration?: number | null
@@ -367,13 +334,19 @@ export async function getUserGeneratedImages(
   frameCount?: number | null
   createdAt: Date
 }>> {
-  const images = await db
+  const conditions = and(
+    eq(userGeneratedImages.userId, userId),
+    inArray(userGeneratedImages.moderationLevel, ['low', 'medium'])
+  )
+
+  const baseQuery = db
     .select({
       id: userGeneratedImages.id,
       imageUrl: userGeneratedImages.imageUrl,
       mediaType: userGeneratedImages.mediaType,
       prompt: userGeneratedImages.prompt,
       model: userGeneratedImages.model,
+      moderationLevel: userGeneratedImages.moderationLevel,
       width: userGeneratedImages.width,
       height: userGeneratedImages.height,
       duration: userGeneratedImages.duration,
@@ -382,14 +355,30 @@ export async function getUserGeneratedImages(
       createdAt: userGeneratedImages.createdAt,
     })
     .from(userGeneratedImages)
-    .where(eq(userGeneratedImages.userId, userId))
-    .orderBy(desc(userGeneratedImages.createdAt)) // 按创建时间降序，最新的在前
-  
-  if (limit) {
-    return images.slice(0, limit)
-  }
-  
-  return images
+    .where(conditions)
+    .orderBy(desc(userGeneratedImages.createdAt))
+
+  const images = typeof limit === 'number' ? await baseQuery.limit(limit) : await baseQuery
+  const consentMap = await getMediaViewConsentMap(userId, images.map((image) => image.id))
+
+  return images.map((image) => ({
+    ...image,
+    hasViewConsent: Boolean(consentMap[image.id]),
+  }))
+}
+
+export async function getUserGeneratedImagesCount(userId: string): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userGeneratedImages)
+    .where(
+      and(
+        eq(userGeneratedImages.userId, userId),
+        inArray(userGeneratedImages.moderationLevel, ['low', 'medium'])
+      )
+    )
+
+  return Number(rows[0]?.count || 0)
 }
 
 /**
