@@ -5,6 +5,7 @@ import { ExtendedUser } from '@/types/auth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import AdminSidebar from '@/components/AdminSidebar'
+import ProfanityBatchActions from '@/components/admin/ProfanityBatchActions'
 import Image from 'next/image'
 import { transferUrl } from '@/utils/locale'
 import { useAvatar } from '@/contexts/AvatarContext'
@@ -119,6 +120,9 @@ export default function GodEyePage() {
   const [formProfanityWord, setFormProfanityWord] = useState('')
   const [formProfanityEnabled, setFormProfanityEnabled] = useState(true)
   const [savingProfanity, setSavingProfanity] = useState(false)
+  const [profanitySelectionMode, setProfanitySelectionMode] = useState(false)
+  const [selectedProfanityIds, setSelectedProfanityIds] = useState<Set<number>>(new Set())
+  const [batchUpdatingProfanity, setBatchUpdatingProfanity] = useState(false)
   const [testPrompt, setTestPrompt] = useState('') // 测试提示词
   const [testResult, setTestResult] = useState('') // 测试结果
 
@@ -236,6 +240,14 @@ export default function GodEyePage() {
 
     fetchProfanityWords()
   }, [isAdmin, activeTab])
+
+  useEffect(() => {
+    setSelectedProfanityIds((previous) => {
+      const existingIds = new Set(profanityWords.map((item) => item.id))
+      const next = new Set([...previous].filter((id) => existingIds.has(id)))
+      return next.size === previous.size ? previous : next
+    })
+  }, [profanityWords])
 
   // 获取通过审核图片列表
   useEffect(() => {
@@ -375,6 +387,41 @@ export default function GodEyePage() {
     setRejectedPage(1)
   }, [activeTab])
 
+  const selectedProfanityCount = selectedProfanityIds.size
+  const isAllProfanitySelected = profanityWords.length > 0 && profanityWords.every((item) => selectedProfanityIds.has(item.id))
+
+  const handleToggleProfanitySelectionMode = () => {
+    setProfanitySelectionMode((previous) => {
+      if (previous) {
+        setSelectedProfanityIds(new Set())
+      }
+      return !previous
+    })
+    setProfanityError('')
+    setProfanitySuccess('')
+  }
+
+  const handleToggleProfanitySelection = (id: number) => {
+    setSelectedProfanityIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleToggleSelectAllProfanity = () => {
+    setSelectedProfanityIds((previous) => {
+      if (profanityWords.length > 0 && profanityWords.every((item) => previous.has(item.id))) {
+        return new Set()
+      }
+      return new Set(profanityWords.map((item) => item.id))
+    })
+  }
+
   // 违禁词：打开新增弹窗
   const handleOpenAddProfanityModal = () => {
     setEditingProfanity(null)
@@ -495,6 +542,60 @@ export default function GodEyePage() {
       console.error('Error toggling profanity enabled:', error)
       setProfanityError(error instanceof Error ? error.message : '更新失败')
       setTimeout(() => setProfanityError(''), 3000)
+    }
+  }
+
+  // 违禁词：批量切换启用状态
+  const handleBatchUpdateProfanityEnabled = async (isEnabled: boolean) => {
+    const ids = Array.from(selectedProfanityIds)
+    if (ids.length === 0) {
+      setProfanityError('请先选择要操作的违禁词')
+      setTimeout(() => setProfanityError(''), 3000)
+      return
+    }
+
+    setBatchUpdatingProfanity(true)
+    setProfanityError('')
+    setProfanitySuccess('')
+
+    try {
+      const response = await fetch('/api/admin/profanity-words', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ids,
+          isEnabled,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || '批量更新失败')
+      }
+
+      setProfanitySuccess(`已批量${isEnabled ? '启用' : '禁用'} ${ids.length} 个违禁词`)
+      setSelectedProfanityIds(new Set())
+
+      try {
+        const listRes = await fetch(`/api/admin/profanity-words?t=${Date.now()}`)
+        const listData = await listRes.json()
+        if (listRes.ok) {
+          setProfanityWords(listData.words || [])
+        }
+      } catch (e) {
+        console.error('刷新违禁词列表失败:', e)
+      }
+
+      setTimeout(() => setProfanitySuccess(''), 3000)
+    } catch (error) {
+      console.error('Error batch updating profanity words:', error)
+      setProfanityError(error instanceof Error ? error.message : '批量更新失败')
+      setTimeout(() => setProfanityError(''), 3000)
+    } finally {
+      setBatchUpdatingProfanity(false)
     }
   }
 
@@ -1958,20 +2059,28 @@ export default function GodEyePage() {
               <div className="space-y-4">
                 {/* 操作栏 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="text-sm text-gray-600">
                       共 {profanityWords.length} 个违禁词，其中{' '}
                       {profanityWords.filter((w) => w.isEnabled).length} 个已启用
+                      {profanitySelectionMode && (
+                        <span className="ml-2 text-orange-600">
+                          已选择 {selectedProfanityCount} 个
+                        </span>
+                      )}
                     </div>
-                    <button
-                      onClick={handleOpenAddProfanityModal}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-400 to-amber-400 text-white font-semibold rounded-lg hover:from-orange-500 hover:to-amber-500 transition-all flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      添加违禁词
-                    </button>
+                    <ProfanityBatchActions
+                      selectionMode={profanitySelectionMode}
+                      totalCount={profanityWords.length}
+                      selectedCount={selectedProfanityCount}
+                      allSelected={isAllProfanitySelected}
+                      loading={batchUpdatingProfanity}
+                      onToggleSelectAll={handleToggleSelectAllProfanity}
+                      onBatchDisable={() => handleBatchUpdateProfanityEnabled(false)}
+                      onBatchEnable={() => handleBatchUpdateProfanityEnabled(true)}
+                      onToggleSelectionMode={handleToggleProfanitySelectionMode}
+                      onAdd={handleOpenAddProfanityModal}
+                    />
                   </div>
                 </div>
 
@@ -2046,6 +2155,18 @@ export default function GodEyePage() {
                       <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
+                            {profanitySelectionMode && (
+                              <th className="px-6 py-3 text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={isAllProfanitySelected}
+                                  onChange={handleToggleSelectAllProfanity}
+                                  disabled={batchUpdatingProfanity}
+                                  className="h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400 disabled:cursor-not-allowed"
+                                  aria-label="选择全部违禁词"
+                                />
+                              </th>
+                            )}
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               违禁词
                             </th>
@@ -2065,7 +2186,24 @@ export default function GodEyePage() {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {profanityWords.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                            <tr
+                              key={item.id}
+                              className={`hover:bg-gray-50 transition-colors ${
+                                selectedProfanityIds.has(item.id) ? 'bg-orange-50/60' : ''
+                              }`}
+                            >
+                              {profanitySelectionMode && (
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProfanityIds.has(item.id)}
+                                    onChange={() => handleToggleProfanitySelection(item.id)}
+                                    disabled={batchUpdatingProfanity}
+                                    className="h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400 disabled:cursor-not-allowed"
+                                    aria-label={`选择违禁词 ${item.word}`}
+                                  />
+                                </td>
+                              )}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">{item.word}</div>
                               </td>
@@ -2267,4 +2405,3 @@ export default function GodEyePage() {
     </div>
   )
 }
-
