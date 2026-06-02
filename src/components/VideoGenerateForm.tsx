@@ -464,7 +464,6 @@ const VideoGenerateForm = ({
         video: isVideoEdit ? sourceVideo || undefined : undefined,
       })
       setPrompt(optimizedPrompt)
-      setToast({ message: hasPrompt ? (t('form.promptOptimized') || 'Prompt optimized.') : (t('form.promptGenerated') || 'Prompt generated.'), type: 'success' })
     } catch (error) {
       console.error('Failed to optimize prompt:', error)
       setToast({ message: error instanceof Error ? error.message : 'Failed to optimize prompt.', type: 'error' })
