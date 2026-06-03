@@ -713,21 +713,6 @@ export async function POST(request: Request) {
         
         const hasQuota = consumedDailyQuota;
 
-        if (hasQuota && isGptImage2Model(model)) {
-          await db
-            .update(user)
-            .set({
-              dailyRequestCount: sql`${user.dailyRequestCount} + 1`,
-              updatedAt: sql`now()`,
-            })
-            .where(
-              and(
-                eq(user.id, userId),
-                lt(user.dailyRequestCount, maxDailyRequests)
-              )
-            );
-        }
-        
         // 获取模型基础积分消耗
         const baseCost = await getModelBaseCost(model);
         
