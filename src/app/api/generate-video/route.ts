@@ -362,8 +362,8 @@ export async function POST(request: Request) {
       }
 
       const spendDesc = modelConfig.provider === 'happyhorse'
-        ? `Video generation - ${model} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
-        : `Video generation - ${model} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
+        ? `视频生成 - ${model} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
+        : `视频生成 - ${model} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
 
       spentRecordId = await deductPoints(userId, pointsCost, spendDesc)
       if (!spentRecordId) {

@@ -94,6 +94,17 @@ function getTimeRangeEndDate(range: TimeRange): Date | null {
 function categorizeConsumption(description: string | null): string {
   if (!description) return '其他'
 
+  const videoModelNameMap: Record<string, string> = {
+    'happyhorse-1.0-t2v': 'HappyHorse T2V',
+    'happyhorse-1.0-i2v': 'HappyHorse I2V',
+    'happyhorse-1.0-r2v': 'HappyHorse R2V',
+    'happyhorse-1.0-video-edit': 'HappyHorse Video Edit',
+  }
+
+  const formatVideoCategory = (modelName: string) => {
+    return `视频生成-${videoModelNameMap[modelName] ?? modelName}`
+  }
+
   if (description.startsWith('图像生成 -')) {
     // 提取模型名称
     const modelMatch = description.match(/图像生成 - ([^(]+)/)
@@ -107,7 +118,16 @@ function categorizeConsumption(description: string | null): string {
     // 提取模型名称
     const modelMatch = description.match(/视频生成 - ([^(]+)/)
     if (modelMatch) {
-      return `视频生成-${modelMatch[1].trim()}`
+      return formatVideoCategory(modelMatch[1].trim())
+    }
+    return '视频生成'
+  }
+
+  if (description.startsWith('Video generation -')) {
+    // 兼容历史视频消费记录，旧记录使用英文描述
+    const modelMatch = description.match(/Video generation - ([^(]+)/)
+    if (modelMatch) {
+      return formatVideoCategory(modelMatch[1].trim())
     }
     return '视频生成'
   }
