@@ -200,7 +200,7 @@ const PromptInput = ({
               {selectedStyle || t('form.styleButton')}
               <div 
                 ref={styleDropdownRef} 
-                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 md:p-4 grid grid-cols-3 gap-2 md:gap-3 md:gap-y-4 w-[280px] md:w-auto md:min-w-[450px] z-50 justify-items-center max-h-[70vh] overflow-y-auto custom-scrollbar transition-all duration-200 ${
+                className={`absolute top-full left-0 md:left-1/2 md:-translate-x-1/2 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 md:p-4 grid grid-cols-3 gap-2 md:gap-3 md:gap-y-4 w-[min(280px,calc(100vw-2rem))] md:w-auto md:min-w-[450px] z-50 justify-items-center max-h-[70vh] overflow-y-auto custom-scrollbar transition-all duration-200 ${
                   isStyleOpen ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none'
                 }`}
               >
