@@ -129,9 +129,23 @@ export async function POST(request: Request) {
         isPremium = currentUser[0].isPremium || false
       }
     }
+
+    // 先解析请求体，后续额度逻辑需要根据模型判断是否允许使用免费额度抵扣
+    const body = await request.json()
+    let prompt: string
+    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt } = body
+    let generationSteps = Number(steps)
+    if (model === 'Wai-SDXL-V170') {
+      generationSteps = generationSteps >= 30 ? 30 : 20
+    }
+    prompt = originalPrompt
+    // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
+    currentModelId = model
+    // 第三方独立计费模型只走积分，不消耗免费额度
+    const usesFreeQuota = model !== 'nano-banana-2' && !isGptImage2Model(model)
     
     // 如果用户未登录，检查IP每日调用次数限制
-    if (!session?.user && clientIP) {
+    if (!session?.user && clientIP && usesFreeQuota) {
       // 获取未登录用户IP每日限额配置（优先使用数据库配置，否则使用环境变量，最后使用默认值100）
       let maxDailyRequests: number;
       try {
@@ -473,8 +487,8 @@ export async function POST(request: Request) {
             .where(eq(user.id, userId));
         }
 
-        // 管理员不限次，其他用户检查次数限制
-        if (!isAdmin) {
+        // 管理员不限次，其他用户检查次数限制；独立计费模型不消耗免费额度
+        if (!isAdmin && usesFreeQuota) {
           // 获取用户限额配置（优先使用数据库配置，否则使用环境变量）
           let maxDailyRequests: number;
           try {
@@ -568,7 +582,7 @@ export async function POST(request: Request) {
           } else {
             consumedDailyQuota = true
           }
-        } else {
+        } else if (usesFreeQuota) {
           // 管理员不限次，直接更新计数
           const updateData: any = {
             dailyRequestCount: sql`${user.dailyRequestCount} + 1`,
@@ -583,18 +597,6 @@ export async function POST(request: Request) {
       }
       
     }
-    
-    // 解析请求体（提前解析，以便检查积分和额度）
-    const body = await request.json()
-    let prompt: string
-    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt } = body
-    let generationSteps = Number(steps)
-    if (model === 'Wai-SDXL-V170') {
-      generationSteps = generationSteps >= 30 ? 30 : 20
-    }
-    prompt = originalPrompt
-    // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
-    currentModelId = model
     
     // 对 prompt 进行违禁词过滤（文生图和图生图模式都生效）
     try {
