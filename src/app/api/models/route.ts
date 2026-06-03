@@ -18,7 +18,7 @@ const MODEL_ENV_MAP = {
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
   "gpt-image-2": "GPT_IMAGE_2_API_URL",
-  "nano-banana-2": "REPLICATE_API_TOKEN"
+  "nano-banana-2": "BANANA_ROUTER_API_KEY"
 } as const;
 
 /**

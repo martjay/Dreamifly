@@ -37,7 +37,7 @@ export async function getPointsConfig() {
   const envGrokVideoCost = parseInt(process.env.GROK_VIDEO_COST || '150', 10);
   const envHappyHorseVideoCost720P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_720P || '150', 10);
   const envHappyHorseVideoCost1080P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_1080P || '200', 10);
-  const envNanoBanana2Cost = parseInt(process.env.NANO_BANANA_2_COST || '10', 10);
+  const envNanoBanana2Cost = parseInt(process.env.NANO_BANANA_2_COST || '30', 10);
 
   return {
     regularUserDailyPoints: configData?.regularUserDailyPoints ?? envRegularPoints,

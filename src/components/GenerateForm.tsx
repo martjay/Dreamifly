@@ -976,7 +976,9 @@ export default function GenerateForm({
                       </button>
                     </div>
                     <p className="text-xs sm:text-sm text-gray-600/80 leading-5">
-                      提供更高的生成质量，但也会花费少许积分
+                      {model === 'nano-banana-2'
+                        ? '默认使用 1K，开启后使用 4K，消耗更多积分'
+                        : '提供更高的生成质量，但也会花费少许积分'}
                     </p>
                     {stepsError && (
                       <p className="mt-1 text-sm text-red-400">{stepsError}</p>

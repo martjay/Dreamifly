@@ -860,7 +860,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
 
     // nano-banana-2 使用独立的比例 → 像素体系
-    // 普通画质对应 1K 基准尺寸，高画质由后续的高分辨率开关自动放大到 2K
+    // 普通画质对应 1K 基准尺寸，高画质由后续的高分辨率开关自动放大并映射为 4K
     if (model === 'nano-banana-2') {
       const baseSize = NANO_BANANA_RATIO_SIZES[ratio] || NANO_BANANA_RATIO_SIZES['1:1'];
       if (isHighResolution) {

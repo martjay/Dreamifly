@@ -18,7 +18,7 @@ const MODEL_ENV_MAP = {
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
   "gpt-image-2": "GPT_IMAGE_2_API_URL",
-  "nano-banana-2": "REPLICATE_API_TOKEN"
+  "nano-banana-2": "BANANA_ROUTER_API_KEY"
 } as const;
 
 // 基础模型配置
@@ -462,23 +462,18 @@ export function isGptImage2Model(modelId?: string | null): boolean {
  * nano-banana-2 支持的比例列表
  * 注意：这是独立的比例体系，不与其他模型共享
  */
-export const NANO_BANANA_ALLOWED_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '21:9'];
+export const NANO_BANANA_ALLOWED_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 
 /**
  * nano-banana-2 各比例对应的 1K 基准尺寸（普通画质）
- * 高画质时前端会通过像素计算自动翻倍（normalResolutionPixels → highResolutionPixels）
+ * 高画质时前端会通过像素计算自动翻倍，后端会映射为 BananaRouter 4K。
  */
 export const NANO_BANANA_RATIO_SIZES: Record<string, { width: number; height: number }> = {
   '1:1':  { width: 1024, height: 1024 },
-  '16:9': { width: 1368, height: 768 },
-  '9:16': { width: 768,  height: 1368 },
   '4:3':  { width: 1024, height: 768 },
   '3:4':  { width: 768,  height: 1024 },
-  '3:2':  { width: 1024, height: 680 },
-  '2:3':  { width: 680,  height: 1024 },
-  '4:5':  { width: 816,  height: 1024 },
-  '5:4':  { width: 1024, height: 816 },
-  '21:9': { width: 1024, height: 440 },
+  '16:9': { width: 1368, height: 768 },
+  '9:16': { width: 768,  height: 1368 },
 };
 
 /**
