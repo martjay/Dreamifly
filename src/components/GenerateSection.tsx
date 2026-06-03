@@ -272,6 +272,14 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   // 用户认证状态
   const authStatus = isPending ? 'loading' : (session?.user ? 'authenticated' : 'unauthenticated') as 'loading' | 'authenticated' | 'unauthenticated';
 
+  useEffect(() => {
+    const modelConfig = getAllModels().find(m => m.id === model);
+    const maxImages = modelConfig?.maxImages ?? 1;
+    if (uploadedImages.length <= maxImages) {
+      setImageCountError(null);
+    }
+  }, [model, uploadedImages.length]);
+
   // 当用户未登录时，强制将生成数量设置为1
   useEffect(() => {
     if (authStatus === 'unauthenticated' && batch_size > 1) {
@@ -458,12 +466,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       }
     ];
     
-    const currentModel = models.find(m => m.id === model);
-    const maxImages = currentModel?.maxImages ?? 1;
-    
     // 首先检查图生图模型是否上传了图片（优先级最高，避免被后续逻辑覆盖）
     const allModels = getAllModels();
     const modelConfig = allModels.find(m => m.id === model);
+    const currentModel = models.find(m => m.id === model);
+    const maxImages = modelConfig?.maxImages ?? currentModel?.maxImages ?? 1;
     // 支持中文以 modelConfig（ALL_MODELS）为准，避免硬编码列表漏掉新模型（如 grok-imagine-1.0）
     const supportsChinese = modelConfig?.tags?.includes('chineseSupport') ?? false;
     

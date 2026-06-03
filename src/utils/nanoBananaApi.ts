@@ -154,8 +154,18 @@ export async function generateNanoBananaImage(params: NanoBananaParams): Promise
     throw new Error('nano-banana-2 的 API Key 未配置，请检查 BANANA_ROUTER_API_KEY 环境变量')
   }
 
-  const baseUrl = (process.env.BANANA_ROUTER_BASE_URL || 'https://api.bananarouter.com').replace(/\/+$/, '')
-  const model = process.env.BANANA_ROUTER_IMAGE_MODEL || 'gemini-3.1-flash-image-preview'
+  const configuredBaseUrl = process.env.BANANA_ROUTER_BASE_URL
+  if (!configuredBaseUrl?.trim()) {
+    throw new Error('nano-banana-2 的 API URL 未配置，请检查 BANANA_ROUTER_BASE_URL 环境变量')
+  }
+
+  const configuredModel = process.env.BANANA_ROUTER_IMAGE_MODEL
+  if (!configuredModel?.trim()) {
+    throw new Error('nano-banana-2 的模型名称未配置，请检查 BANANA_ROUTER_IMAGE_MODEL 环境变量')
+  }
+
+  const baseUrl = configuredBaseUrl.trim().replace(/\/+$/, '')
+  const model = configuredModel.trim()
   const endpoint = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`
   const aspectRatio = deriveAspectRatio(params.width, params.height)
   const imageSize = deriveImageSize(params.width, params.height)

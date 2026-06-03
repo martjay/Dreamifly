@@ -368,9 +368,18 @@ export default function GenerateForm({
   }, [])
 
   // 获取当前模型信息
-  const currentModel = availableModels.find(m => m.id === model);
+  const currentModel = availableModels.find(m => m.id === model) || getAllModels().find(m => m.id === model);
   const maxImages = currentModel?.maxImages || 1;
   const canUploadMore = uploadedImages.length < maxImages;
+
+  useEffect(() => {
+    if (uploadedImages.length > maxImages) {
+      setUploadedImages((prev: string[]) => prev.slice(0, maxImages))
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }, [maxImages, uploadedImages.length, setUploadedImages])
 
   // 上传图片区域，始终显示
   const renderImageUploadSection = () => {
@@ -412,7 +421,7 @@ export default function GenerateForm({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 ${
+              className={`${!canUploadMore ? 'hidden' : ''} group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 ${
                 canUploadMore 
                   ? (isDragging 
                       ? 'border-orange-500 bg-gradient-to-br from-orange-100/20 to-amber-100/20 shadow-lg shadow-orange-400/20' 
@@ -522,8 +531,9 @@ export default function GenerateForm({
             setHeight(finalHeight)
 
             // 更新父组件中的图片数据（使用无前缀的 base64）
+            const nextImageCount = uploadedImages.length + 1
             setUploadedImages((prev: string[]) => [...prev, base64String])
-            switchToReferenceImageDefaultModel()
+            switchToReferenceImageDefaultModel(nextImageCount)
           }
           img.src = event.target.result as string
         }
@@ -596,8 +606,9 @@ export default function GenerateForm({
           setAspectRatio(ratio)
           setWidth(finalWidth)
           setHeight(finalHeight)
+          const nextImageCount = uploadedImages.length + 1
           setUploadedImages((prev: string[]) => [...prev, base64String])
-          switchToReferenceImageDefaultModel()
+          switchToReferenceImageDefaultModel(nextImageCount)
           console.log('GenerateForm: Successfully set uploadedImage to new base64 string')
           console.log('GenerateForm: New image dimensions:', finalWidth, 'x', finalHeight)
         }
@@ -644,10 +655,22 @@ export default function GenerateForm({
     }
   }
 
-  const switchToReferenceImageDefaultModel = () => {
-    const hasGptImage2 = availableModels.some(modelOption => modelOption.id === 'gpt-image-2')
-    if (hasGptImage2 && model !== 'gpt-image-2') {
-      setModel('gpt-image-2')
+  const switchToReferenceImageDefaultModel = (nextImageCount: number) => {
+    const currentModelConfig = availableModels.find(modelOption => modelOption.id === model) || getAllModels().find(modelOption => modelOption.id === model)
+    if (
+      currentModelConfig?.use_i2i &&
+      nextImageCount <= (currentModelConfig.maxImages || 0)
+    ) {
+      return
+    }
+
+    const fallbackModel = availableModels.find(modelOption =>
+      modelOption.use_i2i &&
+      nextImageCount <= (modelOption.maxImages || 0)
+    )
+
+    if (fallbackModel && fallbackModel.id !== model) {
+      setModel(fallbackModel.id)
     }
   }
 
@@ -685,9 +708,19 @@ export default function GenerateForm({
     const currentModel = filteredModels.find(m => m.id === model)
     const modelExistsInAll = availableModels.some(m => m.id === model)
     const isInitialModel = initialModelRef.current === model
+    const selectedModelConfig = availableModels.find(m => m.id === model) || getAllModels().find(m => m.id === model)
     
     // Qwen-Image-Edit 总是可用，不需要自动切换
     if (model === 'Qwen-Image-Edit') return;
+
+    // 当前模型本身支持图生图且图片数量没有超过上限时，不自动切换模型。
+    if (
+      uploadedImages.length > 0 &&
+      selectedModelConfig?.use_i2i &&
+      uploadedImages.length <= selectedModelConfig.maxImages
+    ) {
+      return
+    }
     
     // 如果模型是初始模型（可能是从URL传入的）且存在于所有模型中，即使暂时不可用也保留
     // 只有在因为图片数量限制导致模型不兼容时才切换
@@ -717,7 +750,7 @@ export default function GenerateForm({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadedImages.length, modelsLoading, availableModels.length])
+  }, [model, uploadedImages.length, modelsLoading, availableModels.length])
 
   // 处理从 URL 设置参考图片
   useEffect(() => {
@@ -756,8 +789,9 @@ export default function GenerateForm({
                   setHeight(finalHeight);
 
                   // 更新父组件中的图片数据（使用无前缀的 base64）
+                  const nextImageCount = uploadedImages.length + 1
                   setUploadedImages((prev: string[]) => [...prev, base64String]);
-                  switchToReferenceImageDefaultModel();
+                  switchToReferenceImageDefaultModel(nextImageCount);
                   
                   // 添加小延迟确保状态更新完成
                   setTimeout(() => {

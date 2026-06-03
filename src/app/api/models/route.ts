@@ -25,6 +25,14 @@ const MODEL_ENV_MAP = {
  * 检查模型是否在环境变量中配置了URL
  */
 function isModelConfigured(modelId: string): boolean {
+  if (modelId === 'nano-banana-2') {
+    return [
+      process.env.BANANA_ROUTER_API_KEY,
+      process.env.BANANA_ROUTER_BASE_URL,
+      process.env.BANANA_ROUTER_IMAGE_MODEL,
+    ].every(value => Boolean(value && value.trim() !== ''));
+  }
+
   const envVarName = MODEL_ENV_MAP[modelId as keyof typeof MODEL_ENV_MAP];
   if (!envVarName) {
     return false;

@@ -828,6 +828,9 @@ export async function POST(request: Request) {
     if (isGptImage2Model(model) && images && images.length > 1) {
       return NextResponse.json({ error: 'GPT-image-2 supports one input image per edit request' }, { status: 400 })
     }
+    if (model === 'nano-banana-2' && images && images.length > 3) {
+      return NextResponse.json({ error: 'nano-banana-2 supports up to 3 input images per edit request' }, { status: 400 })
+    }
     // 验证步数：根据模型配置验证
     const thresholds = getModelThresholds(model);
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
