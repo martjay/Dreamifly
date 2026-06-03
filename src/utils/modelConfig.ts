@@ -17,7 +17,7 @@ const MODEL_ENV_MAP = {
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
-  "gpt-image-2": "GPT_IMAGE_2_API_URL",
+  "gpt-image-2": "BANANA_ROUTER_API_KEY",
   "nano-banana-2": "BANANA_ROUTER_API_KEY"
 } as const;
 
@@ -222,6 +222,13 @@ export const ALL_MODELS: ModelConfig[] = [
  * @returns 是否配置了URL
  */
 export function isModelConfigured(modelId: string): boolean {
+  if (isGptImage2Model(modelId)) {
+    return [
+      process.env.BANANA_ROUTER_API_KEY,
+      process.env.BANANA_ROUTER_BASE_URL,
+    ].every(value => Boolean(value && value.trim() !== ''));
+  }
+
   const envVarName = MODEL_ENV_MAP[modelId as keyof typeof MODEL_ENV_MAP];
   if (!envVarName) {
     return false;

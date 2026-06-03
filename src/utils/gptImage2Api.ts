@@ -15,7 +15,7 @@ interface GptImage2Response {
   }>;
 }
 
-const MODEL_ID = 'gpt-image-2';
+const DEFAULT_MODEL_ID = 'gpt-image-2';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const REQUEST_TIMEOUT_MS = 600_000;
@@ -118,15 +118,16 @@ async function requestGptImage2(endpoint: string, init: RequestInit): Promise<st
 }
 
 export async function generateGptImage2(params: GptImage2Params): Promise<string> {
-  const apiUrl = process.env.GPT_IMAGE_2_API_URL;
-  const apiKey = process.env.GPT_IMAGE_2_API_KEY;
+  const apiUrl = process.env.BANANA_ROUTER_BASE_URL;
+  const apiKey = process.env.BANANA_ROUTER_API_KEY;
+  const model = process.env.GPT_IMAGE_2_MODEL?.trim() || DEFAULT_MODEL_ID;
 
   if (!apiUrl?.trim()) {
-    throw new Error('GPT-image-2 service URL is not configured. Please set GPT_IMAGE_2_API_URL.');
+    throw new Error('GPT-image-2 service URL is not configured. Please set BANANA_ROUTER_BASE_URL.');
   }
 
   if (!apiKey?.trim()) {
-    throw new Error('GPT-image-2 API key is not configured. Please set GPT_IMAGE_2_API_KEY.');
+    throw new Error('GPT-image-2 API key is not configured. Please set BANANA_ROUTER_API_KEY.');
   }
 
   const size = getGrokSizeString(params.width, params.height);
@@ -135,7 +136,7 @@ export async function generateGptImage2(params: GptImage2Params): Promise<string
   if (inputImage) {
     const { buffer, mimeType } = decodeInputImage(inputImage);
     const formData = new FormData();
-    formData.append('model', MODEL_ID);
+    formData.append('model', model);
     formData.append('prompt', params.prompt);
     formData.append('n', '1');
     formData.append('size', size);
@@ -157,7 +158,7 @@ export async function generateGptImage2(params: GptImage2Params): Promise<string
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: MODEL_ID,
+      model,
       prompt: params.prompt,
       n: 1,
       size,
