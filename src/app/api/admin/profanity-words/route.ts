@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { profanityWord, user } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { headers } from 'next/headers';
 
 /**
@@ -156,7 +156,49 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, word, isEnabled } = body;
+    const { id, ids, word, isEnabled } = body;
+
+    if (Array.isArray(ids)) {
+      if (ids.length === 0) {
+        return NextResponse.json(
+          { error: '请选择要更新的违禁词' },
+          { status: 400 }
+        );
+      }
+
+      if (word !== undefined) {
+        return NextResponse.json(
+          { error: '批量更新不支持修改违禁词内容' },
+          { status: 400 }
+        );
+      }
+
+      if (isEnabled === undefined) {
+        return NextResponse.json(
+          { error: '启用状态不能为空' },
+          { status: 400 }
+        );
+      }
+
+      const wordIds = ids.map((value) => Number(value));
+      if (wordIds.some((value) => !Number.isInteger(value) || value <= 0)) {
+        return NextResponse.json(
+          { error: '无效的违禁词ID' },
+          { status: 400 }
+        );
+      }
+
+      const updatedWords = await db
+        .update(profanityWord)
+        .set({
+          isEnabled: Boolean(isEnabled),
+          updatedAt: new Date(),
+        })
+        .where(inArray(profanityWord.id, wordIds))
+        .returning();
+
+      return NextResponse.json({ words: updatedWords });
+    }
 
     if (!id) {
       return NextResponse.json(
@@ -290,5 +332,4 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
-
 
