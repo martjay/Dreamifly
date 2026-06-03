@@ -188,7 +188,7 @@ const VideoGenerateForm = ({
         if (cancelled) return
         const models = data.models || []
         setAvailableModels(models)
-        if (models.length > 0 && !model) {
+        if (models.length > 0 && (!model || !models.some((m: VideoModelConfig) => m.id === model))) {
           const defaultModel = models.find((m: VideoModelConfig) => m.isRecommended) || models[0]
           setModel(defaultModel.id)
         }
