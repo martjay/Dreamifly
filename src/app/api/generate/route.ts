@@ -139,6 +139,9 @@ export async function POST(request: Request) {
       generationSteps = generationSteps >= 30 ? 30 : 20
     }
     prompt = originalPrompt
+    if (!prompt?.trim()) {
+      return NextResponse.json({ error: '请输入提示词' }, { status: 400 })
+    }
     // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
     currentModelId = model
     // 第三方独立计费模型只走积分，不消耗免费额度
@@ -812,8 +815,8 @@ export async function POST(request: Request) {
     if (width < 64 || height < 64) {
       return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
     }
-    if (isGptImage2Model(model) && images && images.length > 1) {
-      return NextResponse.json({ error: 'GPT-image-2 supports one input image per edit request' }, { status: 400 })
+    if (isGptImage2Model(model) && images && images.length > 3) {
+      return NextResponse.json({ error: 'GPT-image-2 supports up to 3 input images per edit request' }, { status: 400 })
     }
     if (model === 'nano-banana-2' && images && images.length > 3) {
       return NextResponse.json({ error: 'nano-banana-2 supports up to 3 input images per edit request' }, { status: 400 })

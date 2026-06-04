@@ -27,6 +27,7 @@ interface PromptInputProps {
   model?: string;
   hideRatioSelector?: boolean;
   extraContent?: ReactNode;
+  promptError?: string | null;
 }
 
 const PromptInput = ({
@@ -49,7 +50,8 @@ const PromptInput = ({
   extraCost = null,
   model,
   hideRatioSelector = false,
-  extraContent
+  extraContent,
+  promptError
 }: PromptInputProps) => {
   const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
@@ -77,7 +79,7 @@ const PromptInput = ({
     };
   }, [isStyleOpen, isRatioOpen]);
 
-  const shouldShowRatioSelector = !hideRatioSelector && !isGptImage2Model(model);
+  const shouldShowRatioSelector = !hideRatioSelector;
   const ratios = model === 'grok-imagine-1.0'
     ? GROK_ALLOWED_RATIOS
     : isGptImage2Model(model)
@@ -92,6 +94,8 @@ const PromptInput = ({
     }
   }, [shouldShowRatioSelector]);
 
+  const isExternalPaidImageModel = model === 'nano-banana-2' || isGptImage2Model(model);
+
   return (
     <div>
       <label htmlFor="prompt" className="flex items-center text-xs font-medium text-gray-800 mb-2.5">
@@ -103,10 +107,21 @@ const PromptInput = ({
           id="prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          className="w-full h-28 px-4 py-3 bg-white/95 backdrop-blur-sm border border-amber-400/40 rounded-2xl focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400/50 resize-none shadow-inner transition-all duration-300 text-gray-900 placeholder-gray-500 text-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className={`w-full h-28 px-4 py-3 bg-white/95 backdrop-blur-sm border rounded-2xl focus:ring-2 resize-none shadow-inner transition-all duration-300 text-gray-900 placeholder-gray-500 text-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
+            promptError
+              ? 'border-red-400/70 focus:ring-red-400/50 focus:border-red-400/60'
+              : 'border-amber-400/40 focus:ring-amber-400/50 focus:border-amber-400/50'
+          }`}
           placeholder={t('form.prompt.placeholder')}
           ref={promptRef}
+          aria-invalid={!!promptError}
+          aria-describedby={promptError ? 'prompt-error' : undefined}
         />
+        {promptError && (
+          <p id="prompt-error" className="-mt-1 text-xs font-medium text-red-600">
+            {promptError}
+          </p>
+        )}
 
         {/* 负面提示词 Toggle Switch */}
         <div className="flex items-center justify-between py-1.5 sm:py-2">
@@ -345,8 +360,8 @@ const PromptInput = ({
               )}
             </button>
             <LoginHint className="text-xs md:text-sm" />
-            {/* 额外消耗提示 - 仅对已登录用户显示，无论是否有额度都显示 */}
-            {model !== 'nano-banana-2' && extraCost !== null && extraCost > 0 && (
+            {/* 额外消耗提示 - 独立计费模型不使用免费额度，因此不显示 */}
+            {!isExternalPaidImageModel && extraCost !== null && extraCost > 0 && (
               <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600 whitespace-nowrap">
                 <svg
                   className="w-4 h-4 text-amber-500"

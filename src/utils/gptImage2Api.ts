@@ -1,4 +1,4 @@
-import { getGrokSizeString } from '@/utils/modelConfig';
+import { getGptImage2SizeString } from '@/utils/modelConfig';
 
 interface GptImage2Params {
   prompt: string;
@@ -19,6 +19,9 @@ const DEFAULT_MODEL_ID = 'gpt-image-2';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const REQUEST_TIMEOUT_MS = 600_000;
+const HIGH_QUALITY_PIXEL_THRESHOLD = 1536 * 864 * 1.05;
+
+type GptImage2Quality = 'auto' | 'high';
 
 function buildEndpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`;
@@ -45,6 +48,10 @@ function decodeInputImage(image: string): { buffer: Buffer; mimeType: string } {
     buffer: Buffer.from(base64, 'base64'),
     mimeType,
   };
+}
+
+function deriveQuality(width: number, height: number): GptImage2Quality {
+  return width * height > HIGH_QUALITY_PIXEL_THRESHOLD ? 'high' : 'auto';
 }
 
 async function responseImageToDataUrl(data: GptImage2Response): Promise<string> {
@@ -130,17 +137,22 @@ export async function generateGptImage2(params: GptImage2Params): Promise<string
     throw new Error('GPT-image-2 API key is not configured. Please set BANANA_ROUTER_API_KEY.');
   }
 
-  const size = getGrokSizeString(params.width, params.height);
-  const inputImage = params.images?.[0];
+  const size = getGptImage2SizeString(params.width, params.height);
+  const quality = deriveQuality(params.width, params.height);
+  const inputImages = params.images ?? [];
 
-  if (inputImage) {
-    const { buffer, mimeType } = decodeInputImage(inputImage);
+  if (inputImages.length > 0) {
     const formData = new FormData();
     formData.append('model', model);
     formData.append('prompt', params.prompt);
     formData.append('n', '1');
     formData.append('size', size);
-    formData.append('image', new Blob([new Uint8Array(buffer)], { type: mimeType }), 'input.png');
+    formData.append('quality', quality);
+
+    inputImages.forEach((image, index) => {
+      const { buffer, mimeType } = decodeInputImage(image);
+      formData.append('image', new Blob([new Uint8Array(buffer)], { type: mimeType }), `input-${index + 1}.png`);
+    });
 
     return requestGptImage2(buildEndpoint(apiUrl, '/v1/images/edits'), {
       method: 'POST',
@@ -162,6 +174,7 @@ export async function generateGptImage2(params: GptImage2Params): Promise<string
       prompt: params.prompt,
       n: 1,
       size,
+      quality,
     }),
   });
 }

@@ -195,10 +195,10 @@ export const ALL_MODELS: ModelConfig[] = [
     name: "GPT-image-2",
     image: "/images/gpt-image-2.png",
     homepageCover: "/images/gpt-image-2.png",
-    description: "GPT-image-2 supports text-to-image generation and single-image editing with Chinese prompts.",
+    description: "GPT-image-2 supports text-to-image generation, multi-image reference editing, and high-quality output with Chinese prompts.",
     use_i2i: true,
     use_t2i: true,
-    maxImages: 1,
+    maxImages: 3,
     tags: ["chineseSupport"],
     requiresLogin: true
   },
@@ -428,14 +428,14 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
   "gpt-image-2": {
     normalSteps: null,
     highSteps: null,
-    normalResolutionPixels: null,
-    highResolutionPixels: null,
+    normalResolutionPixels: 1536 * 864,
+    highResolutionPixels: 2736 * 1536,
   },
   "gpt-image-2.0": {
     normalSteps: null,
     highSteps: null,
-    normalResolutionPixels: null,
-    highResolutionPixels: null,
+    normalResolutionPixels: 1536 * 864,
+    highResolutionPixels: 2736 * 1536,
   },
   "nano-banana-2": {
     normalSteps: null,
@@ -459,6 +459,21 @@ export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
 
 export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
 export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
+
+export const GPT_IMAGE_2_RATIO_SIZES: Record<string, { normal: { width: number; height: number }; high: { width: number; height: number } }> = {
+  '1:1': {
+    normal: { width: 1024, height: 1024 },
+    high: { width: 2048, height: 2048 },
+  },
+  '16:9': {
+    normal: { width: 1536, height: 864 },
+    high: { width: 2736, height: 1536 },
+  },
+  '9:16': {
+    normal: { width: 864, height: 1536 },
+    high: { width: 1536, height: 2736 },
+  },
+};
 
 export function isGptImage2Model(modelId?: string | null): boolean {
   const normalizedModelId = modelId?.trim().toLowerCase();
@@ -547,4 +562,19 @@ export function getGrokSizeString(width: number, height: number): string {
     if (width === w && height === h) return size;
   }
   return '1024x1024';
+}
+
+export function getGptImage2SizeString(width: number, height: number): string {
+  const pairs: Array<[number, number, string]> = [
+    [1024, 1024, '1024x1024'],
+    [1536, 864, '1536x864'],
+    [864, 1536, '864x1536'],
+    [2048, 2048, '2048x2048'],
+    [2736, 1536, '2736x1536'],
+    [1536, 2736, '1536x2736'],
+  ];
+  for (const [w, h, size] of pairs) {
+    if (width === w && height === h) return size;
+  }
+  return width >= height ? '1536x864' : '864x1536';
 }

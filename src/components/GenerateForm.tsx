@@ -1,7 +1,7 @@
 import { createScopedT } from '@/lib/strings'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification } from '@/utils/modelConfig'
+import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification, GPT_IMAGE_2_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import Toast from './Toast'
 
 type ModelWithAvailability = ModelConfig & { isAvailable: boolean };
@@ -648,8 +648,10 @@ export default function GenerateForm({
     if (supportsHighResolutionOption) {
       setIsHighResolution(enableHighQuality)
 
-      const targetArea = enableHighQuality ? highPixels : normalPixels
-      const { width: newWidth, height: newHeight } = getDimensionsByPixels(targetArea, aspectRatio)
+      const gptImage2Size = isGptImage2Model(model) ? GPT_IMAGE_2_RATIO_SIZES[aspectRatio] || GPT_IMAGE_2_RATIO_SIZES['1:1'] : null
+      const { width: newWidth, height: newHeight } = gptImage2Size
+        ? (enableHighQuality ? gptImage2Size.high : gptImage2Size.normal)
+        : getDimensionsByPixels(enableHighQuality ? highPixels : normalPixels, aspectRatio)
       setWidth(newWidth)
       setHeight(newHeight)
     }
@@ -1012,6 +1014,8 @@ export default function GenerateForm({
                     <p className="text-xs sm:text-sm text-gray-600/80 leading-5">
                       {model === 'nano-banana-2'
                         ? '默认使用 1K，开启后使用 4K，消耗更多积分'
+                        : isGptImage2Model(model)
+                        ? '默认使用 1K，开启后使用高质量，消耗更多积分'
                         : '提供更高的生成质量，但也会花费少许积分'}
                     </p>
                     {stepsError && (

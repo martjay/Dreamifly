@@ -33,7 +33,7 @@ export async function getPointsConfig() {
   const envWaiSdxlV170Cost = parseInt(process.env.WAI_SDXL_V170_COST || process.env.WAI_SDXL_V150_COST || '2', 10);
   const envWanVideoCost = parseInt(process.env.WAN_VIDEO_COST || '150', 10);
   const envGrokImagine1Cost = parseInt(process.env.GROK_IMAGINE_1_COST || '10', 10);
-  const envGptImage2Cost = parseInt(process.env.GPT_IMAGE_2_COST || '5', 10);
+  const envGptImage2Cost = parseInt(process.env.GPT_IMAGE_2_COST || '7', 10);
   const envGrokVideoCost = parseInt(process.env.GROK_VIDEO_COST || '150', 10);
   const envHappyHorseVideoCost720P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_720P || '150', 10);
   const envHappyHorseVideoCost1080P = parseInt(process.env.HAPPYHORSE_VIDEO_COST_1080P || '200', 10);

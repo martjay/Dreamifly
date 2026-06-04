@@ -12,7 +12,7 @@ import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
@@ -249,6 +249,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [stepsError, setStepsError] = useState<string | null>(null);
   const [batchSizeError, setBatchSizeError] = useState<string | null>(null);
   const [imageCountError, setImageCountError] = useState<string | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const stepsRef = useRef<HTMLInputElement>(null);
   const batchSizeRef = useRef<HTMLInputElement>(null);
   const widthRef = useRef<HTMLInputElement>(null);
@@ -397,10 +398,19 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
   const handleGenerate = async () => {
     let hasError = false;
+    const trimmedPrompt = prompt.trim();
+    const promptRequiredMessage = t('error.validation.promptRequired');
     setStepsError(null);
     setBatchSizeError(null);
     setImageCountError(null);
+    setPromptError(null);
     setConcurrencyError(null);
+
+    if (!trimmedPrompt) {
+      setPromptError(promptRequiredMessage);
+      promptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      hasError = true;
+    }
     
     // 验证参考图片数量
     const models = [
@@ -461,7 +471,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       },
       {
         id: "gpt-image-2",
-        maxImages: 1,
+        maxImages: 3,
         tags: ["chineseSupport", "fastGeneration"]
       }
     ];
@@ -821,7 +831,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
 
   const [aspectRatio, setAspectRatio] = useState('1:1');
-  const hideImageRatioSelector = isGptImage2Model(model);
+  const hideImageRatioSelector = false;
   // 高分辨率开关状态（独立控制，不受图片比例影响）
   const [isHighResolution, setIsHighResolution] = useState(false);
 
@@ -836,13 +846,21 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   }, [model, aspectRatio]);
 
   useEffect(() => {
-    if (isGptImage2Model(model) && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
-      setAspectRatio('1:1');
-      setWidth(1024);
-      setHeight(1024);
-      setIsHighResolution(false);
+    if (isGptImage2Model(model)) {
+      const nextRatio = GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio) ? aspectRatio : '1:1';
+      const size = GPT_IMAGE_2_RATIO_SIZES[nextRatio] || GPT_IMAGE_2_RATIO_SIZES['1:1'];
+      const shouldUseHighQualitySize = nextRatio === aspectRatio && isHighResolution;
+      const targetSize = shouldUseHighQualitySize ? size.high : size.normal;
+
+      if (nextRatio !== aspectRatio) {
+        setAspectRatio(nextRatio);
+        setIsHighResolution(false);
+      }
+
+      setWidth(targetSize.width);
+      setHeight(targetSize.height);
     }
-  }, [model, aspectRatio]);
+  }, [model, aspectRatio, isHighResolution]);
 
   // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为 1:1（1K）
   useEffect(() => {
@@ -858,8 +876,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const handleRatioChange = (ratio: string) => {
     setAspectRatio(ratio);
 
+    if (isGptImage2Model(model)) {
+      const size = GPT_IMAGE_2_RATIO_SIZES[ratio] || GPT_IMAGE_2_RATIO_SIZES['1:1'];
+      const targetSize = isHighResolution ? size.high : size.normal;
+      setWidth(targetSize.width);
+      setHeight(targetSize.height);
+      return;
+    }
+
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
-    if (model === 'grok-imagine-1.0' || isGptImage2Model(model)) {
+    if (model === 'grok-imagine-1.0') {
       const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
       setWidth(size.width);
       setHeight(size.height);
@@ -1076,7 +1102,12 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               <div className="relative">
                 <PromptInput
                   prompt={prompt}
-                  setPrompt={setPrompt}
+                  setPrompt={(value) => {
+                    setPrompt(value)
+                    if (value.trim()) {
+                      setPromptError(null)
+                    }
+                  }}
                   negativePrompt={negativePrompt}
                   setNegativePrompt={setNegativePrompt}
                   onGenerate={handleGenerate}
@@ -1095,6 +1126,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   isQueuing={isQueuing}
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
+                  promptError={promptError}
                   extraContent={
                     <div className="lg:hidden pt-2">
                       <GenerateForm
