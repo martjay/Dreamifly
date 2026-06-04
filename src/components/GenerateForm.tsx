@@ -196,36 +196,43 @@ export default function GenerateForm({
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isGenerating) {
-      // 计算预期时间：基于像素数、步数和模型
-      // 基准：1024*1024像素，30步 = 60秒 (HiDream-full-fp8)
-      const basePixels = 1024 * 1024;
-      const baseSteps = 30;
-      const baseTime = 60;
-      
-      // 模型时间系数
-      const modelTimeFactors = {
-        'HiDream-full-fp16': 2.0,    // 两倍于 fp8
-        'HiDream-full-fp8': 1.0,     // 基准
-        'Flux-Dev': 0.67,            // 40s/60s
-        'Flux-Kontext': 1.0,         // 40s/60s
-        'Flux-Krea': 0.67,           // 40s/60s (与Flux-Dev类似)
-        'Stable-Diffusion-3.5': 0.67,  // 40s/60s
-        'Qwen-Image': 1.5,             // 48s/60s
-        'Qwen-Image-Edit': 1.2,
-        'Wai-SDXL-V150': 0.1,
-        'Wai-SDXL-V170': 0.1,
-        'Z-Image': 0.325,
-        'Z-Image-Turbo': 0.325,      // 20步1024*1024=13秒，换算到30步基准：13*(30/20)/60 = 0.325
-        // nano-banana-2 使用云端大模型，整体耗时相对更长，适当放大系数
-        'nano-banana-2': 2.0,
-      };
-      
-      const currentPixels = width * height;
-      const pixelFactor = currentPixels / basePixels;
-      const stepsFactor = steps / baseSteps;
-      const modelFactor = modelTimeFactors[model as keyof typeof modelTimeFactors] || 1.0;
-      
-      const generationTime = baseTime * pixelFactor * stepsFactor * modelFactor;
+      let generationTime: number;
+
+      if (model === 'nano-banana-2') {
+        generationTime = isHighResolution ? 50 : 25;
+      } else if (isGptImage2Model(model)) {
+        generationTime = isHighResolution ? 60 : 45;
+      } else {
+        // 计算预期时间：基于像素数、步数和模型
+        // 基准：1024*1024像素，30步 = 60秒 (HiDream-full-fp8)
+        const basePixels = 1024 * 1024;
+        const baseSteps = 30;
+        const baseTime = 60;
+
+        // 模型时间系数
+        const modelTimeFactors = {
+          'HiDream-full-fp16': 2.0,    // 两倍于 fp8
+          'HiDream-full-fp8': 1.0,     // 基准
+          'Flux-Dev': 0.67,            // 40s/60s
+          'Flux-Kontext': 1.0,         // 40s/60s
+          'Flux-Krea': 0.67,           // 40s/60s (与Flux-Dev类似)
+          'Stable-Diffusion-3.5': 0.67,  // 40s/60s
+          'Qwen-Image': 1.5,             // 48s/60s
+          'Qwen-Image-Edit': 1.2,
+          'Wai-SDXL-V150': 0.1,
+          'Wai-SDXL-V170': 0.1,
+          'Z-Image': 0.325,
+          'Z-Image-Turbo': 0.325,      // 20步1024*1024=13秒，换算到30步基准：13*(30/20)/60 = 0.325
+        };
+
+        const currentPixels = width * height;
+        const pixelFactor = currentPixels / basePixels;
+        const stepsFactor = steps / baseSteps;
+        const modelFactor = modelTimeFactors[model as keyof typeof modelTimeFactors] || 1.0;
+
+        generationTime = baseTime * pixelFactor * stepsFactor * modelFactor;
+      }
+
       // 预期时间只显示生图时间，不包含排队时间
       setEstimatedTime(generationTime);
       
@@ -301,7 +308,7 @@ export default function GenerateForm({
         clearInterval(timer);
       }
     };
-  }, [isGenerating, steps, width, height, model, status, unauthDelay, setIsQueuingProp]);
+  }, [isGenerating, steps, width, height, model, isHighResolution, status, unauthDelay, setIsQueuingProp]);
 
   // 生成时自动关闭模型下拉框
   useEffect(() => {
