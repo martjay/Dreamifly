@@ -11,7 +11,7 @@ import { headers } from 'next/headers'
  * - page: 页码（默认1）
  * - limit: 每页数量（默认20）
  * - role: 用户角色筛选（admin, subscribed, premium, oldUser, regular, all）
- * - search: 搜索关键词（用户昵称）
+ * - search: 搜索关键词（支持用户快照昵称、用户名、实时昵称、邮箱）
  * - startDate: 开始日期（YYYY-MM-DD）
  * - endDate: 结束日期（YYYY-MM-DD）
  * - reviewStatus: 人工审核状态（pending | approved | rejected | all）
@@ -83,10 +83,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 搜索筛选（用户昵称）
+    // 搜索筛选（支持作品快照昵称 + 用户表实时信息）
     if (search.trim()) {
+      const searchTerm = `%${search.trim()}%`
       conditions.push(
-        like(userGeneratedImages.userNickname, `%${search.trim()}%`)
+        or(
+          like(userGeneratedImages.userNickname, searchTerm),
+          like(user.name, searchTerm),
+          like(user.nickname, searchTerm),
+          like(user.email, searchTerm)
+        )
       )
     }
 
@@ -114,6 +120,7 @@ export async function GET(request: NextRequest) {
         count: sql<number>`count(*)::int`,
       })
       .from(userGeneratedImages)
+      .leftJoin(user, eq(userGeneratedImages.userId, user.id))
       .where(whereClause as any)
 
     const total = totalResult[0]?.count || 0
@@ -145,6 +152,7 @@ export async function GET(request: NextRequest) {
         userId: userGeneratedImages.userId,
       })
       .from(userGeneratedImages)
+      .leftJoin(user, eq(userGeneratedImages.userId, user.id))
       .where(whereClause as any)
       .orderBy(desc(userGeneratedImages.createdAt))
       .limit(limit)
@@ -194,4 +202,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
