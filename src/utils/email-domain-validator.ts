@@ -2,6 +2,116 @@ import { db } from '@/db';
 import { allowedEmailDomain } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 
+const blockedEmailDomains = [
+  'fixscal.com',
+  'tempforward.com',
+  'arigo.site',
+  'arthiq.world',
+  'maildy.site',
+  'hitbase.net',
+  'ilustrosonic.com',
+  'fivan.store',
+  'p-668.top',
+  'trungtampccc.vn',
+  'porhantek.shop',
+  'nexshinz.app',
+  'kantclass.com',
+  'scatterteam.com',
+  'newbreedapps.com',
+  'edumomtalk.com',
+  'dsdfg-dsfg.info',
+  'lovevista.lat',
+  'capcutpro.click',
+  'bnrlner.shop',
+  'vmvzzmv.shop',
+  'edufirst.sbs',
+  'dienmayvietvan.com',
+  'kiras.fun',
+  'vrijspelen.be',
+  'cocoting.space',
+  'baonguyenshop.com',
+  'xongin.online',
+  'tantang.store',
+  'taoxao.online',
+  'luxgan.store',
+  'kingerta.shop',
+  'sogon.site',
+  'sayaga.space',
+  'tigigo.site',
+  'sasi-inc.org',
+  'newssourceai.com',
+  'alf5.com',
+  'tikwel.com',
+  'muskarm.com',
+  'swftbars.com',
+  'taoxe.com',
+  'workpolo.com',
+  '4nly.com',
+  'trepolan.com',
+  'mtupu.com',
+  'matkind.com',
+  'ifcoat.com',
+  'hitzcart.com',
+  'googxs.com',
+  'doreact.com',
+  'acg.box',
+  'simfatic.com',
+  'onion-rush.buzz',
+  'counselsys.com',
+  'shortapk.com',
+  'savdz.com',
+  'seolaner.com',
+  'boraboratech.com',
+  'viawoo.com',
+  'bittnex.com',
+  'web5h.com',
+  'westecom.com',
+  'okcpress.com',
+  'nuitx.com',
+  'nriza.com',
+  'noyavip.com',
+  'marineso.com',
+  'gzeos.com',
+  'ameady.com',
+  'anythingthat.org',
+  'kingofwebdesign.com',
+  'sd.yourselvoes.com',
+  'coalportlogistics.com',
+  'tokoub.com',
+  'vektoru.com',
+  'upipaid.com',
+  'redtion.com',
+  'tkonu.com',
+  'topkute.com',
+  'homvela.com',
+  'getasail.com',
+  'dardr.com',
+  'acanok.com',
+  'bitmah.com',
+  'hidevak.com',
+  'itquoted.com',
+  'veedraw.com',
+  'renakol.com',
+  'lesote.com',
+  'xspiel.com',
+  'shagni.com',
+  'yyxxi.com',
+  'eubonus.com',
+  'jparksky.com',
+  'ixospace.com',
+  'feanzier.com',
+  'atinjo.com',
+  'gopicta.com',
+  'imfaya.com',
+  'akixpres.com',
+  'markuto.com',
+  'kenotown.com',
+  'rewtaxi.com',
+  'trocipad.com',
+  'wfibb.com',
+  'kurstore.com',
+];
+
 /**
  * 从邮箱地址中提取域名
  */
@@ -11,6 +121,20 @@ export function extractDomainFromEmail(email: string): string | null {
     return null;
   }
   return parts[1].toLowerCase();
+}
+
+/**
+ * 验证邮箱域名是否命中临时邮箱黑名单
+ */
+export function isBlockedEmailDomain(email: string): boolean {
+  const domain = extractDomainFromEmail(email);
+  if (!domain) {
+    return false;
+  }
+
+  return blockedEmailDomains.some((blockedDomain) => {
+    return domain === blockedDomain || domain.endsWith(`.${blockedDomain}`);
+  });
 }
 
 /**
@@ -61,6 +185,22 @@ export function isValid163Email(email: string): boolean {
   const localPart = parts[0];
   // 检查是否只包含数字
   return /^\d+$/.test(localPart);
+}
+
+/**
+ * 验证邮箱本地部分的点号数量，拦截低门槛临时邮箱常见的多点号格式
+ * @param email 邮箱地址
+ * @param maxDots @ 前允许的最大点号数量，默认 5
+ */
+export function isEmailDotCountAllowed(email: string, maxDots = 5): boolean {
+  const parts = email.split('@');
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const localPart = parts[0];
+  const dotCount = (localPart.match(/\./g) || []).length;
+  return dotCount <= maxDots;
 }
 
 /**

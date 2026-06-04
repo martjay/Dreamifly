@@ -54,3 +54,6 @@ next-env.d.ts
 
 # local code graph index
 .codegraph/
+
+# local Claude workspace files
+.claude/
