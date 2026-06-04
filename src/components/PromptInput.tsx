@@ -28,6 +28,7 @@ interface PromptInputProps {
   hideRatioSelector?: boolean;
   extraContent?: ReactNode;
   promptError?: string | null;
+  loginHintMessage?: string;
 }
 
 const PromptInput = ({
@@ -51,7 +52,8 @@ const PromptInput = ({
   model,
   hideRatioSelector = false,
   extraContent,
-  promptError
+  promptError,
+  loginHintMessage
 }: PromptInputProps) => {
   const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
@@ -118,9 +120,14 @@ const PromptInput = ({
           aria-describedby={promptError ? 'prompt-error' : undefined}
         />
         {promptError && (
-          <p id="prompt-error" className="-mt-1 text-xs font-medium text-red-600">
-            {promptError}
-          </p>
+          <div id="prompt-error" className="p-3 bg-red-50 border border-red-300 rounded-lg animate-fadeInUp">
+            <p className="text-sm font-medium text-red-600 flex items-center">
+              <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {promptError}
+            </p>
+          </div>
         )}
 
         {/* 负面提示词 Toggle Switch */}
@@ -359,7 +366,7 @@ const PromptInput = ({
                 </div>
               )}
             </button>
-            <LoginHint className="text-xs md:text-sm" />
+            <LoginHint className="text-xs md:text-sm" message={loginHintMessage} />
             {/* 额外消耗提示 - 独立计费模型不使用免费额度，因此不显示 */}
             {!isExternalPaidImageModel && extraCost !== null && extraCost > 0 && (
               <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600 whitespace-nowrap">

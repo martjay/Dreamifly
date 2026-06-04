@@ -12,7 +12,7 @@ import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
@@ -406,6 +406,12 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setPromptError(null);
     setConcurrencyError(null);
 
+    if (authStatus === 'unauthenticated' && isLoginRequiredModel(model)) {
+      setLoginTipMessage('该模型仅限登录用户使用，请先登录后再使用');
+      setShowLoginTip(true);
+      return;
+    }
+
     if (!trimmedPrompt) {
       setPromptError(promptRequiredMessage);
       promptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -605,7 +611,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             }),
           });
 
-          // 检查是否是401未登录错误（图改图模型限制）
+          // 检查是否是401未登录错误（图改图或仅限登录模型限制）
           if (inputModerationFailureMessage) {
             setImageStatuses(prev => {
               const newStatuses = [...prev];
@@ -620,7 +626,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
           if (res.status === 401) {
             const errorData = await res.json().catch(() => ({}));
-            if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I') {
+            if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I' || errorData.code === 'LOGIN_REQUIRED') {
+              setLoginTipMessage(errorData.error || '请先登录后再使用此功能');
               setShowLoginTip(true);
               setIsGenerating(false);
               setImageStatuses(prev => {
@@ -1127,6 +1134,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
                   promptError={promptError}
+                  loginHintMessage={isLoginRequiredModel(model) ? '该模型仅限登录用户使用，请先登录后再使用' : undefined}
                   extraContent={
                     <div className="lg:hidden pt-2">
                       <GenerateForm
