@@ -1,9 +1,9 @@
 import OpenAI from 'openai'
 import { randomUUID } from 'crypto'
 import { db } from '@/db'
-import { communityMediaTag, communityPublishedMediaTag, communityTag, userGeneratedImages } from '@/db/schema'
+import { communityMedia, communityMediaTag, communityPublishedMediaTag, communityTag, userGeneratedImages } from '@/db/schema'
 import { decodeMediaFromStorage } from '@/utils/mediaStorage'
-import { eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm'
 
 type CommunityTaggingEnv = {
   baseUrl?: string
@@ -11,6 +11,37 @@ type CommunityTaggingEnv = {
   model: string
   prompt: string
   maxTags: number
+}
+
+const COMMUNITY_VISIBLE_USER_ROLES = ['premium', 'oldUser', 'regular']
+const COMMUNITY_VISIBLE_EXCLUDED_MODELS = ['Qwen-Image-Edit', 'Flux-Kontext']
+const COMMUNITY_VISIBLE_BLOCK_WORDS = [
+  '**',
+  "I'm sorry",
+  'loli',
+  'toddler',
+  "I can't generate",
+]
+
+function buildVisibleCommunityMediaWhere() {
+  const blockWordFilters = COMMUNITY_VISIBLE_BLOCK_WORDS.map((word) => {
+    return sql`lower(coalesce(${communityMedia.prompt}, '')) not like ${`%${word.toLowerCase()}%`}`
+  })
+
+  return and(
+    or(
+      inArray(communityMedia.userRole, COMMUNITY_VISIBLE_USER_ROLES),
+      isNull(communityMedia.userRole)
+    ),
+    or(
+      notInArray(communityMedia.model, COMMUNITY_VISIBLE_EXCLUDED_MODELS),
+      isNull(communityMedia.model)
+    ),
+    eq(communityMedia.moderationLevel, 'low'),
+    eq(communityMedia.nsfw, false),
+    sql`length(trim(coalesce(${communityMedia.prompt}, ''))) > 0`,
+    ...blockWordFilters
+  )
 }
 
 function getCommunityTaggingEnv(): CommunityTaggingEnv {
@@ -549,17 +580,10 @@ export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'r
       lastUsedAt: sql<Date | null>`max(${communityPublishedMediaTag.createdAt})`,
     })
     .from(communityTag)
-    .leftJoin(communityPublishedMediaTag, eq(communityTag.id, communityPublishedMediaTag.tagId))
+    .innerJoin(communityPublishedMediaTag, eq(communityTag.id, communityPublishedMediaTag.tagId))
+    .innerJoin(communityMedia, eq(communityPublishedMediaTag.communityMediaId, communityMedia.id))
+    .where(buildVisibleCommunityMediaWhere())
     .groupBy(communityTag.id, communityTag.name)
-
-  const fallbackQuery = db
-    .select({
-      id: communityTag.id,
-      name: communityTag.name,
-      usageCount: communityTag.usageCount,
-      lastUsedAt: communityTag.lastUsedAt,
-    })
-    .from(communityTag)
 
   if (mode === 'random') {
     const liveTags = await liveTagStatsQuery
@@ -567,12 +591,7 @@ export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'r
       .orderBy(sql`random()`)
       .limit(safeLimit)
 
-    if (liveTags.length > 0) {
-      return liveTags.map(({ id, name, usageCount }) => ({ id, name, usageCount }))
-    }
-
-    const fallbackTags = await fallbackQuery.orderBy(sql`random()`).limit(safeLimit)
-    return fallbackTags.map(({ id, name, usageCount }) => ({ id, name, usageCount }))
+    return liveTags.map(({ id, name, usageCount }) => ({ id, name, usageCount }))
   }
 
   const liveTags = await liveTagStatsQuery
@@ -586,17 +605,5 @@ export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'r
     )
     .limit(safeLimit)
 
-  if (liveTags.length > 0) {
-    return liveTags.map(({ id, name, usageCount }) => ({ id, name, usageCount }))
-  }
-
-  return fallbackQuery
-    .orderBy(
-      mode === 'hot'
-        ? sql`${communityTag.usageCount} desc`
-        : sql`${communityTag.lastUsedAt} desc nulls last`,
-      sql`${communityTag.usageCount} desc`,
-      sql`${communityTag.id} desc`
-    )
-    .limit(safeLimit)
+  return liveTags.map(({ id, name, usageCount }) => ({ id, name, usageCount }))
 }

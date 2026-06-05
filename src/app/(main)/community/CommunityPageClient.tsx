@@ -12,6 +12,8 @@ type TagRecommendation = {
   usageCount: number
 }
 
+const RECOMMENDED_TAG_LIMIT = 4
+
 export default function CommunityPageClient() {
   const t = createScopedT('communityPage')
   const router = useRouter()
@@ -61,7 +63,7 @@ export default function CommunityPageClient() {
   const fetchTags = useCallback(async () => {
     setLoadingTags(true)
     try {
-      const response = await fetch('/api/community/tags?mode=random&limit=4')
+      const response = await fetch(`/api/community/tags?mode=random&limit=${RECOMMENDED_TAG_LIMIT}`)
       const data = await response.json()
       if (!response.ok || !data.success) {
         throw new Error(data.error || '加载推荐标签失败')
@@ -151,7 +153,7 @@ export default function CommunityPageClient() {
               <span className="text-[11px] font-medium text-gray-600 sm:text-sm">{t('recommendTitle')}</span>
               <div className="flex min-h-7 flex-wrap gap-1.5 sm:min-h-11 sm:gap-3">
                 {loadingTags ? (
-                  Array.from({ length: 4 }).map((_, index) => (
+                  Array.from({ length: RECOMMENDED_TAG_LIMIT }).map((_, index) => (
                     <div key={index} className="h-6 w-14 animate-pulse rounded-full bg-orange-100 sm:h-10 sm:w-24" />
                   ))
                 ) : (
