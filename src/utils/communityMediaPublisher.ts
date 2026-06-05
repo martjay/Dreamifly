@@ -37,6 +37,20 @@ function buildCommunityMediaFolder(mediaType: string | null): string {
   return `community-media/${mediaFolder}/${year}/${month}/${day}`
 }
 
+function buildCommunityMediaUpload(mediaBuffer: Buffer, mediaType: string | null) {
+  if (mediaType === 'video') {
+    return {
+      fileBuffer: encodeMediaForStorage(mediaBuffer),
+      fileName: `${randomUUID()}.dat`,
+    }
+  }
+
+  return {
+    fileBuffer: mediaBuffer,
+    fileName: `${randomUUID()}.png`,
+  }
+}
+
 async function copyPublishedTags(sourceMediaId: string, communityMediaId: string) {
   const oldRelations = await db
     .select({
@@ -110,9 +124,8 @@ export async function publishCommunityMediaFromGeneratedImage(params: {
   }
 
   const mediaBuffer = await fetchMediaBufferFromUrl(source.imageUrl)
-  const encodedBuffer = encodeMediaForStorage(mediaBuffer)
-  const fileName = `${randomUUID()}.dat`
-  const mediaUrl = await uploadToOSS(encodedBuffer, fileName, buildCommunityMediaFolder(source.mediaType))
+  const { fileBuffer, fileName } = buildCommunityMediaUpload(mediaBuffer, source.mediaType)
+  const mediaUrl = await uploadToOSS(fileBuffer, fileName, buildCommunityMediaFolder(source.mediaType))
   const communityMediaId = randomUUID()
   const now = new Date()
 
