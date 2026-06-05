@@ -75,7 +75,13 @@
           "tags": {
             "textToImage": "文生图",
             "imageToImage": "图生图",
+            "textToVideo": "文生视频",
+            "imageToVideo": "图生视频",
+            "referenceToVideo": "参考生视频",
+            "multiReference": "多参考图",
+            "videoEdit": "视频编辑",
             "chineseSupport": "支持中文",
+            "audioSupport": "支持音频",
             "fastGeneration": "极速生成",
             "realisticStyle": "写实风格",
             "animeSpecialty": "动漫特长",
@@ -97,7 +103,13 @@
             "Flux-2": "Flux-2 是 Black Forest Labs 开发的最新文本到图像生成模型，采用改进的架构和更强大的 CLIP 编码器，能够生成更高质量、更细节丰富的图像。",
             "grok-imagine-10": "Grok Imagine 是 xAI 开发的闭源文生图模型，具备出色的提示词理解能力与画质表现，支持中文输入。",
             "gpt-image-2": "GPT-image-2 是支持文生图、多图参考生成与高质量输出的图像模型，具备较强的提示词理解、中文输入和画面细节生成能力，适合插画、设计稿、商品图和创意内容制作。",
-            "nano-banana-2": "Google 基于 Gemini 3.1 Flash Image 构建的高效文生图模型，支持高保真输出、精准文字渲染与多种画面比例，兼顾速度与质量。"
+            "nano-banana-2": "Google 基于 Gemini 3.1 Flash Image 构建的高效文生图模型，支持高保真输出、精准文字渲染与多种画面比例，兼顾速度与质量。",
+            "Wan22-I2V-Lightning": "Wan 2.2 图生视频模型，支持基于参考图片生成流畅短视频，适合人物、场景和创意动态效果。",
+            "grok-imagine-10-video": "Grok Imagine 视频模型，支持基于图片生成富有想象力的动态画面，输出固定 480p 视频。",
+            "happyhorse-10-t2v": "HappyHorse 文生视频模型，根据文字提示生成 3-15 秒短视频，适合快速制作动态创意内容。",
+            "happyhorse-10-i2v": "HappyHorse 图生视频模型，以上传图片作为首帧生成 3-15 秒短视频，适合让静态画面自然动起来。",
+            "happyhorse-10-r2v": "HappyHorse 参考生视频模型，支持 1-9 张参考图和文字提示，生成更贴合参考内容的短视频。",
+            "happyhorse-10-video-edit": "HappyHorse 视频编辑模型，根据文字指令和可选参考图编辑源视频，适合调整画面内容和动态效果。"
           }
         },
         "steps": {

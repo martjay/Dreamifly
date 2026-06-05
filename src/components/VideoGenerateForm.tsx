@@ -1,7 +1,7 @@
 'use client'
 
 import { createScopedT } from '@/lib/strings'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { useSession } from '@/lib/auth-client'
 import { usePoints } from '@/contexts/PointsContext'
@@ -9,6 +9,7 @@ import { Clock3 } from 'lucide-react'
 import {
   aspectRatioLabelToNumber,
   calculateVideoLayoutForAspectRatio,
+  getAvailableVideoModels,
   getVideoAspectRatioOptions,
   getVideoModelById,
   type VideoAspectRatioLabel,
@@ -17,6 +18,8 @@ import {
 } from '@/utils/videoModelConfig'
 import { optimizeVideoPrompt } from '@/utils/videoPromptOptimizer'
 import Toast from '@/components/Toast'
+import ModelDropdown from '@/components/ModelDropdown'
+import { getVideoModelDescription, getVideoModelDisplayTags } from '@/utils/videoModelDisplay'
 import type { VisualRiskLevel } from '@/utils/visualModeration'
 import type { HappyHorseResolution } from '@/utils/happyHorseVideoApi'
 
@@ -91,6 +94,36 @@ function getVideoInputModerationFailureMessage(reason?: string) {
   return '内容未通过审核，请调整后重试'
 }
 
+function getVideoTagStyle(tag: string): string {
+  switch (tag) {
+    case 't2v':
+      return 'bg-gradient-to-r from-blue-600/30 to-cyan-600/30 text-cyan-900 border-cyan-500/40'
+    case 'i2v':
+      return 'bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-pink-900 border-pink-500/40'
+    case 'r2v':
+      return 'bg-gradient-to-r from-teal-600/30 to-emerald-600/30 text-emerald-900 border-emerald-500/40'
+    case 'videoEdit':
+      return 'bg-gradient-to-r from-orange-600/30 to-amber-600/30 text-amber-900 border-amber-500/40'
+    case 'fastGeneration':
+      return 'bg-gradient-to-r from-green-600/30 to-emerald-600/30 text-emerald-900 border-emerald-500/40'
+    case 'audioSupport':
+      return 'bg-gradient-to-r from-emerald-600/30 to-teal-600/30 text-emerald-900 border-emerald-500/40'
+    case 'chineseSupport':
+      return 'bg-gradient-to-r from-pink-600/30 to-rose-600/30 text-pink-900 border-pink-500/40'
+    default:
+      return 'bg-gradient-to-r from-gray-600/30 to-slate-600/30 text-slate-900 border-slate-500/40'
+  }
+}
+
+function preloadVideoModelImages(models: VideoModelConfig[]) {
+  if (typeof window === 'undefined') return
+  models.forEach((model) => {
+    if (!model.image) return
+    const img = new window.Image()
+    img.src = model.image
+  })
+}
+
 const VideoGenerateForm = ({
   prompt,
   setPrompt,
@@ -121,6 +154,7 @@ const VideoGenerateForm = ({
   const { refreshPoints } = usePoints()
 
   const [availableModels, setAvailableModels] = useState<VideoModelConfig[]>([])
+  const [modelsLoading, setModelsLoading] = useState(true)
   const [baseCost, setBaseCost] = useState<number | null>(null)
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null)
   const [videoSeconds, setVideoSeconds] = useState(5)
@@ -178,15 +212,13 @@ const VideoGenerateForm = ({
     img.src = imageSrc(image)
   }
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     let cancelled = false
     const loadModels = async () => {
       try {
-        const response = await fetch('/api/video-models')
-        if (!response.ok || cancelled) return
-        const data = await response.json()
+        setModelsLoading(true)
+        const models = await getAvailableVideoModels()
         if (cancelled) return
-        const models = data.models || []
         setAvailableModels(models)
         if (models.length > 0 && (!model || !models.some((m: VideoModelConfig) => m.id === model))) {
           const defaultModel = models.find((m: VideoModelConfig) => m.isRecommended) || models[0]
@@ -194,6 +226,8 @@ const VideoGenerateForm = ({
         }
       } catch (error) {
         if (!cancelled) console.error('Failed to load video models:', error)
+      } finally {
+        if (!cancelled) setModelsLoading(false)
       }
     }
     loadModels()
@@ -620,18 +654,27 @@ const VideoGenerateForm = ({
             <img src="/form/models.svg" alt="Model" className="w-5 h-5 mr-2 text-gray-900" />
             {t('form.model.label')}
           </label>
-          <select
+          <ModelDropdown
             value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300"
+            models={availableModels}
+            loading={modelsLoading}
             disabled={isGenerating}
-          >
-            {availableModels.map(modelOption => (
-              <option key={modelOption.id} value={modelOption.id}>
-                {modelOption.name}
-              </option>
-            ))}
-          </select>
+            loadingText={t('form.model.loading')}
+            emptyText={t('form.model.noModelsAvailable')}
+            fallbackImage="/images/video-community/video-demo-11.png"
+            onChange={setModel}
+            getDescription={getVideoModelDescription}
+            onFirstOpen={preloadVideoModelImages}
+            renderTags={(modelOption) => (
+              <>
+                {getVideoModelDisplayTags(modelOption).map((tag) => (
+                  <span key={tag.styleKey} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getVideoTagStyle(tag.styleKey)}`}>
+                    {tag.label}
+                  </span>
+                ))}
+              </>
+            )}
+          />
         </div>
 
         {isTextToVideo ? null : isReferenceToVideo ? (

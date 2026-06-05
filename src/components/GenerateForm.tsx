@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification, GPT_IMAGE_2_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import Toast from './Toast'
+import ModelDropdown from './ModelDropdown'
 
 type ModelWithAvailability = ModelConfig & { isAvailable: boolean };
 
@@ -66,9 +67,6 @@ export default function GenerateForm({
   const t = createScopedT('home.generate')
   const [progress, setProgress] = useState(0)
   const [estimatedTime, setEstimatedTime] = useState(0)
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
-  const [hasOpenedModelDropdown, setHasOpenedModelDropdown] = useState(false)
-  const modelDropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -135,7 +133,6 @@ export default function GenerateForm({
   // 获取未登录用户延迟时间（秒）
   const unauthDelay = parseInt(process.env.NEXT_PUBLIC_UNAUTHENTICATED_USER_DELAY || '20', 10)
 
-  // 获取标签样式的函数
   const getTagStyle = (tag: string) => {
     switch (tag) {
       case 'chineseSupport':
@@ -310,13 +307,6 @@ export default function GenerateForm({
     };
   }, [isGenerating, steps, width, height, model, isHighResolution, status, unauthDelay, setIsQueuingProp]);
 
-  // 生成时自动关闭模型下拉框
-  useEffect(() => {
-    if (isGenerating) {
-      setIsModelDropdownOpen(false)
-    }
-  }, [isGenerating])
-
   // 当模型切换时，自动调整步数和分辨率到新模型的默认值
   useEffect(() => {
     // 只在模型真正改变时执行调整逻辑
@@ -353,17 +343,6 @@ export default function GenerateForm({
     previousModelRef.current = currentModel;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]); // 只依赖 model，确保只在模型改变时执行，aspectRatio 在函数内部使用当前值
-
-  // Add click outside handler for dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   // 清理防抖定时器
   useEffect(() => {
@@ -627,11 +606,6 @@ export default function GenerateForm({
 
   // 根据上传图片数量过滤可用模型
   const filteredModels: ModelWithAvailability[] = filterModelsByImageCount(uploadedImages.length, availableModels);
-  const selectedAvailableModel = filteredModels.find(m => m.id === model)
-  const selectedFallbackModel = getAllModels().find(m => m.id === model)
-  const selectedDisplayModel = selectedAvailableModel || selectedFallbackModel
-  const selectedModelImage = selectedDisplayModel?.image || '/models/Qwen-Image.jpg'
-  const selectedModelImageFallback = selectedDisplayModel?.imageFallback || '/models/Qwen-Image.jpg'
   const qualityThresholds = getModelThresholds(model)
   const supportsHighSteps = supportsStepsModification(model)
   const supportsHighResolutionOption = supportsResolutionModification(model)
@@ -844,151 +818,45 @@ export default function GenerateForm({
                 <img src="/form/models.svg" alt="Model" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
                 {t('form.model.label')}
               </label>
-              <div className="relative" ref={modelDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isGenerating && status !== 'loading') {
-                      setHasOpenedModelDropdown(true)
-                      setIsModelDropdownOpen(!isModelDropdownOpen)
-                    }
-                  }}
-                  className={`w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-2.5 text-left text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 flex items-center justify-between ${
-                    (!modelsLoading && selectedAvailableModel && !selectedAvailableModel.isAvailable) || isGenerating ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  disabled={status === 'loading' || isGenerating}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-6 rounded overflow-hidden flex-shrink-0">
-                      <img 
-                        src={selectedModelImage} 
-                        alt={model} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          if (target.getAttribute('src') !== selectedModelImageFallback) {
-                            target.src = selectedModelImageFallback
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{model}</span>
-                    </div>
-                  </div>
-                  <svg
-                    className={`w-4 h-4 text-gray-600 transform transition-transform duration-300 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                
-                {hasOpenedModelDropdown && (
-                  <div className={`absolute z-10 w-96 mt-2 bg-white/95 backdrop-blur-xl rounded-xl border border-orange-400/40 shadow-xl max-h-80 overflow-y-auto custom-scrollbar ${
-                    isModelDropdownOpen ? '' : 'hidden'
-                  }`}>
-                    {modelsLoading ? (
-                      <div className="px-4 py-4 text-center text-gray-600">
-                        {t('form.model.loading')}
-                      </div>
-                    ) : filteredModels.length === 0 ? (
-                      <div className="px-4 py-4 text-center text-gray-600">
-                        {t('form.model.noModelsAvailable')}
-                      </div>
-                    ) : (
-                      filteredModels.map((modelOption) => (
-                      <button
-                        key={modelOption.id}
-                        type="button"
-                        onClick={() => {
-                          // 生成时不允许切换模型
-                          if (isGenerating) {
-                            return
-                          }
-                          // Qwen-Image-Edit 即使没有上传图片也可以选择
-                          if (modelOption.isAvailable || modelOption.id === 'Qwen-Image-Edit') {
-                            setModel(modelOption.id)
-                            setIsModelDropdownOpen(false)
-                          }
-                        }}
-                        disabled={(!modelOption.isAvailable && modelOption.id !== 'Qwen-Image-Edit') || isGenerating}
-                        className={`w-full px-4 py-4 text-left transition-colors duration-200 flex flex-col space-y-3 ${
-                          model === modelOption.id ? 'bg-white/50' : ''
-                        } ${
-                          modelOption.isAvailable 
-                            ? 'hover:bg-gray-200 hover:shadow-sm transition-all' 
-                            : 'opacity-50 cursor-not-allowed'
-                        }`}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div className="w-24 h-12 rounded overflow-hidden flex-shrink-0">
-                            <img 
-                              src={modelOption.image} 
-                              alt={modelOption.name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement
-                                const fallback = modelOption.imageFallback || '/models/Qwen-Image.jpg'
-                                if (target.getAttribute('src') !== fallback) {
-                                  target.src = fallback
-                                }
-                              }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="text-gray-900 font-medium">{modelOption.name}</div>
-                              {modelOption.isRecommended && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-600/30 to-red-600/30 text-orange-900 border border-orange-500/40">
-                                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 6 8 6c0 0 .5-.5 2-2.5C10.5.5 11 0 11 0c0 0 .5 0 1.5 1C14 2 16 3.75 17 6c1 0 1.657-.343 1.657-.343A8 8 0 0121 12c0 2.707-1.34 5.106-3.343 6.657z"></path>
-                                  </svg>
-                                  推荐
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {modelOption.use_t2i && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-600/30 to-cyan-600/30 text-cyan-900 border border-cyan-500/40">
-                                  {t('form.model.tags.textToImage')}
-                                </span>
-                              )}
-                              {modelOption.use_i2i && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-pink-900 border border-pink-500/40">
-                                  {t('form.model.tags.imageToImage')}
-                                </span>
-                              )}
-                              {modelOption.tags && modelOption.tags.map((tag: string) => (
-                                <span key={tag} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getTagStyle(tag)}`}>
-                                  {t(`form.model.tags.${tag}`)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-600/80 line-clamp-2 pl-27">
-                          {t(`form.model.descriptions.${modelOption.id.replace(/\./g, '')}`)}
-                        </div>
-                        {!modelOption.isAvailable && (
-                          <div className="text-sm text-red-500 pl-27">
-                            {uploadedImages.length > 0 ? 
-                              (modelOption.use_i2i ? 
-                                t('error.validation.modelNotAvailable.maxImagesExceeded', { maxImages: modelOption.maxImages || 1 }) : 
-                                t('error.validation.modelNotAvailable.notSupportReference')
-                              ) : 
-                              t('error.validation.modelNotAvailable.needReference')
-                            }
-                          </div>
-                        )}
-                      </button>
-                      ))
+              <ModelDropdown
+                value={model}
+                models={filteredModels}
+                loading={modelsLoading}
+                disabled={isGenerating}
+                loadingText={t('form.model.loading')}
+                emptyText={t('form.model.noModelsAvailable')}
+                fallbackImage="/models/Qwen-Image.jpg"
+                onChange={setModel}
+                canSelect={(modelOption) => modelOption.isAvailable || modelOption.id === 'Qwen-Image-Edit'}
+                getDescription={(modelOption) => t(`form.model.descriptions.${modelOption.id.replace(/\./g, '')}`)}
+                getUnavailableText={(modelOption) => uploadedImages.length > 0
+                  ? (
+                    modelOption.use_i2i
+                      ? t('error.validation.modelNotAvailable.maxImagesExceeded', { maxImages: modelOption.maxImages || 1 })
+                      : t('error.validation.modelNotAvailable.notSupportReference')
+                  )
+                  : t('error.validation.modelNotAvailable.needReference')
+                }
+                renderTags={(modelOption) => (
+                  <>
+                    {modelOption.use_t2i && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-600/30 to-cyan-600/30 text-cyan-900 border border-cyan-500/40">
+                        {t('form.model.tags.textToImage')}
+                      </span>
                     )}
-                  </div>
+                    {modelOption.use_i2i && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-pink-900 border border-pink-500/40">
+                        {t('form.model.tags.imageToImage')}
+                      </span>
+                    )}
+                    {modelOption.tags && modelOption.tags.map((tag: string) => (
+                      <span key={tag} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getTagStyle(tag)}`}>
+                        {t(`form.model.tags.${tag}`)}
+                      </span>
+                    ))}
+                  </>
                 )}
-              </div>
+              />
             </div>
           </div>
 

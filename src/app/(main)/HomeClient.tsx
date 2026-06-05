@@ -17,6 +17,7 @@ import AIPlazaCard from '@/components/AIPlazaCard'
 import VideoToVideoPlazaCard from '@/components/VideoToVideoPlazaCard'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
+import { getVideoModelDescription, getVideoModelDisplayTags } from '@/utils/videoModelDisplay'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
 
 interface FAQItem {
@@ -61,24 +62,6 @@ const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; videoFallbackSrc: st
     thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-9.png'),
     thumbnailFallbackSrc: '/images/video-community/video-demo-9.png',
   },
-}
-
-function getVideoModelTags(model: VideoModelConfig): string[] {
-  const modeLabel = (() => {
-    switch (model.mode) {
-      case 'text-to-video':
-        return '文生视频'
-      case 'reference-to-video':
-        return '多参考图'
-      case 'video-edit':
-        return '视频编辑'
-      case 'image-to-video':
-      default:
-        return '图生视频'
-    }
-  })()
-
-  return model.provider === 'grok' ? [modeLabel, '支持中文'] : [modeLabel, '支持音频', '支持中文']
 }
 
 function sortImageModelsForHomepage(models: ModelConfig[]): ModelConfig[] {
@@ -542,13 +525,13 @@ export default function HomeClient() {
                           <div key={`video-model-${videoModel.id}`} className="animate-fadeInUp" style={{ animationDelay: `${index * 100}ms` }}>
                             <VideoToVideoPlazaCard
                               name={videoModel.name}
-                              description={videoModel.description}
+                              description={getVideoModelDescription(videoModel)}
                               videoSrc={demo.videoSrc}
                               videoFallbackSrc={demo.videoFallbackSrc}
                               thumbnailSrc={demo.thumbnailSrc}
                               thumbnailFallbackSrc={demo.thumbnailFallbackSrc}
                               modelId={videoModel.id}
-                              tags={getVideoModelTags(videoModel)}
+                              tags={getVideoModelDisplayTags(videoModel).map(tag => tag.label)}
                             />
                           </div>
                         )

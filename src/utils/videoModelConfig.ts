@@ -1,3 +1,5 @@
+import { getHomepageAsset } from './homepageAssets'
+
 const VIDEO_MODEL_ENV_MAP = {
   'Wan2.2-I2V-Lightning': 'WAN_I2V_URL',
   'grok-imagine-1.0-video': 'GROK_VIDEO_API_URL',
@@ -51,6 +53,7 @@ export interface VideoModelConfig {
   name: string
   description?: string
   image?: string
+  imageFallback?: string
   homepageCover?: string
   homepageCoverFallback?: string
   files?: VideoModelFiles
@@ -72,8 +75,8 @@ export interface VideoModelConfig {
 }
 
 const HAPPYHORSE_COMMON = {
-  image: '/images/video-community/video-demo-11.png',
-  homepageCover: '/images/video-community/video-demo-11.png',
+  imageFallback: '/images/video-community/video-demo-11.png',
+  homepageCoverFallback: '/images/video-community/video-demo-11.png',
   isRecommended: false,
   provider: 'happyhorse' as const,
   defaultVideoSeconds: 5,
@@ -86,9 +89,11 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: 'Wan2.2-I2V-Lightning',
     name: 'Wan 2.2 I2V Lightning',
-    description: 'Wan 2.2 image-to-video Lightning workflow.',
-    image: '/models/video/Wan2.2-I2V-Lightning.jpg',
-    homepageCover: '/models/homepageModelCover/wan-video.png',
+    description: 'Wan 2.2 图生视频模型，支持基于参考图片生成流畅短视频，适合人物、场景和创意动态效果。',
+    image: '/images/video-community/video-demo-8.png',
+    imageFallback: '/models/video/Wan2.2-I2V-Lightning.jpg',
+    homepageCover: '/images/video-community/video-demo-8.png',
+    homepageCoverFallback: '/models/homepageModelCover/wan-video.png',
     files: {
       unetHighNoise: 'wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors',
       unetLowNoise: 'wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors',
@@ -109,9 +114,11 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: 'grok-imagine-1.0-video',
     name: 'Grok Imagine Video',
-    description: 'Grok image-to-video model with fixed 480p output.',
-    image: '/models/video/grok-imagine-1.0-video.jpg',
-    homepageCover: '/models/homepageModelCover/grok-video.png',
+    description: 'Grok Imagine 视频模型，支持基于图片生成富有想象力的动态画面，输出固定 480p 视频。',
+    image: '/images/video-community/video-demo-10.png',
+    imageFallback: '/models/video/grok-imagine-1.0-video.jpg',
+    homepageCover: '/images/video-community/video-demo-10.png',
+    homepageCoverFallback: '/models/homepageModelCover/grok-video.png',
     tags: ['i2v'],
     isRecommended: false,
     provider: 'grok',
@@ -124,7 +131,9 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
     ...HAPPYHORSE_COMMON,
     id: 'happyhorse-1.0-t2v',
     name: 'HappyHorse T2V',
-    description: 'HappyHorse 文生视频模型，根据文字提示生成 3-15 秒视频。',
+    description: 'HappyHorse 文生视频模型，根据文字提示生成 3-15 秒短视频，适合快速制作动态创意内容。',
+    image: '/images/video-community/video-demo-11.png',
+    homepageCover: '/images/video-community/video-demo-11.png',
     tags: ['t2v', 'fastGeneration'],
     mode: 'text-to-video',
   },
@@ -132,7 +141,9 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
     ...HAPPYHORSE_COMMON,
     id: 'happyhorse-1.0-i2v',
     name: 'HappyHorse I2V',
-    description: 'HappyHorse 图生视频模型，将上传图片作为首帧生成 3-15 秒视频。',
+    description: 'HappyHorse 图生视频模型，以上传图片作为首帧生成 3-15 秒短视频，适合让静态画面自然动起来。',
+    image: '/images/video-community/video-demo-5.png',
+    homepageCover: '/images/video-community/video-demo-5.png',
     tags: ['i2v', 'fastGeneration'],
     mode: 'image-to-video',
   },
@@ -140,7 +151,9 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
     ...HAPPYHORSE_COMMON,
     id: 'happyhorse-1.0-r2v',
     name: 'HappyHorse R2V',
-    description: 'HappyHorse 参考生视频模型，使用 1-9 张参考图和文字提示生成 3-15 秒视频。',
+    description: 'HappyHorse 参考生视频模型，支持 1-9 张参考图和文字提示，生成更贴合参考内容的短视频。',
+    image: '/images/video-community/video-demo-12.png',
+    homepageCover: '/images/video-community/video-demo-12.png',
     tags: ['r2v', 'fastGeneration'],
     mode: 'reference-to-video',
     maxReferenceImages: 9,
@@ -149,7 +162,9 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
     ...HAPPYHORSE_COMMON,
     id: 'happyhorse-1.0-video-edit',
     name: 'HappyHorse Video Edit',
-    description: 'HappyHorse 视频编辑模型，根据文字指令和可选参考图编辑源视频。',
+    description: 'HappyHorse 视频编辑模型，根据文字指令和可选参考图编辑源视频，适合调整画面内容和动态效果。',
+    image: '/images/video-community/video-demo-9.png',
+    homepageCover: '/images/video-community/video-demo-9.png',
     tags: ['videoEdit', 'fastGeneration'],
     mode: 'video-edit',
     maxReferenceImages: 9,
@@ -163,27 +178,52 @@ export function isVideoModelConfigured(modelId: string): boolean {
   return true
 }
 
-export async function getAvailableVideoModels(): Promise<VideoModelConfig[]> {
-  try {
-    const response = await fetch('/api/video-models')
-    if (!response.ok) {
-      throw new Error('Failed to fetch available video models')
-    }
-
-    const data = await response.json()
-    return data.models || []
-  } catch (error) {
-    console.error('Error fetching available video models:', error)
-    return ALL_VIDEO_MODELS
+export function withVideoModelOssAssets(model: VideoModelConfig): VideoModelConfig {
+  return {
+    ...model,
+    image: model.image ? getHomepageAsset(model.image) : model.image,
+    imageFallback: model.imageFallback || model.image,
+    homepageCover: model.homepageCover ? getHomepageAsset(model.homepageCover) : model.homepageCover,
+    homepageCoverFallback: model.homepageCoverFallback || model.homepageCover,
   }
 }
 
+let availableVideoModelsCache: VideoModelConfig[] | null = null
+let availableVideoModelsRequest: Promise<VideoModelConfig[]> | null = null
+
+export async function getAvailableVideoModels(): Promise<VideoModelConfig[]> {
+  if (availableVideoModelsCache) return availableVideoModelsCache
+  if (availableVideoModelsRequest) return availableVideoModelsRequest
+
+  availableVideoModelsRequest = (async () => {
+    try {
+      const response = await fetch('/api/video-models')
+      if (!response.ok) {
+        throw new Error('Failed to fetch available video models')
+      }
+
+      const data = await response.json()
+      const models = (data.models || []).map(withVideoModelOssAssets)
+      availableVideoModelsCache = models
+      return models
+    } catch (error) {
+      console.error('Error fetching available video models:', error)
+      return ALL_VIDEO_MODELS.map(withVideoModelOssAssets)
+    } finally {
+      availableVideoModelsRequest = null
+    }
+  })()
+
+  return availableVideoModelsRequest
+}
+
 export function getAllVideoModels(): VideoModelConfig[] {
-  return ALL_VIDEO_MODELS
+  return ALL_VIDEO_MODELS.map(withVideoModelOssAssets)
 }
 
 export function getVideoModelById(modelId: string): VideoModelConfig | null {
-  return ALL_VIDEO_MODELS.find(model => model.id === modelId) || null
+  const model = ALL_VIDEO_MODELS.find(model => model.id === modelId)
+  return model ? withVideoModelOssAssets(model) : null
 }
 
 export function getVideoAspectRatioOptions(modelConfig: VideoModelConfig): Array<{ label: VideoAspectRatioLabel; value: number }> {

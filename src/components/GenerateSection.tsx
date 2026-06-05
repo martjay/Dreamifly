@@ -269,9 +269,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   
   // 要设置为参考图片的生成图片 URL
   const [generatedImageToSetAsReference, setGeneratedImageToSetAsReference] = useState<string | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
   
   // 用户认证状态
-  const authStatus = isPending ? 'loading' : (session?.user ? 'authenticated' : 'unauthenticated') as 'loading' | 'authenticated' | 'unauthenticated';
+  const authStatus = (!hasMounted || isPending)
+    ? 'loading'
+    : (session?.user ? 'authenticated' : 'unauthenticated') as 'loading' | 'authenticated' | 'unauthenticated';
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     const modelConfig = getAllModels().find(m => m.id === model);
