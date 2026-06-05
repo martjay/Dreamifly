@@ -12,11 +12,12 @@ import { transferUrl } from '@/utils/locale'
 import { getHomepageAsset } from '@/utils/homepageAssets'
 import { getAvailableModels } from '@/utils/modelConfig'
 import { getAvailableWorkflows } from '@/utils/workflowConfig'
-import { ALL_VIDEO_MODELS, type VideoModelConfig } from '@/utils/videoModelConfig'
+import type { VideoModelConfig } from '@/utils/videoModelConfig'
 import AIPlazaCard from '@/components/AIPlazaCard'
 import VideoToVideoPlazaCard from '@/components/VideoToVideoPlazaCard'
 import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
+import { getVideoModelDescription, getVideoModelDisplayTags } from '@/utils/videoModelDisplay'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
 
 interface FAQItem {
@@ -63,24 +64,6 @@ const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; videoFallbackSrc: st
   },
 }
 
-function getVideoModelTags(model: VideoModelConfig): string[] {
-  const modeLabel = (() => {
-    switch (model.mode) {
-      case 'text-to-video':
-        return '文生视频'
-      case 'reference-to-video':
-        return '多参考图'
-      case 'video-edit':
-        return '视频编辑'
-      case 'image-to-video':
-      default:
-        return '图生视频'
-    }
-  })()
-
-  return model.provider === 'grok' ? [modeLabel, '支持中文'] : [modeLabel, '支持音频', '支持中文']
-}
-
 function sortImageModelsForHomepage(models: ModelConfig[]): ModelConfig[] {
   return [...models].sort((a, b) => {
     const aIsGrok = a.id.toLowerCase().includes('grok')
@@ -101,6 +84,7 @@ export default function HomeClient() {
   const faqQuestions = msg<FAQItem[]>('home.faq.questions')
   // 先使用所有模型和工作流，然后异步更新为可用的
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([])
+  const [availableVideoModels, setAvailableVideoModels] = useState<VideoModelConfig[]>([])
   const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowConfig[]>([])
   const [isLoadingAIItems, setIsLoadingAIItems] = useState(false)
   const homepageImageModels = sortImageModelsForHomepage(availableModels)
@@ -110,16 +94,20 @@ export default function HomeClient() {
     const fetchAIItems = async () => {
       setIsLoadingAIItems(true)
       try {
-        const [models, workflows] = await Promise.all([
+        const [models, workflows, videoModelsResponse] = await Promise.all([
           getAvailableModels(),
-          getAvailableWorkflows()
+          getAvailableWorkflows(),
+          fetch('/api/video-models'),
         ])
+        const videoModelsData = videoModelsResponse.ok ? await videoModelsResponse.json() : { models: [] }
         setAvailableModels(models)
         setAvailableWorkflows(workflows)
+        setAvailableVideoModels(Array.isArray(videoModelsData.models) ? videoModelsData.models : [])
       } catch (error) {
         console.error('Error fetching AI items:', error)
         // 如果API调用失败，显示空列表
         setAvailableModels([])
+        setAvailableVideoModels([])
         setAvailableWorkflows([])
       } finally {
         setIsLoadingAIItems(false)
@@ -296,6 +284,10 @@ export default function HomeClient() {
     navigateToCreate(promptText, modelId)
   };
 
+  const handleContactClick = () => {
+    document.getElementById('community-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-gray-950">
       <div className="fixed inset-0 z-0 bg-white">
@@ -399,9 +391,7 @@ export default function HomeClient() {
                     <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
                   <button
-                    onClick={() => {
-                      document.getElementById('site-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }}
+                    onClick={handleContactClick}
                     className="group whitespace-nowrap px-7 py-3 sm:px-9 sm:py-3.5 border-2 border-orange-500 text-orange-600 rounded-2xl hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 transition-all duration-300 text-base sm:text-base font-medium relative overflow-hidden"
                   >
                     <span className="relative z-10">{t('hero.contactButton')}</span>
@@ -514,40 +504,41 @@ export default function HomeClient() {
                   </div>
                 </div>
 
-                {/* AI 视频模型 */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-5 flex items-center gap-2">
-                    <span className="w-1 h-5 bg-purple-400 rounded-full inline-block"></span>
-                    AI 视频模型
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-                    {ALL_VIDEO_MODELS.map((videoModel, index) => {
-                      const demo = VIDEO_MODEL_DEMOS[videoModel.id] || {
-                        videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
-                        videoFallbackSrc: '/images/video-community/video-demo-11.mp4',
-                        thumbnailSrc: videoModel.homepageCover
-                          ? getHomepageAsset(videoModel.homepageCover)
-                          : getHomepageAsset(videoModel.image || '/images/video-community/video-demo-11.png'),
-                        thumbnailFallbackSrc: videoModel.homepageCover || videoModel.image || '/images/video-community/video-demo-11.png',
-                      }
+                {availableVideoModels.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-5 flex items-center gap-2">
+                      <span className="w-1 h-5 bg-purple-400 rounded-full inline-block"></span>
+                      AI 视频模型
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+                      {availableVideoModels.map((videoModel, index) => {
+                        const demo = VIDEO_MODEL_DEMOS[videoModel.id] || {
+                          videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
+                          videoFallbackSrc: '/images/video-community/video-demo-11.mp4',
+                          thumbnailSrc: videoModel.homepageCover
+                            ? getHomepageAsset(videoModel.homepageCover)
+                            : getHomepageAsset(videoModel.image || '/images/video-community/video-demo-11.png'),
+                          thumbnailFallbackSrc: videoModel.homepageCover || videoModel.image || '/images/video-community/video-demo-11.png',
+                        }
 
-                      return (
-                        <div key={`video-model-${videoModel.id}`} className="animate-fadeInUp" style={{ animationDelay: `${index * 100}ms` }}>
-                          <VideoToVideoPlazaCard
-                            name={videoModel.name}
-                            description={videoModel.description}
-                            videoSrc={demo.videoSrc}
-                            videoFallbackSrc={demo.videoFallbackSrc}
-                            thumbnailSrc={demo.thumbnailSrc}
-                            thumbnailFallbackSrc={demo.thumbnailFallbackSrc}
-                            modelId={videoModel.id}
-                            tags={getVideoModelTags(videoModel)}
-                          />
-                        </div>
-                      )
-                    })}
+                        return (
+                          <div key={`video-model-${videoModel.id}`} className="animate-fadeInUp" style={{ animationDelay: `${index * 100}ms` }}>
+                            <VideoToVideoPlazaCard
+                              name={videoModel.name}
+                              description={getVideoModelDescription(videoModel)}
+                              videoSrc={demo.videoSrc}
+                              videoFallbackSrc={demo.videoFallbackSrc}
+                              thumbnailSrc={demo.thumbnailSrc}
+                              thumbnailFallbackSrc={demo.thumbnailFallbackSrc}
+                              modelId={videoModel.id}
+                              tags={getVideoModelDisplayTags(videoModel).map(tag => tag.label)}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

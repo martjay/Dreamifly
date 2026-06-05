@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { ALL_VIDEO_MODELS, type VideoModelConfig } from '@/utils/videoModelConfig'
+import { ALL_VIDEO_MODELS, type VideoModelConfig, withVideoModelOssAssets } from '@/utils/videoModelConfig'
 import { isHappyHorseConfigured } from '@/utils/happyHorseVideoApi'
 
 // 视频模型环境变量映射（与 videoModelConfig.ts 保持一致）
@@ -37,7 +37,7 @@ function getAvailableVideoModels(): VideoModelConfig[] {
   return ALL_VIDEO_MODELS.filter(model => {
     // 检查是否配置了环境变量
     return isVideoModelConfigured(model.id);
-  });
+  }).map(withVideoModelOssAssets);
 }
 
 export async function GET() {

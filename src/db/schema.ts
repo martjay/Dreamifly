@@ -1,4 +1,4 @@
-import { pgTable, timestamp, integer, text, boolean, real, serial, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, integer, text, boolean, real, serial, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const siteStats = pgTable('site_stats', {
@@ -309,6 +309,55 @@ export const communityMediaTag = pgTable("community_media_tag", {
   mediaTagUnique: uniqueIndex("community_media_tag_media_tag_unique").on(table.mediaId, table.tagId),
 }));
 
+// 已发布社区媒体表
+export const communityMedia = pgTable("community_media", {
+  id: text("id").primaryKey(),
+  sourceMediaId: text("source_media_id").notNull(), // 来源作品ID，不做级联删除
+  sourceUserId: text("source_user_id"), // 来源用户ID快照，不做级联删除
+  sourceMediaUrl: text("source_media_url"), // 来源媒体URL快照，仅用于追溯
+  mediaUrl: text("media_url").notNull(), // 社区专用OSS媒体URL
+  mediaType: text("media_type").default("image").notNull(), // 媒体类型：'image' | 'video'
+  prompt: text("prompt"),
+  model: text("model"),
+  width: integer("width"),
+  height: integer("height"),
+  duration: integer("duration"),
+  fps: integer("fps"),
+  frameCount: integer("frame_count"),
+  userRole: text("user_role"),
+  userAvatar: text("user_avatar"),
+  userNickname: text("user_nickname"),
+  avatarFrameId: integer("avatar_frame_id"),
+  moderationLevel: text("moderation_level").default('low').notNull(),
+  nsfw: boolean("nsfw").default(false).notNull(),
+  approvedAt: timestamp("approved_at").notNull(),
+  approvedBy: text("approved_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  sourceMediaUnique: uniqueIndex("community_media_source_media_id_unique").on(table.sourceMediaId),
+  mediaTypeIdx: index("community_media_media_type_idx").on(table.mediaType),
+  nsfwIdx: index("community_media_nsfw_idx").on(table.nsfw),
+  createdAtIdx: index("community_media_created_at_idx").on(table.createdAt),
+}));
+
+// 已发布社区媒体与标签关联表
+export const communityPublishedMediaTag = pgTable("community_published_media_tag", {
+  id: text("id").primaryKey(),
+  communityMediaId: text("community_media_id")
+    .notNull()
+    .references(() => communityMedia.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => communityTag.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  mediaTagUnique: uniqueIndex("community_published_media_tag_media_tag_unique").on(table.communityMediaId, table.tagId),
+  communityMediaIdx: index("community_published_media_tag_media_id_idx").on(table.communityMediaId),
+  tagIdx: index("community_published_media_tag_tag_id_idx").on(table.tagId),
+}));
+
 // 中风险内容查看确认记录表
 export const mediaViewConsent = pgTable("media_view_consent", {
   id: text("id").primaryKey(),
@@ -348,6 +397,23 @@ export const communityLike = pgTable("community_like", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   userImageUnique: uniqueIndex("community_like_user_image_unique").on(table.userId, table.imageId),
+}));
+
+// 社区发布作品收藏表
+export const communityMediaLike = pgTable("community_media_like", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  communityMediaId: text("community_media_id")
+    .notNull()
+    .references(() => communityMedia.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userMediaUnique: uniqueIndex("community_media_like_user_media_unique").on(table.userId, table.communityMediaId),
+  userIdx: index("community_media_like_user_id_idx").on(table.userId),
+  communityMediaIdx: index("community_media_like_media_id_idx").on(table.communityMediaId),
 }));
 
 // 未通过审核图片表

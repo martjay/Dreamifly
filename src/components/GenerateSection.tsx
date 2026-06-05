@@ -12,7 +12,7 @@ import PromptInput from './PromptInput'
 import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
+import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
@@ -48,6 +48,10 @@ type VideoModerationState = {
   mediaId?: string | null
 }
 
+const DEFAULT_IMAGE_ASPECT_RATIO = '9:16'
+const DEFAULT_IMAGE_WIDTH = 768
+const DEFAULT_IMAGE_HEIGHT = 1368
+
 // 格式化时间（秒转为 MM:SS 或 HH:MM:SS）
 const formatTime = (seconds: number): string => {
   if (!isFinite(seconds) || isNaN(seconds)) return '0:00'
@@ -81,8 +85,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const [negativePrompt, setNegativePrompt] = useState('');
-  const [width, setWidth] = useState(1024);
-  const [height, setHeight] = useState(1024);
+  const [width, setWidth] = useState(DEFAULT_IMAGE_WIDTH);
+  const [height, setHeight] = useState(DEFAULT_IMAGE_HEIGHT);
   // 初始步数根据初始模型配置设置（如果提供了initialModel，使用它的配置；否则使用默认模型）
   const initialModelForSteps = defaultImageModel;
   const initialModelThresholds = getModelThresholds(initialModelForSteps);
@@ -249,6 +253,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [stepsError, setStepsError] = useState<string | null>(null);
   const [batchSizeError, setBatchSizeError] = useState<string | null>(null);
   const [imageCountError, setImageCountError] = useState<string | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const stepsRef = useRef<HTMLInputElement>(null);
   const batchSizeRef = useRef<HTMLInputElement>(null);
   const widthRef = useRef<HTMLInputElement>(null);
@@ -268,9 +273,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   
   // 要设置为参考图片的生成图片 URL
   const [generatedImageToSetAsReference, setGeneratedImageToSetAsReference] = useState<string | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
   
   // 用户认证状态
-  const authStatus = isPending ? 'loading' : (session?.user ? 'authenticated' : 'unauthenticated') as 'loading' | 'authenticated' | 'unauthenticated';
+  const authStatus = (!hasMounted || isPending)
+    ? 'loading'
+    : (session?.user ? 'authenticated' : 'unauthenticated') as 'loading' | 'authenticated' | 'unauthenticated';
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const modelConfig = getAllModels().find(m => m.id === model);
+    const maxImages = modelConfig?.maxImages ?? 1;
+    if (uploadedImages.length <= maxImages) {
+      setImageCountError(null);
+    }
+  }, [model, uploadedImages.length]);
 
   // 当用户未登录时，强制将生成数量设置为1
   useEffect(() => {
@@ -389,10 +409,25 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
   const handleGenerate = async () => {
     let hasError = false;
+    const trimmedPrompt = prompt.trim();
+    const promptRequiredMessage = t('error.validation.promptRequired');
     setStepsError(null);
     setBatchSizeError(null);
     setImageCountError(null);
+    setPromptError(null);
     setConcurrencyError(null);
+
+    if (authStatus === 'unauthenticated' && isLoginRequiredModel(model)) {
+      setLoginTipMessage('该模型仅限登录用户使用，请先登录后再使用');
+      setShowLoginTip(true);
+      return;
+    }
+
+    if (!trimmedPrompt) {
+      setPromptError(promptRequiredMessage);
+      promptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      hasError = true;
+    }
     
     // 验证参考图片数量
     const models = [
@@ -453,17 +488,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       },
       {
         id: "gpt-image-2",
-        maxImages: 1,
+        maxImages: 3,
         tags: ["chineseSupport", "fastGeneration"]
       }
     ];
     
-    const currentModel = models.find(m => m.id === model);
-    const maxImages = currentModel?.maxImages ?? 1;
-    
     // 首先检查图生图模型是否上传了图片（优先级最高，避免被后续逻辑覆盖）
     const allModels = getAllModels();
     const modelConfig = allModels.find(m => m.id === model);
+    const currentModel = models.find(m => m.id === model);
+    const maxImages = modelConfig?.maxImages ?? currentModel?.maxImages ?? 1;
     // 支持中文以 modelConfig（ALL_MODELS）为准，避免硬编码列表漏掉新模型（如 grok-imagine-1.0）
     const supportsChinese = modelConfig?.tags?.includes('chineseSupport') ?? false;
     
@@ -588,7 +622,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
             }),
           });
 
-          // 检查是否是401未登录错误（图改图模型限制）
+          // 检查是否是401未登录错误（图改图或仅限登录模型限制）
           if (inputModerationFailureMessage) {
             setImageStatuses(prev => {
               const newStatuses = [...prev];
@@ -603,7 +637,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
           if (res.status === 401) {
             const errorData = await res.json().catch(() => ({}));
-            if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I') {
+            if (errorData.code === 'LOGIN_REQUIRED_FOR_I2I' || errorData.code === 'LOGIN_REQUIRED') {
+              setLoginTipMessage(errorData.error || '请先登录后再使用此功能');
               setShowLoginTip(true);
               setIsGenerating(false);
               setImageStatuses(prev => {
@@ -661,6 +696,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           // 审核未通过：非 2xx，但响应体包含 imageUrl 供前端加遮罩展示
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
+            if (errorData?.code === 'OFFICIAL_MODEL_MODERATION_FAILED') {
+              const message = t('preview.officialModerationFailed')
+              setImageStatuses(prev => {
+                const newStatuses = [...prev];
+                newStatuses[index] = ({
+                  status: 'error',
+                  message
+                });
+                return newStatuses;
+              });
+              return;
+            }
             if (errorData?.code === 'MODERATION_FAILED' && !errorData?.imageUrl) {
               const message = inputModerationFailureMessage || getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
               inputModerationFailureMessage = message
@@ -813,35 +860,44 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   };
 
 
-  const [aspectRatio, setAspectRatio] = useState('1:1');
-  const hideImageRatioSelector = isGptImage2Model(model);
+  const [aspectRatio, setAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
+  const hideImageRatioSelector = false;
   // 高分辨率开关状态（独立控制，不受图片比例影响）
   const [isHighResolution, setIsHighResolution] = useState(false);
 
-  // 切换到 grok-imagine-1.0 时，若当前比例不在支持列表内，重置为 1:1
+  // 切换到 grok-imagine-1.0 时，若当前比例不在支持列表内，重置为默认比例
   useEffect(() => {
     if (model === 'grok-imagine-1.0' && !GROK_ALLOWED_RATIOS.includes(aspectRatio)) {
-      setAspectRatio('1:1');
-      setWidth(1024);
-      setHeight(1024);
+      const defaultSize = GROK_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
+      setWidth(defaultSize.width);
+      setHeight(defaultSize.height);
       setIsHighResolution(false);
     }
   }, [model, aspectRatio]);
 
   useEffect(() => {
-    if (isGptImage2Model(model) && !GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio)) {
-      setAspectRatio('1:1');
-      setWidth(1024);
-      setHeight(1024);
-      setIsHighResolution(false);
-    }
-  }, [model, aspectRatio]);
+    if (isGptImage2Model(model)) {
+      const nextRatio = GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio) ? aspectRatio : DEFAULT_IMAGE_ASPECT_RATIO;
+      const size = GPT_IMAGE_2_RATIO_SIZES[nextRatio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      const shouldUseHighQualitySize = nextRatio === aspectRatio && isHighResolution;
+      const targetSize = shouldUseHighQualitySize ? size.high : size.normal;
 
-  // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为 1:1（1K）
+      if (nextRatio !== aspectRatio) {
+        setAspectRatio(nextRatio);
+        setIsHighResolution(false);
+      }
+
+      setWidth(targetSize.width);
+      setHeight(targetSize.height);
+    }
+  }, [model, aspectRatio, isHighResolution]);
+
+  // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为默认比例（1K）
   useEffect(() => {
     if (model === 'nano-banana-2' && !NANO_BANANA_ALLOWED_RATIOS.includes(aspectRatio)) {
-      const defaultSize = NANO_BANANA_RATIO_SIZES['1:1'];
-      setAspectRatio('1:1');
+      const defaultSize = NANO_BANANA_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
       setWidth(defaultSize.width);
       setHeight(defaultSize.height);
       setIsHighResolution(false);
@@ -851,18 +907,26 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const handleRatioChange = (ratio: string) => {
     setAspectRatio(ratio);
 
+    if (isGptImage2Model(model)) {
+      const size = GPT_IMAGE_2_RATIO_SIZES[ratio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      const targetSize = isHighResolution ? size.high : size.normal;
+      setWidth(targetSize.width);
+      setHeight(targetSize.height);
+      return;
+    }
+
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
-    if (model === 'grok-imagine-1.0' || isGptImage2Model(model)) {
-      const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
+    if (model === 'grok-imagine-1.0') {
+      const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       setWidth(size.width);
       setHeight(size.height);
       return;
     }
 
     // nano-banana-2 使用独立的比例 → 像素体系
-    // 普通画质对应 1K 基准尺寸，高画质由后续的高分辨率开关自动放大到 2K
+    // 普通画质对应 1K 基准尺寸，高画质由后续的高分辨率开关自动放大并映射为 4K
     if (model === 'nano-banana-2') {
-      const baseSize = NANO_BANANA_RATIO_SIZES[ratio] || NANO_BANANA_RATIO_SIZES['1:1'];
+      const baseSize = NANO_BANANA_RATIO_SIZES[ratio] || NANO_BANANA_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       if (isHighResolution) {
         setWidth(baseSize.width * 2);
         setHeight(baseSize.height * 2);
@@ -1069,7 +1133,12 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               <div className="relative">
                 <PromptInput
                   prompt={prompt}
-                  setPrompt={setPrompt}
+                  setPrompt={(value) => {
+                    setPrompt(value)
+                    if (value.trim()) {
+                      setPromptError(null)
+                    }
+                  }}
                   negativePrompt={negativePrompt}
                   setNegativePrompt={setNegativePrompt}
                   onGenerate={handleGenerate}
@@ -1088,6 +1157,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   isQueuing={isQueuing}
                   estimatedCost={estimatedCost}
                   extraCost={extraCost}
+                  promptError={promptError}
+                  loginHintMessage={isLoginRequiredModel(model) ? '该模型仅限登录用户使用，请先登录后再使用' : undefined}
                   extraContent={
                     <div className="lg:hidden pt-2">
                       <GenerateForm

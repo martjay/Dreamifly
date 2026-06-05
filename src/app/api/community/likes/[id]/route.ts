@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { communityLike, userGeneratedImages } from '@/db/schema'
+import { communityMedia, communityMediaLike } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -17,11 +17,11 @@ async function getSessionUser(request: NextRequest) {
   return session.user
 }
 
-async function validateMediaExists(imageId: string) {
+async function validateMediaExists(mediaId: string) {
   const rows = await db
-    .select({ id: userGeneratedImages.id })
-    .from(userGeneratedImages)
-    .where(eq(userGeneratedImages.id, imageId))
+    .select({ id: communityMedia.id })
+    .from(communityMedia)
+    .where(eq(communityMedia.id, mediaId))
     .limit(1)
 
   return rows.length > 0
@@ -44,21 +44,21 @@ export async function POST(
     }
 
     const existing = await db
-      .select({ id: communityLike.id })
-      .from(communityLike)
+      .select({ id: communityMediaLike.id })
+      .from(communityMediaLike)
       .where(
         and(
-          eq(communityLike.userId, currentUser.id),
-          eq(communityLike.imageId, id)
+          eq(communityMediaLike.userId, currentUser.id),
+          eq(communityMediaLike.communityMediaId, id)
         )
       )
       .limit(1)
 
     if (existing.length === 0) {
-      await db.insert(communityLike).values({
+      await db.insert(communityMediaLike).values({
         id: uuidv4(),
         userId: currentUser.id,
-        imageId: id,
+        communityMediaId: id,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -87,11 +87,11 @@ export async function DELETE(
     const { id } = await params
 
     await db
-      .delete(communityLike)
+      .delete(communityMediaLike)
       .where(
         and(
-          eq(communityLike.userId, currentUser.id),
-          eq(communityLike.imageId, id)
+          eq(communityMediaLike.userId, currentUser.id),
+          eq(communityMediaLike.communityMediaId, id)
         )
       )
 

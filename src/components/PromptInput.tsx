@@ -27,6 +27,8 @@ interface PromptInputProps {
   model?: string;
   hideRatioSelector?: boolean;
   extraContent?: ReactNode;
+  promptError?: string | null;
+  loginHintMessage?: string;
 }
 
 const PromptInput = ({
@@ -49,7 +51,9 @@ const PromptInput = ({
   extraCost = null,
   model,
   hideRatioSelector = false,
-  extraContent
+  extraContent,
+  promptError,
+  loginHintMessage
 }: PromptInputProps) => {
   const t = createScopedT('home.generate')
   const [isRatioOpen, setIsRatioOpen] = useState(false);
@@ -77,7 +81,7 @@ const PromptInput = ({
     };
   }, [isStyleOpen, isRatioOpen]);
 
-  const shouldShowRatioSelector = !hideRatioSelector && !isGptImage2Model(model);
+  const shouldShowRatioSelector = !hideRatioSelector;
   const ratios = model === 'grok-imagine-1.0'
     ? GROK_ALLOWED_RATIOS
     : isGptImage2Model(model)
@@ -92,6 +96,8 @@ const PromptInput = ({
     }
   }, [shouldShowRatioSelector]);
 
+  const isExternalPaidImageModel = model === 'nano-banana-2' || isGptImage2Model(model);
+
   return (
     <div>
       <label htmlFor="prompt" className="flex items-center text-xs font-medium text-gray-800 mb-2.5">
@@ -103,10 +109,26 @@ const PromptInput = ({
           id="prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          className="w-full h-28 px-4 py-3 bg-white/95 backdrop-blur-sm border border-amber-400/40 rounded-2xl focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400/50 resize-none shadow-inner transition-all duration-300 text-gray-900 placeholder-gray-500 text-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className={`w-full h-28 px-4 py-3 bg-white/95 backdrop-blur-sm border rounded-2xl focus:ring-2 resize-none shadow-inner transition-all duration-300 text-gray-900 placeholder-gray-500 text-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
+            promptError
+              ? 'border-red-400/70 focus:ring-red-400/50 focus:border-red-400/60'
+              : 'border-amber-400/40 focus:ring-amber-400/50 focus:border-amber-400/50'
+          }`}
           placeholder={t('form.prompt.placeholder')}
           ref={promptRef}
+          aria-invalid={!!promptError}
+          aria-describedby={promptError ? 'prompt-error' : undefined}
         />
+        {promptError && (
+          <div id="prompt-error" className="p-3 bg-red-50 border border-red-300 rounded-lg animate-fadeInUp">
+            <p className="text-sm font-medium text-red-600 flex items-center">
+              <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {promptError}
+            </p>
+          </div>
+        )}
 
         {/* 负面提示词 Toggle Switch */}
         <div className="flex items-center justify-between py-1.5 sm:py-2">
@@ -200,7 +222,7 @@ const PromptInput = ({
               {selectedStyle || t('form.styleButton')}
               <div 
                 ref={styleDropdownRef} 
-                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 md:p-4 grid grid-cols-3 gap-2 md:gap-3 md:gap-y-4 w-[280px] md:w-auto md:min-w-[450px] z-50 justify-items-center max-h-[70vh] overflow-y-auto custom-scrollbar transition-all duration-200 ${
+                className={`absolute top-full left-0 md:left-1/2 md:-translate-x-1/2 mt-2 bg-white/95 border border-amber-400/40 rounded-xl shadow-xl p-2 md:p-4 grid grid-cols-3 gap-2 md:gap-3 md:gap-y-4 w-[min(280px,calc(100vw-2rem))] md:w-auto md:min-w-[450px] z-50 justify-items-center max-h-[70vh] overflow-y-auto custom-scrollbar transition-all duration-200 ${
                   isStyleOpen ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none'
                 }`}
               >
@@ -344,9 +366,9 @@ const PromptInput = ({
                 </div>
               )}
             </button>
-            <LoginHint className="text-xs md:text-sm" />
-            {/* 额外消耗提示 - 仅对已登录用户显示，无论是否有额度都显示 */}
-            {model !== 'nano-banana-2' && extraCost !== null && extraCost > 0 && (
+            <LoginHint className="text-xs md:text-sm" message={loginHintMessage} />
+            {/* 额外消耗提示 - 独立计费模型不使用免费额度，因此不显示 */}
+            {!isExternalPaidImageModel && extraCost !== null && extraCost > 0 && (
               <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600 whitespace-nowrap">
                 <svg
                   className="w-4 h-4 text-amber-500"

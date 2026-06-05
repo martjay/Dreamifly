@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { isEmailDomainAllowed, isValid163Email } from "@/utils/email-domain-validator";
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isValid163Email } from "@/utils/email-domain-validator";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from 'crypto';
@@ -84,9 +84,17 @@ async function ensureAllowedEmailDomain(request: NextRequest) {
     return jsonError("邮箱地址不能为空");
   }
 
+  if (isBlockedEmailDomain(payload.email)) {
+    return jsonError("EMAIL_DOMAIN_BLOCKED", "EMAIL_DOMAIN_BLOCKED");
+  }
+
   // 特殊验证163邮箱：只允许纯数字+@163.com
   if (!isValid163Email(payload.email)) {
     return jsonError("163_EMAIL_NOT_ALLOWED", "163_EMAIL_NOT_ALLOWED");
+  }
+
+  if (!isEmailDotCountAllowed(payload.email)) {
+    return jsonError("EMAIL_DOT_COUNT_NOT_ALLOWED", "EMAIL_DOT_COUNT_NOT_ALLOWED");
   }
 
   const isAllowed = await isEmailDomainAllowed(payload.email);

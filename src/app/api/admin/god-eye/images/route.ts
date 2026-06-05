@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { userGeneratedImages, user } from '@/db/schema'
+import { communityMedia, userGeneratedImages, user } from '@/db/schema'
 import { eq, ne, desc, and, or, like, isNull, gte, lte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
@@ -11,7 +11,7 @@ import { headers } from 'next/headers'
  * - page: 页码（默认1）
  * - limit: 每页数量（默认20）
  * - role: 用户角色筛选（admin, subscribed, premium, oldUser, regular, all）
- * - search: 搜索关键词（用户昵称）
+ * - search: 搜索关键词（支持用户快照昵称、用户名、实时昵称、邮箱）
  * - startDate: 开始日期（YYYY-MM-DD）
  * - endDate: 结束日期（YYYY-MM-DD）
  * - reviewStatus: 人工审核状态（pending | approved | rejected | all）
@@ -83,10 +83,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 搜索筛选（用户昵称）
+    // 搜索筛选（支持作品快照昵称 + 用户表实时信息）
     if (search.trim()) {
+      const searchTerm = `%${search.trim()}%`
       conditions.push(
-        like(userGeneratedImages.userNickname, `%${search.trim()}%`)
+        or(
+          like(userGeneratedImages.userNickname, searchTerm),
+          like(user.name, searchTerm),
+          like(user.nickname, searchTerm),
+          like(user.email, searchTerm)
+        )
       )
     }
 
@@ -106,6 +112,125 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(userGeneratedImages.manualReviewStatus, reviewStatus))
     }
 
+    if (reviewStatus === 'approved') {
+      const communityConditions = [
+        eq(communityMedia.moderationLevel, 'low'),
+      ]
+
+      if (roleFilter !== 'all') {
+        if (roleFilter === 'regular') {
+          communityConditions.push(
+            or(
+              eq(communityMedia.userRole, 'regular'),
+              isNull(communityMedia.userRole)
+            ) as any
+          )
+        } else {
+          communityConditions.push(eq(communityMedia.userRole, roleFilter))
+        }
+      }
+
+      if (search.trim()) {
+        const searchTerm = `%${search.trim()}%`
+        communityConditions.push(
+          or(
+            like(communityMedia.userNickname, searchTerm),
+            like(user.name, searchTerm),
+            like(user.nickname, searchTerm),
+            like(user.email, searchTerm)
+          ) as any
+        )
+      }
+
+      if (startDate) {
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        communityConditions.push(gte(communityMedia.createdAt, start))
+      }
+      if (endDate) {
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+        communityConditions.push(lte(communityMedia.createdAt, end))
+      }
+
+      const communityWhereClause = and(...communityConditions)
+
+      const totalResult = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(communityMedia)
+        .leftJoin(user, eq(communityMedia.sourceUserId, user.id))
+        .where(communityWhereClause as any)
+
+      const total = totalResult[0]?.count || 0
+
+      const images = await db
+        .select({
+          id: communityMedia.sourceMediaId,
+          imageUrl: communityMedia.mediaUrl,
+          mediaType: communityMedia.mediaType,
+          prompt: communityMedia.prompt,
+          model: communityMedia.model,
+          width: communityMedia.width,
+          height: communityMedia.height,
+          duration: communityMedia.duration,
+          fps: communityMedia.fps,
+          frameCount: communityMedia.frameCount,
+          userRole: communityMedia.userRole,
+          userAvatar: communityMedia.userAvatar,
+          userNickname: communityMedia.userNickname,
+          avatarFrameId: communityMedia.avatarFrameId,
+          manualReviewedAt: communityMedia.approvedAt,
+          manualReviewedBy: communityMedia.approvedBy,
+          nsfw: communityMedia.nsfw,
+          createdAt: communityMedia.createdAt,
+          userId: communityMedia.sourceUserId,
+        })
+        .from(communityMedia)
+        .leftJoin(user, eq(communityMedia.sourceUserId, user.id))
+        .where(communityWhereClause as any)
+        .orderBy(desc(communityMedia.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+      const formattedImages = images.map(img => ({
+        id: img.id,
+        imageUrl: img.imageUrl,
+        mediaType: img.mediaType || 'image',
+        prompt: img.prompt,
+        model: img.model,
+        width: img.width,
+        height: img.height,
+        duration: img.duration,
+        fps: img.fps,
+        frameCount: img.frameCount,
+        userRole: img.userRole || 'regular',
+        userAvatar: img.userAvatar || '/images/default-avatar.svg',
+        userNickname: img.userNickname || '未知用户',
+        avatarFrameId: img.avatarFrameId,
+        referenceImages: [],
+        manualReviewStatus: 'approved',
+        manualReviewedAt: img.manualReviewedAt?.toISOString() || null,
+        manualReviewedBy: img.manualReviewedBy || null,
+        reportCount: 0,
+        nsfw: Boolean(img.nsfw),
+        createdAt: img.createdAt?.toISOString() || new Date().toISOString(),
+        userId: img.userId,
+      }))
+
+      return NextResponse.json({
+        success: true,
+        images: formattedImages,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      })
+    }
+
     // 查询总数
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -114,6 +239,7 @@ export async function GET(request: NextRequest) {
         count: sql<number>`count(*)::int`,
       })
       .from(userGeneratedImages)
+      .leftJoin(user, eq(userGeneratedImages.userId, user.id))
       .where(whereClause as any)
 
     const total = totalResult[0]?.count || 0
@@ -145,6 +271,7 @@ export async function GET(request: NextRequest) {
         userId: userGeneratedImages.userId,
       })
       .from(userGeneratedImages)
+      .leftJoin(user, eq(userGeneratedImages.userId, user.id))
       .where(whereClause as any)
       .orderBy(desc(userGeneratedImages.createdAt))
       .limit(limit)
@@ -194,4 +321,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

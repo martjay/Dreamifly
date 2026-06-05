@@ -152,6 +152,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             // 检查是否是163邮箱错误
             if (validateData.error === '163_EMAIL_NOT_ALLOWED') {
               setError(t('error.163EmailNotAllowed'))
+            } else if (validateData.error === 'EMAIL_DOMAIN_BLOCKED') {
+              setError(t('error.emailDomainBlocked'))
+            } else if (validateData.error === 'EMAIL_DOT_COUNT_NOT_ALLOWED') {
+              setError(t('error.emailDotCountNotAllowed'))
             } else {
               setError(t('error.emailDomainNotAllowed'))
             }
@@ -222,6 +226,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
                 errorMessage === 'EMAIL_DOMAIN_NOT_ALLOWED' ||
                 errorMessage.includes('EMAIL_DOMAIN_NOT_ALLOWED')) {
               setError(t('error.emailDomainNotAllowed'))
+            } else if (errorCode === 'EMAIL_DOMAIN_BLOCKED' ||
+                errorMessage === 'EMAIL_DOMAIN_BLOCKED' ||
+                errorMessage.includes('EMAIL_DOMAIN_BLOCKED')) {
+              setError(t('error.emailDomainBlocked'))
+            } else if (errorCode === 'EMAIL_DOT_COUNT_NOT_ALLOWED' ||
+                errorMessage === 'EMAIL_DOT_COUNT_NOT_ALLOWED' ||
+                errorMessage.includes('EMAIL_DOT_COUNT_NOT_ALLOWED')) {
+              setError(t('error.emailDotCountNotAllowed'))
             } else if (errorCode === 'UNAUTHORIZED' || errorCode === 'INVALID_TOKEN') {
               setError(t('error.unauthorized'))
             } else {

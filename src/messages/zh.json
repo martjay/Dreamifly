@@ -75,7 +75,13 @@
           "tags": {
             "textToImage": "文生图",
             "imageToImage": "图生图",
+            "textToVideo": "文生视频",
+            "imageToVideo": "图生视频",
+            "referenceToVideo": "参考生视频",
+            "multiReference": "多参考图",
+            "videoEdit": "视频编辑",
             "chineseSupport": "支持中文",
+            "audioSupport": "支持音频",
             "fastGeneration": "极速生成",
             "realisticStyle": "写实风格",
             "animeSpecialty": "动漫特长",
@@ -96,7 +102,14 @@
             "Z-Image-Turbo": "Z-Image-Turbo 是一个支持中文的快速文生图模型，基于 Lumina2 架构，能够快速生成高质量的图像，特别适合中文提示词输入。",
             "Flux-2": "Flux-2 是 Black Forest Labs 开发的最新文本到图像生成模型，采用改进的架构和更强大的 CLIP 编码器，能够生成更高质量、更细节丰富的图像。",
             "grok-imagine-10": "Grok Imagine 是 xAI 开发的闭源文生图模型，具备出色的提示词理解能力与画质表现，支持中文输入。",
-            "nano-banana-2": "Google 基于 Gemini 3.1 Flash Image 构建的高效文生图模型，支持高保真输出、精准文字渲染与多种画面比例，兼顾速度与质量。"
+            "gpt-image-2": "GPT-image-2 是支持文生图、多图参考生成与高质量输出的图像模型，具备较强的提示词理解、中文输入和画面细节生成能力，适合插画、设计稿、商品图和创意内容制作。",
+            "nano-banana-2": "Google 基于 Gemini 3.1 Flash Image 构建的高效文生图模型，支持高保真输出、精准文字渲染与多种画面比例，兼顾速度与质量。",
+            "Wan22-I2V-Lightning": "Wan 2.2 图生视频模型，支持基于参考图片生成流畅短视频，适合人物、场景和创意动态效果。",
+            "grok-imagine-10-video": "Grok Imagine 视频模型，支持基于图片生成富有想象力的动态画面，输出固定 480p 视频。",
+            "happyhorse-10-t2v": "HappyHorse 文生视频模型，根据文字提示生成 3-15 秒短视频，适合快速制作动态创意内容。",
+            "happyhorse-10-i2v": "HappyHorse 图生视频模型，以上传图片作为首帧生成 3-15 秒短视频，适合让静态画面自然动起来。",
+            "happyhorse-10-r2v": "HappyHorse 参考生视频模型，支持 1-9 张参考图和文字提示，生成更贴合参考内容的短视频。",
+            "happyhorse-10-video-edit": "HappyHorse 视频编辑模型，根据文字指令和可选参考图编辑源视频，适合调整画面内容和动态效果。"
           }
         },
         "steps": {
@@ -179,6 +192,7 @@
         "generating": "生成中...",
         "completed": "生成完成",
         "error": "生成失败",
+        "officialModerationFailed": "模型官方审核未通过",
         "retrying": "正在重试",
         "hint": "图片或视频生成可能耗时较长，偶尔一张图片或视频出错是正常情况，请耐心等待。",
         "status": {
@@ -195,6 +209,7 @@
           "stepsRange": "步数必须在10到32之间",
           "batchSizeRange": "生成数量必须在1到4之间",
           "sizeRange": "宽高必须在64到1920之间",
+          "promptRequired": "请输入提示词，说明希望如何生成或修改图片",
           "imageCountLimit": "当前模型 {model} 最多支持 {maxImages} 张参考图片，请删除多余的图片",
           "fileType": "请上传图片文件",
           "fileSize": "图片大小不能超过 10MB",
@@ -459,7 +474,9 @@
       "resendFailed": "发送失败，请稍后重试",
       "emailQuotaExceeded": "邮件发送失败：已达每日限制验证人数上限，建议加入官方群联系管理员处理",
       "emailDomainNotAllowed": "不支持该邮箱类型注册",
+      "emailDomainBlocked": "该邮箱地址不符合注册要求，请使用常用邮箱注册",
       "163EmailNotAllowed": "不支持网易免费邮箱，请使用其他邮箱注册",
+      "emailDotCountNotAllowed": "该邮箱地址不符合注册要求，请使用常用邮箱注册",
       "emailSendFailed": "注册成功，但验证邮件发送失败，建议加入官方群联系管理员处理",
       "unauthorized": "未授权，请刷新页面后重试",
       "ipRegistrationLimitExceeded": "24小时内最多只能注册2次，请稍后再试",

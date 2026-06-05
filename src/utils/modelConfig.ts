@@ -17,8 +17,8 @@ const MODEL_ENV_MAP = {
   "Z-Image-Turbo": "Z_Image_Turbo_URL",
   "Flux-2": "Flux_2_URL",
   "grok-imagine-1.0": "GROK_IMAGINE_API_URL",
-  "gpt-image-2": "GPT_IMAGE_2_API_URL",
-  "nano-banana-2": "REPLICATE_API_TOKEN"
+  "gpt-image-2": "BANANA_ROUTER_API_KEY",
+  "nano-banana-2": "BANANA_ROUTER_API_KEY"
 } as const;
 
 // 基础模型配置
@@ -195,10 +195,10 @@ export const ALL_MODELS: ModelConfig[] = [
     name: "GPT-image-2",
     image: "/images/gpt-image-2.png",
     homepageCover: "/images/gpt-image-2.png",
-    description: "GPT-image-2 supports text-to-image generation and single-image editing with Chinese prompts.",
+    description: "GPT-image-2 supports text-to-image generation, multi-image reference editing, and high-quality output with Chinese prompts.",
     use_i2i: true,
     use_t2i: true,
-    maxImages: 1,
+    maxImages: 3,
     tags: ["chineseSupport"],
     requiresLogin: true
   },
@@ -222,6 +222,13 @@ export const ALL_MODELS: ModelConfig[] = [
  * @returns 是否配置了URL
  */
 export function isModelConfigured(modelId: string): boolean {
+  if (isGptImage2Model(modelId)) {
+    return [
+      process.env.BANANA_ROUTER_API_KEY,
+      process.env.BANANA_ROUTER_BASE_URL,
+    ].every(value => Boolean(value && value.trim() !== ''));
+  }
+
   const envVarName = MODEL_ENV_MAP[modelId as keyof typeof MODEL_ENV_MAP];
   if (!envVarName) {
     return false;
@@ -421,14 +428,14 @@ export const MODEL_THRESHOLDS: Record<string, ModelThresholds> = {
   "gpt-image-2": {
     normalSteps: null,
     highSteps: null,
-    normalResolutionPixels: null,
-    highResolutionPixels: null,
+    normalResolutionPixels: 1536 * 864,
+    highResolutionPixels: 2736 * 1536,
   },
   "gpt-image-2.0": {
     normalSteps: null,
     highSteps: null,
-    normalResolutionPixels: null,
-    highResolutionPixels: null,
+    normalResolutionPixels: 1536 * 864,
+    highResolutionPixels: 2736 * 1536,
   },
   "nano-banana-2": {
     normalSteps: null,
@@ -453,6 +460,21 @@ export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
 export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
 export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
 
+export const GPT_IMAGE_2_RATIO_SIZES: Record<string, { normal: { width: number; height: number }; high: { width: number; height: number } }> = {
+  '1:1': {
+    normal: { width: 1024, height: 1024 },
+    high: { width: 2048, height: 2048 },
+  },
+  '16:9': {
+    normal: { width: 1536, height: 864 },
+    high: { width: 2736, height: 1536 },
+  },
+  '9:16': {
+    normal: { width: 864, height: 1536 },
+    high: { width: 1536, height: 2736 },
+  },
+};
+
 export function isGptImage2Model(modelId?: string | null): boolean {
   const normalizedModelId = modelId?.trim().toLowerCase();
   return Boolean(normalizedModelId && GPT_IMAGE_2_MODEL_IDS.includes(normalizedModelId as typeof GPT_IMAGE_2_MODEL_IDS[number]));
@@ -462,23 +484,18 @@ export function isGptImage2Model(modelId?: string | null): boolean {
  * nano-banana-2 支持的比例列表
  * 注意：这是独立的比例体系，不与其他模型共享
  */
-export const NANO_BANANA_ALLOWED_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '21:9'];
+export const NANO_BANANA_ALLOWED_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 
 /**
  * nano-banana-2 各比例对应的 1K 基准尺寸（普通画质）
- * 高画质时前端会通过像素计算自动翻倍（normalResolutionPixels → highResolutionPixels）
+ * 高画质时前端会通过像素计算自动翻倍，后端会映射为 BananaRouter 4K。
  */
 export const NANO_BANANA_RATIO_SIZES: Record<string, { width: number; height: number }> = {
   '1:1':  { width: 1024, height: 1024 },
-  '16:9': { width: 1368, height: 768 },
-  '9:16': { width: 768,  height: 1368 },
   '4:3':  { width: 1024, height: 768 },
   '3:4':  { width: 768,  height: 1024 },
-  '3:2':  { width: 1024, height: 680 },
-  '2:3':  { width: 680,  height: 1024 },
-  '4:5':  { width: 816,  height: 1024 },
-  '5:4':  { width: 1024, height: 816 },
-  '21:9': { width: 1024, height: 440 },
+  '16:9': { width: 1368, height: 768 },
+  '9:16': { width: 768,  height: 1368 },
 };
 
 /**
@@ -545,4 +562,19 @@ export function getGrokSizeString(width: number, height: number): string {
     if (width === w && height === h) return size;
   }
   return '1024x1024';
+}
+
+export function getGptImage2SizeString(width: number, height: number): string {
+  const pairs: Array<[number, number, string]> = [
+    [1024, 1024, '1024x1024'],
+    [1536, 864, '1536x864'],
+    [864, 1536, '864x1536'],
+    [2048, 2048, '2048x2048'],
+    [2736, 1536, '2736x1536'],
+    [1536, 2736, '1536x2736'],
+  ];
+  for (const [w, h, size] of pairs) {
+    if (width === w && height === h) return size;
+  }
+  return width >= height ? '1536x864' : '864x1536';
 }

@@ -3,9 +3,10 @@ import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { paymentOrder, pointsPackage, subscriptionPlan } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { generateOrderNo, createAlipayPagePayment } from '@/lib/alipay';
+import { generateOrderNo, createAlipayPagePayment, createAlipayWapPayment } from '@/lib/alipay';
 
 const TEST_PLAN_ID = 999001;
+type PaymentScene = 'pc' | 'mobile';
 
 // 创建订单并调用支付宝支付
 export async function POST(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { orderType, productId, paymentMethod } = body;
+    const { orderType, productId, paymentMethod, paymentScene } = body;
 
     if (!orderType || !productId) {
       return NextResponse.json(
@@ -32,6 +33,14 @@ export async function POST(request: NextRequest) {
     if (paymentMethod && paymentMethod !== 'alipay') {
       return NextResponse.json(
         { error: 'Unsupported payment method, only alipay is supported' },
+        { status: 400 }
+      );
+    }
+
+    const resolvedPaymentScene: PaymentScene = paymentScene === 'mobile' ? 'mobile' : 'pc';
+    if (paymentScene && paymentScene !== 'pc' && paymentScene !== 'mobile') {
+      return NextResponse.json(
+        { error: 'Unsupported payment scene' },
         { status: 400 }
       );
     }
@@ -120,7 +129,11 @@ export async function POST(request: NextRequest) {
 
     // 调用支付宝创建支付链接
     try {
-      const paymentUrl = await createAlipayPagePayment({
+      const createPayment = resolvedPaymentScene === 'mobile'
+        ? createAlipayWapPayment
+        : createAlipayPagePayment;
+
+      const paymentUrl = await createPayment({
         outTradeNo: orderId,
         totalAmount: amount.toFixed(2),
         subject: productName,
@@ -133,6 +146,7 @@ export async function POST(request: NextRequest) {
         pointsAmount,
         paymentUrl,
         paymentMethod: 'alipay',
+        paymentScene: resolvedPaymentScene,
       });
     } catch (alipayError) {
       console.error('创建支付宝支付失败:', alipayError);

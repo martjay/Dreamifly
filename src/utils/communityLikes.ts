@@ -1,32 +1,31 @@
 import { db } from '@/db'
-import { communityLike, userGeneratedImages } from '@/db/schema'
+import { communityMedia, communityMediaLike } from '@/db/schema'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
-import { getMediaViewConsentMap } from './mediaViewConsent'
 
 export async function getLikedMediaIdsForUser(userId: string, mediaIds: string[]) {
   if (!mediaIds.length) return new Set<string>()
 
   const rows = await db
-    .select({ imageId: communityLike.imageId })
-    .from(communityLike)
+    .select({ mediaId: communityMediaLike.communityMediaId })
+    .from(communityMediaLike)
     .where(
       and(
-        eq(communityLike.userId, userId),
-        inArray(communityLike.imageId, mediaIds)
+        eq(communityMediaLike.userId, userId),
+        inArray(communityMediaLike.communityMediaId, mediaIds)
       )
     )
 
-  return new Set(rows.map((row) => row.imageId))
+  return new Set(rows.map((row) => row.mediaId))
 }
 
-export async function hasUserLikedMedia(userId: string, imageId: string) {
+export async function hasUserLikedMedia(userId: string, mediaId: string) {
   const rows = await db
-    .select({ id: communityLike.id })
-    .from(communityLike)
+    .select({ id: communityMediaLike.id })
+    .from(communityMediaLike)
     .where(
       and(
-        eq(communityLike.userId, userId),
-        eq(communityLike.imageId, imageId)
+        eq(communityMediaLike.userId, userId),
+        eq(communityMediaLike.communityMediaId, mediaId)
       )
     )
     .limit(1)
@@ -37,40 +36,38 @@ export async function hasUserLikedMedia(userId: string, imageId: string) {
 export async function getLikedCommunityMediaForUser(userId: string, limit?: number) {
   const baseQuery = db
     .select({
-      id: userGeneratedImages.id,
-      imageUrl: userGeneratedImages.imageUrl,
-      mediaType: userGeneratedImages.mediaType,
-      prompt: userGeneratedImages.prompt,
-      model: userGeneratedImages.model,
-      moderationLevel: userGeneratedImages.moderationLevel,
-      width: userGeneratedImages.width,
-      height: userGeneratedImages.height,
-      duration: userGeneratedImages.duration,
-      fps: userGeneratedImages.fps,
-      frameCount: userGeneratedImages.frameCount,
-      createdAt: userGeneratedImages.createdAt,
-      likedAt: communityLike.createdAt,
+      id: communityMedia.id,
+      imageUrl: communityMedia.mediaUrl,
+      mediaType: communityMedia.mediaType,
+      prompt: communityMedia.prompt,
+      model: communityMedia.model,
+      moderationLevel: communityMedia.moderationLevel,
+      width: communityMedia.width,
+      height: communityMedia.height,
+      duration: communityMedia.duration,
+      fps: communityMedia.fps,
+      frameCount: communityMedia.frameCount,
+      createdAt: communityMedia.createdAt,
+      likedAt: communityMediaLike.createdAt,
     })
-    .from(communityLike)
-    .innerJoin(userGeneratedImages, eq(communityLike.imageId, userGeneratedImages.id))
-    .where(eq(communityLike.userId, userId))
-    .orderBy(desc(communityLike.createdAt))
+    .from(communityMediaLike)
+    .innerJoin(communityMedia, eq(communityMediaLike.communityMediaId, communityMedia.id))
+    .where(eq(communityMediaLike.userId, userId))
+    .orderBy(desc(communityMediaLike.createdAt))
 
   const rows = typeof limit === 'number' ? await baseQuery.limit(limit) : await baseQuery
 
-  const consentMap = await getMediaViewConsentMap(userId, rows.map((item) => item.id))
-
   return rows.map((item) => ({
     ...item,
-    hasViewConsent: Boolean(consentMap[item.id]),
+    hasViewConsent: true,
   }))
 }
 
 export async function getLikedCommunityMediaCount(userId: string): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(communityLike)
-    .where(eq(communityLike.userId, userId))
+    .from(communityMediaLike)
+    .where(eq(communityMediaLike.userId, userId))
 
   return Number(rows[0]?.count || 0)
 }

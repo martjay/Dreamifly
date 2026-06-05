@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { randomUUID } from 'crypto'
 import { db } from '@/db'
-import { communityMediaTag, communityTag, userGeneratedImages } from '@/db/schema'
+import { communityMediaTag, communityPublishedMediaTag, communityTag, userGeneratedImages } from '@/db/schema'
 import { decodeMediaFromStorage } from '@/utils/mediaStorage'
 import { eq, inArray, sql } from 'drizzle-orm'
 
@@ -436,6 +436,25 @@ export async function getCommunityTagsForMediaIds(mediaIds: string[]) {
   }, {})
 }
 
+export async function getPublishedCommunityTagsForMediaIds(communityMediaIds: string[]) {
+  if (communityMediaIds.length === 0) return {}
+
+  const rows = await db
+    .select({
+      mediaId: communityPublishedMediaTag.communityMediaId,
+      tagName: communityTag.name,
+    })
+    .from(communityPublishedMediaTag)
+    .innerJoin(communityTag, eq(communityPublishedMediaTag.tagId, communityTag.id))
+    .where(inArray(communityPublishedMediaTag.communityMediaId, communityMediaIds))
+
+  return rows.reduce<Record<string, string[]>>((acc, row) => {
+    if (!acc[row.mediaId]) acc[row.mediaId] = []
+    acc[row.mediaId].push(row.tagName)
+    return acc
+  }, {})
+}
+
 export async function getMediaIdsByTagKeyword(keyword: string) {
   const normalized = keyword.trim()
   if (!normalized) return []
@@ -454,6 +473,28 @@ export async function getMediaIdsByTagKeyword(keyword: string) {
     .select({ mediaId: communityMediaTag.mediaId })
     .from(communityMediaTag)
     .where(inArray(communityMediaTag.tagId, tagIds))
+
+  return relations.map((item) => item.mediaId)
+}
+
+export async function getPublishedCommunityMediaIdsByTagKeyword(keyword: string) {
+  const normalized = keyword.trim()
+  if (!normalized) return []
+
+  const tags = await db
+    .select({
+      id: communityTag.id,
+    })
+    .from(communityTag)
+    .where(sql`lower(${communityTag.name}) like lower(${`%${normalized}%`})`)
+
+  const tagIds = tags.map((item) => item.id)
+  if (tagIds.length === 0) return []
+
+  const relations = await db
+    .select({ mediaId: communityPublishedMediaTag.communityMediaId })
+    .from(communityPublishedMediaTag)
+    .where(inArray(communityPublishedMediaTag.tagId, tagIds))
 
   return relations.map((item) => item.mediaId)
 }
@@ -478,17 +519,37 @@ export async function getExactMediaIdsForTag(tagName: string) {
   return relations.map((item) => item.mediaId)
 }
 
+export async function getExactPublishedCommunityMediaIdsForTag(tagName: string) {
+  const normalized = normalizeTagName(tagName)
+  if (!normalized) return []
+
+  const tags = await db
+    .select({ id: communityTag.id })
+    .from(communityTag)
+    .where(sql`lower(${communityTag.name}) = lower(${normalized})`)
+    .limit(1)
+
+  if (tags.length === 0) return []
+
+  const relations = await db
+    .select({ mediaId: communityPublishedMediaTag.communityMediaId })
+    .from(communityPublishedMediaTag)
+    .where(eq(communityPublishedMediaTag.tagId, tags[0].id))
+
+  return relations.map((item) => item.mediaId)
+}
+
 export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'random', limit: number) {
   const safeLimit = Math.min(Math.max(limit, 1), 24)
   const liveTagStatsQuery = db
     .select({
       id: communityTag.id,
       name: communityTag.name,
-      usageCount: sql<number>`count(${communityMediaTag.id})::int`,
-      lastUsedAt: sql<Date | null>`max(${communityMediaTag.createdAt})`,
+      usageCount: sql<number>`count(${communityPublishedMediaTag.id})::int`,
+      lastUsedAt: sql<Date | null>`max(${communityPublishedMediaTag.createdAt})`,
     })
     .from(communityTag)
-    .leftJoin(communityMediaTag, eq(communityTag.id, communityMediaTag.tagId))
+    .leftJoin(communityPublishedMediaTag, eq(communityTag.id, communityPublishedMediaTag.tagId))
     .groupBy(communityTag.id, communityTag.name)
 
   const fallbackQuery = db
@@ -502,7 +563,7 @@ export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'r
 
   if (mode === 'random') {
     const liveTags = await liveTagStatsQuery
-      .having(sql`count(${communityMediaTag.id}) > 0`)
+      .having(sql`count(${communityPublishedMediaTag.id}) > 0`)
       .orderBy(sql`random()`)
       .limit(safeLimit)
 
@@ -515,12 +576,12 @@ export async function getCommunityTagRecommendations(mode: 'latest' | 'hot' | 'r
   }
 
   const liveTags = await liveTagStatsQuery
-    .having(sql`count(${communityMediaTag.id}) > 0`)
+    .having(sql`count(${communityPublishedMediaTag.id}) > 0`)
     .orderBy(
       mode === 'hot'
-        ? sql`count(${communityMediaTag.id}) desc`
-        : sql`max(${communityMediaTag.createdAt}) desc nulls last`,
-      sql`count(${communityMediaTag.id}) desc`,
+        ? sql`count(${communityPublishedMediaTag.id}) desc`
+        : sql`max(${communityPublishedMediaTag.createdAt}) desc nulls last`,
+      sql`count(${communityPublishedMediaTag.id}) desc`,
       sql`${communityTag.id} desc`
     )
     .limit(safeLimit)

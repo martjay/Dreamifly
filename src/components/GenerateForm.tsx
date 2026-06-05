@@ -1,10 +1,12 @@
 import { createScopedT } from '@/lib/strings'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification } from '@/utils/modelConfig'
+import { getAvailableModels, filterModelsByImageCount, getAllModels, type ModelConfig, getModelThresholds, supportsStepsModification, supportsResolutionModification, GPT_IMAGE_2_RATIO_SIZES, isGptImage2Model } from '@/utils/modelConfig'
 import Toast from './Toast'
+import ModelDropdown from './ModelDropdown'
 
 type ModelWithAvailability = ModelConfig & { isAvailable: boolean };
+const DEFAULT_IMAGE_ASPECT_RATIO = '9:16';
 
 interface GenerateFormProps {
   width: number;
@@ -66,9 +68,6 @@ export default function GenerateForm({
   const t = createScopedT('home.generate')
   const [progress, setProgress] = useState(0)
   const [estimatedTime, setEstimatedTime] = useState(0)
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
-  const [hasOpenedModelDropdown, setHasOpenedModelDropdown] = useState(false)
-  const modelDropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -135,7 +134,6 @@ export default function GenerateForm({
   // 获取未登录用户延迟时间（秒）
   const unauthDelay = parseInt(process.env.NEXT_PUBLIC_UNAUTHENTICATED_USER_DELAY || '20', 10)
 
-  // 获取标签样式的函数
   const getTagStyle = (tag: string) => {
     switch (tag) {
       case 'chineseSupport':
@@ -196,36 +194,43 @@ export default function GenerateForm({
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isGenerating) {
-      // 计算预期时间：基于像素数、步数和模型
-      // 基准：1024*1024像素，30步 = 60秒 (HiDream-full-fp8)
-      const basePixels = 1024 * 1024;
-      const baseSteps = 30;
-      const baseTime = 60;
-      
-      // 模型时间系数
-      const modelTimeFactors = {
-        'HiDream-full-fp16': 2.0,    // 两倍于 fp8
-        'HiDream-full-fp8': 1.0,     // 基准
-        'Flux-Dev': 0.67,            // 40s/60s
-        'Flux-Kontext': 1.0,         // 40s/60s
-        'Flux-Krea': 0.67,           // 40s/60s (与Flux-Dev类似)
-        'Stable-Diffusion-3.5': 0.67,  // 40s/60s
-        'Qwen-Image': 1.5,             // 48s/60s
-        'Qwen-Image-Edit': 1.2,
-        'Wai-SDXL-V150': 0.1,
-        'Wai-SDXL-V170': 0.1,
-        'Z-Image': 0.325,
-        'Z-Image-Turbo': 0.325,      // 20步1024*1024=13秒，换算到30步基准：13*(30/20)/60 = 0.325
-        // nano-banana-2 使用云端大模型，整体耗时相对更长，适当放大系数
-        'nano-banana-2': 2.0,
-      };
-      
-      const currentPixels = width * height;
-      const pixelFactor = currentPixels / basePixels;
-      const stepsFactor = steps / baseSteps;
-      const modelFactor = modelTimeFactors[model as keyof typeof modelTimeFactors] || 1.0;
-      
-      const generationTime = baseTime * pixelFactor * stepsFactor * modelFactor;
+      let generationTime: number;
+
+      if (model === 'nano-banana-2') {
+        generationTime = isHighResolution ? 50 : 25;
+      } else if (isGptImage2Model(model)) {
+        generationTime = isHighResolution ? 60 : 45;
+      } else {
+        // 计算预期时间：基于像素数、步数和模型
+        // 基准：1024*1024像素，30步 = 60秒 (HiDream-full-fp8)
+        const basePixels = 1024 * 1024;
+        const baseSteps = 30;
+        const baseTime = 60;
+
+        // 模型时间系数
+        const modelTimeFactors = {
+          'HiDream-full-fp16': 2.0,    // 两倍于 fp8
+          'HiDream-full-fp8': 1.0,     // 基准
+          'Flux-Dev': 0.67,            // 40s/60s
+          'Flux-Kontext': 1.0,         // 40s/60s
+          'Flux-Krea': 0.67,           // 40s/60s (与Flux-Dev类似)
+          'Stable-Diffusion-3.5': 0.67,  // 40s/60s
+          'Qwen-Image': 1.5,             // 48s/60s
+          'Qwen-Image-Edit': 1.2,
+          'Wai-SDXL-V150': 0.1,
+          'Wai-SDXL-V170': 0.1,
+          'Z-Image': 0.325,
+          'Z-Image-Turbo': 0.325,      // 20步1024*1024=13秒，换算到30步基准：13*(30/20)/60 = 0.325
+        };
+
+        const currentPixels = width * height;
+        const pixelFactor = currentPixels / basePixels;
+        const stepsFactor = steps / baseSteps;
+        const modelFactor = modelTimeFactors[model as keyof typeof modelTimeFactors] || 1.0;
+
+        generationTime = baseTime * pixelFactor * stepsFactor * modelFactor;
+      }
+
       // 预期时间只显示生图时间，不包含排队时间
       setEstimatedTime(generationTime);
       
@@ -301,14 +306,7 @@ export default function GenerateForm({
         clearInterval(timer);
       }
     };
-  }, [isGenerating, steps, width, height, model, status, unauthDelay, setIsQueuingProp]);
-
-  // 生成时自动关闭模型下拉框
-  useEffect(() => {
-    if (isGenerating) {
-      setIsModelDropdownOpen(false)
-    }
-  }, [isGenerating])
+  }, [isGenerating, steps, width, height, model, isHighResolution, status, unauthDelay, setIsQueuingProp]);
 
   // 当模型切换时，自动调整步数和分辨率到新模型的默认值
   useEffect(() => {
@@ -347,17 +345,6 @@ export default function GenerateForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]); // 只依赖 model，确保只在模型改变时执行，aspectRatio 在函数内部使用当前值
 
-  // Add click outside handler for dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
   // 清理防抖定时器
   useEffect(() => {
     return () => {
@@ -368,9 +355,18 @@ export default function GenerateForm({
   }, [])
 
   // 获取当前模型信息
-  const currentModel = availableModels.find(m => m.id === model);
+  const currentModel = availableModels.find(m => m.id === model) || getAllModels().find(m => m.id === model);
   const maxImages = currentModel?.maxImages || 1;
   const canUploadMore = uploadedImages.length < maxImages;
+
+  useEffect(() => {
+    if (uploadedImages.length > maxImages) {
+      setUploadedImages((prev: string[]) => prev.slice(0, maxImages))
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }, [maxImages, uploadedImages.length, setUploadedImages])
 
   // 上传图片区域，始终显示
   const renderImageUploadSection = () => {
@@ -412,7 +408,7 @@ export default function GenerateForm({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 ${
+              className={`${!canUploadMore ? 'hidden' : ''} group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 ${
                 canUploadMore 
                   ? (isDragging 
                       ? 'border-orange-500 bg-gradient-to-br from-orange-100/20 to-amber-100/20 shadow-lg shadow-orange-400/20' 
@@ -522,8 +518,9 @@ export default function GenerateForm({
             setHeight(finalHeight)
 
             // 更新父组件中的图片数据（使用无前缀的 base64）
+            const nextImageCount = uploadedImages.length + 1
             setUploadedImages((prev: string[]) => [...prev, base64String])
-            switchToReferenceImageDefaultModel()
+            switchToReferenceImageDefaultModel(nextImageCount)
           }
           img.src = event.target.result as string
         }
@@ -596,8 +593,9 @@ export default function GenerateForm({
           setAspectRatio(ratio)
           setWidth(finalWidth)
           setHeight(finalHeight)
+          const nextImageCount = uploadedImages.length + 1
           setUploadedImages((prev: string[]) => [...prev, base64String])
-          switchToReferenceImageDefaultModel()
+          switchToReferenceImageDefaultModel(nextImageCount)
           console.log('GenerateForm: Successfully set uploadedImage to new base64 string')
           console.log('GenerateForm: New image dimensions:', finalWidth, 'x', finalHeight)
         }
@@ -609,11 +607,6 @@ export default function GenerateForm({
 
   // 根据上传图片数量过滤可用模型
   const filteredModels: ModelWithAvailability[] = filterModelsByImageCount(uploadedImages.length, availableModels);
-  const selectedAvailableModel = filteredModels.find(m => m.id === model)
-  const selectedFallbackModel = getAllModels().find(m => m.id === model)
-  const selectedDisplayModel = selectedAvailableModel || selectedFallbackModel
-  const selectedModelImage = selectedDisplayModel?.image || '/models/Qwen-Image.jpg'
-  const selectedModelImageFallback = selectedDisplayModel?.imageFallback || '/models/Qwen-Image.jpg'
   const qualityThresholds = getModelThresholds(model)
   const supportsHighSteps = supportsStepsModification(model)
   const supportsHighResolutionOption = supportsResolutionModification(model)
@@ -637,17 +630,31 @@ export default function GenerateForm({
     if (supportsHighResolutionOption) {
       setIsHighResolution(enableHighQuality)
 
-      const targetArea = enableHighQuality ? highPixels : normalPixels
-      const { width: newWidth, height: newHeight } = getDimensionsByPixels(targetArea, aspectRatio)
+      const gptImage2Size = isGptImage2Model(model) ? GPT_IMAGE_2_RATIO_SIZES[aspectRatio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO] : null
+      const { width: newWidth, height: newHeight } = gptImage2Size
+        ? (enableHighQuality ? gptImage2Size.high : gptImage2Size.normal)
+        : getDimensionsByPixels(enableHighQuality ? highPixels : normalPixels, aspectRatio)
       setWidth(newWidth)
       setHeight(newHeight)
     }
   }
 
-  const switchToReferenceImageDefaultModel = () => {
-    const hasGptImage2 = availableModels.some(modelOption => modelOption.id === 'gpt-image-2')
-    if (hasGptImage2 && model !== 'gpt-image-2') {
-      setModel('gpt-image-2')
+  const switchToReferenceImageDefaultModel = (nextImageCount: number) => {
+    const currentModelConfig = availableModels.find(modelOption => modelOption.id === model) || getAllModels().find(modelOption => modelOption.id === model)
+    if (
+      currentModelConfig?.use_i2i &&
+      nextImageCount <= (currentModelConfig.maxImages || 0)
+    ) {
+      return
+    }
+
+    const fallbackModel = availableModels.find(modelOption =>
+      modelOption.use_i2i &&
+      nextImageCount <= (modelOption.maxImages || 0)
+    )
+
+    if (fallbackModel && fallbackModel.id !== model) {
+      setModel(fallbackModel.id)
     }
   }
 
@@ -685,9 +692,19 @@ export default function GenerateForm({
     const currentModel = filteredModels.find(m => m.id === model)
     const modelExistsInAll = availableModels.some(m => m.id === model)
     const isInitialModel = initialModelRef.current === model
+    const selectedModelConfig = availableModels.find(m => m.id === model) || getAllModels().find(m => m.id === model)
     
     // Qwen-Image-Edit 总是可用，不需要自动切换
     if (model === 'Qwen-Image-Edit') return;
+
+    // 当前模型本身支持图生图且图片数量没有超过上限时，不自动切换模型。
+    if (
+      uploadedImages.length > 0 &&
+      selectedModelConfig?.use_i2i &&
+      uploadedImages.length <= selectedModelConfig.maxImages
+    ) {
+      return
+    }
     
     // 如果模型是初始模型（可能是从URL传入的）且存在于所有模型中，即使暂时不可用也保留
     // 只有在因为图片数量限制导致模型不兼容时才切换
@@ -717,7 +734,7 @@ export default function GenerateForm({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadedImages.length, modelsLoading, availableModels.length])
+  }, [model, uploadedImages.length, modelsLoading, availableModels.length])
 
   // 处理从 URL 设置参考图片
   useEffect(() => {
@@ -756,8 +773,9 @@ export default function GenerateForm({
                   setHeight(finalHeight);
 
                   // 更新父组件中的图片数据（使用无前缀的 base64）
+                  const nextImageCount = uploadedImages.length + 1
                   setUploadedImages((prev: string[]) => [...prev, base64String]);
-                  switchToReferenceImageDefaultModel();
+                  switchToReferenceImageDefaultModel(nextImageCount);
                   
                   // 添加小延迟确保状态更新完成
                   setTimeout(() => {
@@ -801,151 +819,45 @@ export default function GenerateForm({
                 <img src="/form/models.svg" alt="Model" className="w-5 h-5 mr-2 text-gray-900 [&>path]:fill-current" />
                 {t('form.model.label')}
               </label>
-              <div className="relative" ref={modelDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isGenerating && status !== 'loading') {
-                      setHasOpenedModelDropdown(true)
-                      setIsModelDropdownOpen(!isModelDropdownOpen)
-                    }
-                  }}
-                  className={`w-full bg-white/50 backdrop-blur-sm border border-orange-400/40 rounded-xl px-4 py-2.5 text-left text-gray-900 focus:ring-2 focus:ring-orange-400/50 focus:border-orange-400/50 shadow-inner transition-all duration-300 flex items-center justify-between ${
-                    (!modelsLoading && selectedAvailableModel && !selectedAvailableModel.isAvailable) || isGenerating ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  disabled={status === 'loading' || isGenerating}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-6 rounded overflow-hidden flex-shrink-0">
-                      <img 
-                        src={selectedModelImage} 
-                        alt={model} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          if (target.getAttribute('src') !== selectedModelImageFallback) {
-                            target.src = selectedModelImageFallback
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{model}</span>
-                    </div>
-                  </div>
-                  <svg
-                    className={`w-4 h-4 text-gray-600 transform transition-transform duration-300 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                
-                {hasOpenedModelDropdown && (
-                  <div className={`absolute z-10 w-96 mt-2 bg-white/95 backdrop-blur-xl rounded-xl border border-orange-400/40 shadow-xl max-h-80 overflow-y-auto custom-scrollbar ${
-                    isModelDropdownOpen ? '' : 'hidden'
-                  }`}>
-                    {modelsLoading ? (
-                      <div className="px-4 py-4 text-center text-gray-600">
-                        {t('form.model.loading')}
-                      </div>
-                    ) : filteredModels.length === 0 ? (
-                      <div className="px-4 py-4 text-center text-gray-600">
-                        {t('form.model.noModelsAvailable')}
-                      </div>
-                    ) : (
-                      filteredModels.map((modelOption) => (
-                      <button
-                        key={modelOption.id}
-                        type="button"
-                        onClick={() => {
-                          // 生成时不允许切换模型
-                          if (isGenerating) {
-                            return
-                          }
-                          // Qwen-Image-Edit 即使没有上传图片也可以选择
-                          if (modelOption.isAvailable || modelOption.id === 'Qwen-Image-Edit') {
-                            setModel(modelOption.id)
-                            setIsModelDropdownOpen(false)
-                          }
-                        }}
-                        disabled={(!modelOption.isAvailable && modelOption.id !== 'Qwen-Image-Edit') || isGenerating}
-                        className={`w-full px-4 py-4 text-left transition-colors duration-200 flex flex-col space-y-3 ${
-                          model === modelOption.id ? 'bg-white/50' : ''
-                        } ${
-                          modelOption.isAvailable 
-                            ? 'hover:bg-gray-200 hover:shadow-sm transition-all' 
-                            : 'opacity-50 cursor-not-allowed'
-                        }`}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div className="w-24 h-12 rounded overflow-hidden flex-shrink-0">
-                            <img 
-                              src={modelOption.image} 
-                              alt={modelOption.name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement
-                                const fallback = modelOption.imageFallback || '/models/Qwen-Image.jpg'
-                                if (target.getAttribute('src') !== fallback) {
-                                  target.src = fallback
-                                }
-                              }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="text-gray-900 font-medium">{modelOption.name}</div>
-                              {modelOption.isRecommended && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-orange-600/30 to-red-600/30 text-orange-900 border border-orange-500/40">
-                                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 6 8 6c0 0 .5-.5 2-2.5C10.5.5 11 0 11 0c0 0 .5 0 1.5 1C14 2 16 3.75 17 6c1 0 1.657-.343 1.657-.343A8 8 0 0121 12c0 2.707-1.34 5.106-3.343 6.657z"></path>
-                                  </svg>
-                                  推荐
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {modelOption.use_t2i && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-600/30 to-cyan-600/30 text-cyan-900 border border-cyan-500/40">
-                                  {t('form.model.tags.textToImage')}
-                                </span>
-                              )}
-                              {modelOption.use_i2i && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-pink-900 border border-pink-500/40">
-                                  {t('form.model.tags.imageToImage')}
-                                </span>
-                              )}
-                              {modelOption.tags && modelOption.tags.map((tag: string) => (
-                                <span key={tag} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getTagStyle(tag)}`}>
-                                  {t(`form.model.tags.${tag}`)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-600/80 line-clamp-2 pl-27">
-                          {t(`form.model.descriptions.${modelOption.id.replace(/\./g, '')}`)}
-                        </div>
-                        {!modelOption.isAvailable && (
-                          <div className="text-sm text-red-500 pl-27">
-                            {uploadedImages.length > 0 ? 
-                              (modelOption.use_i2i ? 
-                                t('error.validation.modelNotAvailable.maxImagesExceeded', { maxImages: modelOption.maxImages || 1 }) : 
-                                t('error.validation.modelNotAvailable.notSupportReference')
-                              ) : 
-                              t('error.validation.modelNotAvailable.needReference')
-                            }
-                          </div>
-                        )}
-                      </button>
-                      ))
+              <ModelDropdown
+                value={model}
+                models={filteredModels}
+                loading={modelsLoading}
+                disabled={isGenerating}
+                loadingText={t('form.model.loading')}
+                emptyText={t('form.model.noModelsAvailable')}
+                fallbackImage="/models/Qwen-Image.jpg"
+                onChange={setModel}
+                canSelect={(modelOption) => modelOption.isAvailable || modelOption.id === 'Qwen-Image-Edit'}
+                getDescription={(modelOption) => t(`form.model.descriptions.${modelOption.id.replace(/\./g, '')}`)}
+                getUnavailableText={(modelOption) => uploadedImages.length > 0
+                  ? (
+                    modelOption.use_i2i
+                      ? t('error.validation.modelNotAvailable.maxImagesExceeded', { maxImages: modelOption.maxImages || 1 })
+                      : t('error.validation.modelNotAvailable.notSupportReference')
+                  )
+                  : t('error.validation.modelNotAvailable.needReference')
+                }
+                renderTags={(modelOption) => (
+                  <>
+                    {modelOption.use_t2i && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-600/30 to-cyan-600/30 text-cyan-900 border border-cyan-500/40">
+                        {t('form.model.tags.textToImage')}
+                      </span>
                     )}
-                  </div>
+                    {modelOption.use_i2i && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-pink-900 border border-pink-500/40">
+                        {t('form.model.tags.imageToImage')}
+                      </span>
+                    )}
+                    {modelOption.tags && modelOption.tags.map((tag: string) => (
+                      <span key={tag} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getTagStyle(tag)}`}>
+                        {t(`form.model.tags.${tag}`)}
+                      </span>
+                    ))}
+                  </>
                 )}
-              </div>
+              />
             </div>
           </div>
 
@@ -976,7 +888,11 @@ export default function GenerateForm({
                       </button>
                     </div>
                     <p className="text-xs sm:text-sm text-gray-600/80 leading-5">
-                      提供更高的生成质量，但也会花费少许积分
+                      {model === 'nano-banana-2'
+                        ? '默认使用 1K，开启后使用 4K，消耗更多积分'
+                        : isGptImage2Model(model)
+                        ? '默认使用 1K，开启后使用高质量，消耗更多积分'
+                        : '提供更高的生成质量，但也会花费少许积分'}
                     </p>
                     {stepsError && (
                       <p className="mt-1 text-sm text-red-400">{stepsError}</p>

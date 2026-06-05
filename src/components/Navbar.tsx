@@ -9,7 +9,7 @@ import GitHubIcon from './GitHubIcon'
 import AuthModal from './AuthModal'
 import { usePathname, useRouter } from 'next/navigation'
 import { transferUrl } from '@/utils/locale'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useSession, signOut } from '@/lib/auth-client'
 import { useAvatar } from '@/contexts/AvatarContext'
@@ -27,6 +27,8 @@ export default function Navbar() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const headerUserMenuRef = useRef<HTMLDivElement>(null)
+  const sidebarUserMenuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const router = useRouter()
   const pricingPath = transferUrl('/pricing')
@@ -62,10 +64,30 @@ export default function Navbar() {
     checkUserStatus()
   }, [session?.user])
 
+  useEffect(() => {
+    if (!showUserMenu) return
+
+    const handleClickOutside = (event: PointerEvent) => {
+      const target = event.target as Node
+      const isInsideHeaderMenu = headerUserMenuRef.current?.contains(target)
+      const isInsideSidebarMenu = sidebarUserMenuRef.current?.contains(target)
+
+      if (!isInsideHeaderMenu && !isInsideSidebarMenu) {
+        setShowUserMenu(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside)
+    }
+  }, [showUserMenu])
+
 
   // 处理点击遮罩层关闭菜单
   const handleOverlayClick = () => {
     setIsMobileMenuOpen(false)
+    setShowUserMenu(false)
   }
 
   // 处理点击菜单按钮
@@ -174,7 +196,7 @@ export default function Navbar() {
                   <span className="text-sm font-semibold text-orange-700">{pointsBalance}</span>
                 </div>
               )}
-              <div className="relative">
+              <div ref={headerUserMenuRef} className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-200/50 transition-colors"
@@ -365,7 +387,7 @@ export default function Navbar() {
               {/* 用户信息 */}
               {session?.user && (
                 <div className="w-full">
-                  <div className="relative">
+                  <div ref={sidebarUserMenuRef} className="relative">
                     <button
                       onClick={() => setShowUserMenu(!showUserMenu)}
                       className="w-full flex items-center gap-3 p-3 rounded-2xl bg-gray-200/50 hover:bg-gray-300/50 transition-all duration-300"

@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
-import { isEmailDomainAllowed, isValid163Email } from "@/utils/email-domain-validator";
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isValid163Email } from "@/utils/email-domain-validator";
 
 export const auth = betterAuth({
   baseURL: process.env.NEXT_PUBLIC_BASE_URL || "https://dreamifly.com",
@@ -18,10 +18,18 @@ export const auth = betterAuth({
       if (!user.email) {
         throw new Error("邮箱地址不能为空");
       }
+
+      if (isBlockedEmailDomain(user.email)) {
+        throw new Error("EMAIL_DOMAIN_BLOCKED");
+      }
       
       // 特殊验证163邮箱：只允许纯数字+@163.com
       if (!isValid163Email(user.email)) {
         throw new Error("163_EMAIL_NOT_ALLOWED");
+      }
+
+      if (!isEmailDotCountAllowed(user.email)) {
+        throw new Error("EMAIL_DOT_COUNT_NOT_ALLOWED");
       }
       
       const isAllowed = await isEmailDomainAllowed(user.email);
