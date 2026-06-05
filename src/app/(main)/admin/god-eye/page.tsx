@@ -390,6 +390,13 @@ export default function GodEyePage() {
   const selectedProfanityCount = selectedProfanityIds.size
   const isAllProfanitySelected = profanityWords.length > 0 && profanityWords.every((item) => selectedProfanityIds.has(item.id))
 
+  const reviewStatusCountLabel = {
+    all: '模型审核通过的作品',
+    pending: '待人工审核的作品',
+    approved: '已发布社区作品',
+    rejected: '人工驳回作品',
+  }[reviewStatusFilter]
+
   const handleToggleProfanitySelectionMode = () => {
     setProfanitySelectionMode((previous) => {
       if (previous) {
@@ -1250,7 +1257,7 @@ export default function GodEyePage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">
-                      共找到 <span className="font-semibold text-orange-600">{total}</span> 张模型审核已通过的作品
+                      共找到 <span className="font-semibold text-orange-600">{total}</span> 张{reviewStatusCountLabel}
                     </span>
                     <span className="text-xs text-gray-500">
                       第 {page} 页 / 共 {totalPages} 页

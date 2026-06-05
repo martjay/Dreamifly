@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { userGeneratedImages, user } from '@/db/schema'
+import { communityMedia, userGeneratedImages, user } from '@/db/schema'
 import { eq, ne, desc, and, or, like, isNull, gte, lte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
@@ -110,6 +110,125 @@ export async function GET(request: NextRequest) {
 
     if (reviewStatus !== 'all') {
       conditions.push(eq(userGeneratedImages.manualReviewStatus, reviewStatus))
+    }
+
+    if (reviewStatus === 'approved') {
+      const communityConditions = [
+        eq(communityMedia.moderationLevel, 'low'),
+      ]
+
+      if (roleFilter !== 'all') {
+        if (roleFilter === 'regular') {
+          communityConditions.push(
+            or(
+              eq(communityMedia.userRole, 'regular'),
+              isNull(communityMedia.userRole)
+            ) as any
+          )
+        } else {
+          communityConditions.push(eq(communityMedia.userRole, roleFilter))
+        }
+      }
+
+      if (search.trim()) {
+        const searchTerm = `%${search.trim()}%`
+        communityConditions.push(
+          or(
+            like(communityMedia.userNickname, searchTerm),
+            like(user.name, searchTerm),
+            like(user.nickname, searchTerm),
+            like(user.email, searchTerm)
+          ) as any
+        )
+      }
+
+      if (startDate) {
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        communityConditions.push(gte(communityMedia.createdAt, start))
+      }
+      if (endDate) {
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+        communityConditions.push(lte(communityMedia.createdAt, end))
+      }
+
+      const communityWhereClause = and(...communityConditions)
+
+      const totalResult = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(communityMedia)
+        .leftJoin(user, eq(communityMedia.sourceUserId, user.id))
+        .where(communityWhereClause as any)
+
+      const total = totalResult[0]?.count || 0
+
+      const images = await db
+        .select({
+          id: communityMedia.sourceMediaId,
+          imageUrl: communityMedia.mediaUrl,
+          mediaType: communityMedia.mediaType,
+          prompt: communityMedia.prompt,
+          model: communityMedia.model,
+          width: communityMedia.width,
+          height: communityMedia.height,
+          duration: communityMedia.duration,
+          fps: communityMedia.fps,
+          frameCount: communityMedia.frameCount,
+          userRole: communityMedia.userRole,
+          userAvatar: communityMedia.userAvatar,
+          userNickname: communityMedia.userNickname,
+          avatarFrameId: communityMedia.avatarFrameId,
+          manualReviewedAt: communityMedia.approvedAt,
+          manualReviewedBy: communityMedia.approvedBy,
+          nsfw: communityMedia.nsfw,
+          createdAt: communityMedia.createdAt,
+          userId: communityMedia.sourceUserId,
+        })
+        .from(communityMedia)
+        .leftJoin(user, eq(communityMedia.sourceUserId, user.id))
+        .where(communityWhereClause as any)
+        .orderBy(desc(communityMedia.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+      const formattedImages = images.map(img => ({
+        id: img.id,
+        imageUrl: img.imageUrl,
+        mediaType: img.mediaType || 'image',
+        prompt: img.prompt,
+        model: img.model,
+        width: img.width,
+        height: img.height,
+        duration: img.duration,
+        fps: img.fps,
+        frameCount: img.frameCount,
+        userRole: img.userRole || 'regular',
+        userAvatar: img.userAvatar || '/images/default-avatar.svg',
+        userNickname: img.userNickname || '未知用户',
+        avatarFrameId: img.avatarFrameId,
+        referenceImages: [],
+        manualReviewStatus: 'approved',
+        manualReviewedAt: img.manualReviewedAt?.toISOString() || null,
+        manualReviewedBy: img.manualReviewedBy || null,
+        reportCount: 0,
+        nsfw: Boolean(img.nsfw),
+        createdAt: img.createdAt?.toISOString() || new Date().toISOString(),
+        userId: img.userId,
+      }))
+
+      return NextResponse.json({
+        success: true,
+        images: formattedImages,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      })
     }
 
     // 查询总数

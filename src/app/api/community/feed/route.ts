@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { user, userGeneratedImages } from '@/db/schema'
+import { communityMedia, user } from '@/db/schema'
 import { and, desc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import {
-  ensureCommunityTagsForExistingMedia,
-  getCommunityTagsForMediaIds,
-  getExactMediaIdsForTag,
-  getMediaIdsByTagKeyword,
+  getExactPublishedCommunityMediaIdsForTag,
+  getPublishedCommunityMediaIdsByTagKeyword,
+  getPublishedCommunityTagsForMediaIds,
 } from '@/utils/communityTags'
 import { getLikedMediaIdsForUser } from '@/utils/communityLikes'
 
@@ -66,6 +65,7 @@ async function checkCommunityAccess() {
 
 type CommunityFeedItem = {
   id: string
+  sourceMediaId: string
   imageUrl: string
   mediaType: string
   prompt: string | null
@@ -102,39 +102,39 @@ export async function GET(request: NextRequest) {
     )
 
     const [matchedTagMediaIds, exactTagMediaIds] = await Promise.all([
-      q ? getMediaIdsByTagKeyword(q) : Promise.resolve([]),
-      tag ? getExactMediaIdsForTag(tag) : Promise.resolve([]),
+      q ? getPublishedCommunityMediaIdsByTagKeyword(q) : Promise.resolve([]),
+      tag ? getExactPublishedCommunityMediaIdsForTag(tag) : Promise.resolve([]),
     ])
 
     const recentMedia = await db
       .select({
-        id: userGeneratedImages.id,
-        imageUrl: userGeneratedImages.imageUrl,
-        mediaType: userGeneratedImages.mediaType,
-        prompt: userGeneratedImages.prompt,
-        model: userGeneratedImages.model,
-        userAvatar: userGeneratedImages.userAvatar,
-        userNickname: userGeneratedImages.userNickname,
-        avatarFrameId: userGeneratedImages.avatarFrameId,
-        createdAt: userGeneratedImages.createdAt,
+        id: communityMedia.id,
+        sourceMediaId: communityMedia.sourceMediaId,
+        imageUrl: communityMedia.mediaUrl,
+        mediaType: communityMedia.mediaType,
+        prompt: communityMedia.prompt,
+        model: communityMedia.model,
+        userAvatar: communityMedia.userAvatar,
+        userNickname: communityMedia.userNickname,
+        avatarFrameId: communityMedia.avatarFrameId,
+        createdAt: communityMedia.createdAt,
       })
-      .from(userGeneratedImages)
+      .from(communityMedia)
       .where(
         and(
           or(
-            inArray(userGeneratedImages.userRole, ['premium', 'oldUser', 'regular']),
-            isNull(userGeneratedImages.userRole)
+            inArray(communityMedia.userRole, ['premium', 'oldUser', 'regular']),
+            isNull(communityMedia.userRole)
           ),
           or(
-            notInArray(userGeneratedImages.model, I2I_MODELS),
-            isNull(userGeneratedImages.model)
+            notInArray(communityMedia.model, I2I_MODELS),
+            isNull(communityMedia.model)
           ),
-          eq(userGeneratedImages.moderationLevel, 'low'),
-          eq(userGeneratedImages.manualReviewStatus, 'approved'),
-          eq(userGeneratedImages.nsfw, false)
+          eq(communityMedia.moderationLevel, 'low'),
+          eq(communityMedia.nsfw, false)
         )
       )
-      .orderBy(desc(userGeneratedImages.createdAt))
+      .orderBy(desc(communityMedia.createdAt))
       .limit(sort === 'latest' ? 240 : 600)
 
     const promptMatchedMediaIds = q
@@ -158,13 +158,7 @@ export async function GET(request: NextRequest) {
     })
 
     const mediaIds = filteredMedia.map((item) => item.id)
-    const tagsMap = await getCommunityTagsForMediaIds(mediaIds)
-
-    for (const item of filteredMedia) {
-      if (!tagsMap[item.id] || tagsMap[item.id].length === 0) {
-        void ensureCommunityTagsForExistingMedia(item.id)
-      }
-    }
+    const tagsMap = await getPublishedCommunityTagsForMediaIds(mediaIds)
 
     if (sort === 'random') {
       filteredMedia = [...filteredMedia].sort(() => Math.random() - 0.5)
@@ -178,13 +172,13 @@ export async function GET(request: NextRequest) {
 
     const pageItems = filteredMedia.slice(offset, offset + limit)
     const likedIdSet = session?.user
-      ? await getLikedMediaIdsForUser(session.user.id, pageItems.map((item) => item.id))
+      ? await getLikedMediaIdsForUser(session.user.id, pageItems.map((item) => item.sourceMediaId))
       : new Set<string>()
 
     return NextResponse.json({
       success: true,
       items: pageItems.map((item) => ({
-        id: item.id,
+        id: item.sourceMediaId,
         mediaUrl: item.imageUrl,
         mediaType: item.mediaType || 'image',
         prompt: item.prompt || '',
@@ -194,7 +188,7 @@ export async function GET(request: NextRequest) {
         userAvatar: item.userAvatar || '/images/default-avatar.svg',
         userNickname: item.userNickname || '',
         avatarFrameId: item.avatarFrameId,
-        likedByCurrentUser: likedIdSet.has(item.id),
+        likedByCurrentUser: likedIdSet.has(item.sourceMediaId),
       })),
       hasMore: offset + limit < filteredMedia.length,
       total: filteredMedia.length,

@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
 import { user, userGeneratedImages } from '@/db/schema'
+import { publishCommunityMediaFromGeneratedImage } from '@/utils/communityMediaPublisher'
 
 type ManualReviewStatus = 'approved' | 'rejected'
 
@@ -55,6 +56,13 @@ export async function POST(
 
     if (existing.length === 0) {
       return NextResponse.json({ error: '作品不存在，或不属于待人工审核范围' }, { status: 404 })
+    }
+
+    if (status === 'approved') {
+      await publishCommunityMediaFromGeneratedImage({
+        sourceMediaId: id,
+        approvedBy: session.user.id,
+      })
     }
 
     await db

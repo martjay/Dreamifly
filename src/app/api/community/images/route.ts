@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { userGeneratedImages, user } from '@/db/schema'
+import { communityMedia, user } from '@/db/schema'
 import { desc, or, and, isNull, inArray, eq, notInArray } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
         )
       }
     }
-    // 获取最近600张图片（按创建时间降序）
-    // 通过 user_generated_images 表中的 userRole 字段过滤掉管理员和付费用户
+    // 获取最近600张已发布社区图片（按创建时间降序）
+    // 通过 community_media 表中的 userRole 字段过滤掉管理员和付费用户
     // 只选择：premium（优质用户）、oldUser（首批用户）、regular（普通用户）或 null（旧数据）
     // 排除图生图模型：Qwen-Image-Edit、Flux-Kontext
     // 排除视频类型，只展示图片
@@ -110,38 +110,37 @@ export async function GET(request: NextRequest) {
 
     const recentImages = await db
       .select({
-        id: userGeneratedImages.id,
-        imageUrl: userGeneratedImages.imageUrl,
-        prompt: userGeneratedImages.prompt,
-        model: userGeneratedImages.model,
-        userAvatar: userGeneratedImages.userAvatar,
-        userNickname: userGeneratedImages.userNickname,
-        avatarFrameId: userGeneratedImages.avatarFrameId,
-        createdAt: userGeneratedImages.createdAt,
+        id: communityMedia.sourceMediaId,
+        imageUrl: communityMedia.mediaUrl,
+        prompt: communityMedia.prompt,
+        model: communityMedia.model,
+        userAvatar: communityMedia.userAvatar,
+        userNickname: communityMedia.userNickname,
+        avatarFrameId: communityMedia.avatarFrameId,
+        createdAt: communityMedia.createdAt,
       })
-      .from(userGeneratedImages)
+      .from(communityMedia)
       .where(
         and(
           // 只选择图片类型，排除视频
-          eq(userGeneratedImages.mediaType, 'image'),
+          eq(communityMedia.mediaType, 'image'),
           // 允许的角色：premium（优质用户）、oldUser（首批用户）、regular（普通用户）或 null（旧数据）
           or(
-            inArray(userGeneratedImages.userRole, ['premium', 'oldUser', 'regular']),
-            isNull(userGeneratedImages.userRole)
+            inArray(communityMedia.userRole, ['premium', 'oldUser', 'regular']),
+            isNull(communityMedia.userRole)
           ),
           // 排除图生图模型
           or(
-            notInArray(userGeneratedImages.model, i2iModels),
-            isNull(userGeneratedImages.model)
+            notInArray(communityMedia.model, i2iModels),
+            isNull(communityMedia.model)
           ),
-          // 社区展示必须是模型审核低风险，且经过人工审核通过
-          eq(userGeneratedImages.moderationLevel, 'low'),
-          eq(userGeneratedImages.manualReviewStatus, 'approved'),
+          // 已进入 community_media 表代表经过人工审核发布
+          eq(communityMedia.moderationLevel, 'low'),
           // 排除 NSFW 内容
-          eq(userGeneratedImages.nsfw, false)
+          eq(communityMedia.nsfw, false)
         )
       )
-      .orderBy(desc(userGeneratedImages.createdAt))
+      .orderBy(desc(communityMedia.createdAt))
       .limit(600)
 
     // 获取屏蔽词列表（直接使用代码中配置的常量）
