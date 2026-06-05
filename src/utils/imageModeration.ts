@@ -101,7 +101,7 @@ export async function moderatePrompt(
 
     if (!result) {
       console.warn('提示词审核结果为空')
-      return false
+      throw new Error('提示词审核结果为空')
     }
 
     const yes = result === '是' || result === 'yes'
@@ -121,7 +121,7 @@ export async function moderatePrompt(
     }
 
     console.warn('提示词审核结果不明确:', rawResult)
-    return false
+    throw new Error('提示词审核结果不明确')
   } catch (error) {
     console.error('提示词审核失败:', error)
     throw new Error(`提示词审核失败: ${error instanceof Error ? error.message : '未知错误'}`)
