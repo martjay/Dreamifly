@@ -6,6 +6,7 @@ import Toast from './Toast'
 import ModelDropdown from './ModelDropdown'
 
 type ModelWithAvailability = ModelConfig & { isAvailable: boolean };
+const DEFAULT_IMAGE_ASPECT_RATIO = '9:16';
 
 interface GenerateFormProps {
   width: number;
@@ -629,7 +630,7 @@ export default function GenerateForm({
     if (supportsHighResolutionOption) {
       setIsHighResolution(enableHighQuality)
 
-      const gptImage2Size = isGptImage2Model(model) ? GPT_IMAGE_2_RATIO_SIZES[aspectRatio] || GPT_IMAGE_2_RATIO_SIZES['1:1'] : null
+      const gptImage2Size = isGptImage2Model(model) ? GPT_IMAGE_2_RATIO_SIZES[aspectRatio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO] : null
       const { width: newWidth, height: newHeight } = gptImage2Size
         ? (enableHighQuality ? gptImage2Size.high : gptImage2Size.normal)
         : getDimensionsByPixels(enableHighQuality ? highPixels : normalPixels, aspectRatio)

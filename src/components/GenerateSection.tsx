@@ -48,6 +48,10 @@ type VideoModerationState = {
   mediaId?: string | null
 }
 
+const DEFAULT_IMAGE_ASPECT_RATIO = '9:16'
+const DEFAULT_IMAGE_WIDTH = 768
+const DEFAULT_IMAGE_HEIGHT = 1368
+
 // 格式化时间（秒转为 MM:SS 或 HH:MM:SS）
 const formatTime = (seconds: number): string => {
   if (!isFinite(seconds) || isNaN(seconds)) return '0:00'
@@ -81,8 +85,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const [negativePrompt, setNegativePrompt] = useState('');
-  const [width, setWidth] = useState(1024);
-  const [height, setHeight] = useState(1024);
+  const [width, setWidth] = useState(DEFAULT_IMAGE_WIDTH);
+  const [height, setHeight] = useState(DEFAULT_IMAGE_HEIGHT);
   // 初始步数根据初始模型配置设置（如果提供了initialModel，使用它的配置；否则使用默认模型）
   const initialModelForSteps = defaultImageModel;
   const initialModelThresholds = getModelThresholds(initialModelForSteps);
@@ -856,25 +860,26 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   };
 
 
-  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [aspectRatio, setAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
   const hideImageRatioSelector = false;
   // 高分辨率开关状态（独立控制，不受图片比例影响）
   const [isHighResolution, setIsHighResolution] = useState(false);
 
-  // 切换到 grok-imagine-1.0 时，若当前比例不在支持列表内，重置为 1:1
+  // 切换到 grok-imagine-1.0 时，若当前比例不在支持列表内，重置为默认比例
   useEffect(() => {
     if (model === 'grok-imagine-1.0' && !GROK_ALLOWED_RATIOS.includes(aspectRatio)) {
-      setAspectRatio('1:1');
-      setWidth(1024);
-      setHeight(1024);
+      const defaultSize = GROK_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
+      setWidth(defaultSize.width);
+      setHeight(defaultSize.height);
       setIsHighResolution(false);
     }
   }, [model, aspectRatio]);
 
   useEffect(() => {
     if (isGptImage2Model(model)) {
-      const nextRatio = GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio) ? aspectRatio : '1:1';
-      const size = GPT_IMAGE_2_RATIO_SIZES[nextRatio] || GPT_IMAGE_2_RATIO_SIZES['1:1'];
+      const nextRatio = GPT_IMAGE_2_ALLOWED_RATIOS.includes(aspectRatio) ? aspectRatio : DEFAULT_IMAGE_ASPECT_RATIO;
+      const size = GPT_IMAGE_2_RATIO_SIZES[nextRatio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       const shouldUseHighQualitySize = nextRatio === aspectRatio && isHighResolution;
       const targetSize = shouldUseHighQualitySize ? size.high : size.normal;
 
@@ -888,11 +893,11 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
   }, [model, aspectRatio, isHighResolution]);
 
-  // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为 1:1（1K）
+  // 切换到 nano-banana-2 时，若当前比例不在支持列表内，重置为默认比例（1K）
   useEffect(() => {
     if (model === 'nano-banana-2' && !NANO_BANANA_ALLOWED_RATIOS.includes(aspectRatio)) {
-      const defaultSize = NANO_BANANA_RATIO_SIZES['1:1'];
-      setAspectRatio('1:1');
+      const defaultSize = NANO_BANANA_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
+      setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
       setWidth(defaultSize.width);
       setHeight(defaultSize.height);
       setIsHighResolution(false);
@@ -903,7 +908,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setAspectRatio(ratio);
 
     if (isGptImage2Model(model)) {
-      const size = GPT_IMAGE_2_RATIO_SIZES[ratio] || GPT_IMAGE_2_RATIO_SIZES['1:1'];
+      const size = GPT_IMAGE_2_RATIO_SIZES[ratio] || GPT_IMAGE_2_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       const targetSize = isHighResolution ? size.high : size.normal;
       setWidth(targetSize.width);
       setHeight(targetSize.height);
@@ -912,7 +917,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
     // grok-imagine-1.0 使用固定尺寸，不按像素计算
     if (model === 'grok-imagine-1.0') {
-      const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES['1:1'];
+      const size = GROK_RATIO_SIZES[ratio] || GROK_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       setWidth(size.width);
       setHeight(size.height);
       return;
@@ -921,7 +926,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     // nano-banana-2 使用独立的比例 → 像素体系
     // 普通画质对应 1K 基准尺寸，高画质由后续的高分辨率开关自动放大并映射为 4K
     if (model === 'nano-banana-2') {
-      const baseSize = NANO_BANANA_RATIO_SIZES[ratio] || NANO_BANANA_RATIO_SIZES['1:1'];
+      const baseSize = NANO_BANANA_RATIO_SIZES[ratio] || NANO_BANANA_RATIO_SIZES[DEFAULT_IMAGE_ASPECT_RATIO];
       if (isHighResolution) {
         setWidth(baseSize.width * 2);
         setHeight(baseSize.height * 2);
