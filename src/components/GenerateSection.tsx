@@ -692,6 +692,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
           // 审核未通过：非 2xx，但响应体包含 imageUrl 供前端加遮罩展示
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
+            if (errorData?.code === 'OFFICIAL_MODEL_MODERATION_FAILED') {
+              const message = t('preview.officialModerationFailed')
+              setImageStatuses(prev => {
+                const newStatuses = [...prev];
+                newStatuses[index] = ({
+                  status: 'error',
+                  message
+                });
+                return newStatuses;
+              });
+              return;
+            }
             if (errorData?.code === 'MODERATION_FAILED' && !errorData?.imageUrl) {
               const message = inputModerationFailureMessage || getInputModerationFailureMessage(errorData?.moderation?.reason, 'image')
               inputModerationFailureMessage = message

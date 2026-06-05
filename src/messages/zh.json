@@ -192,6 +192,7 @@
         "generating": "生成中...",
         "completed": "生成完成",
         "error": "生成失败",
+        "officialModerationFailed": "模型官方审核未通过",
         "retrying": "正在重试",
         "hint": "图片或视频生成可能耗时较长，偶尔一张图片或视频出错是正常情况，请耐心等待。",
         "status": {

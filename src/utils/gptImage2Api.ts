@@ -1,4 +1,8 @@
 import { getGptImage2SizeString } from '@/utils/modelConfig';
+import {
+  OfficialModelModerationError,
+  detectOfficialModelModerationFailure,
+} from '@/utils/officialModelModeration';
 
 interface GptImage2Params {
   prompt: string;
@@ -93,6 +97,9 @@ async function requestGptImage2(endpoint: string, init: RequestInit): Promise<st
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (detectOfficialModelModerationFailure(errorText)) {
+          throw new OfficialModelModerationError();
+        }
         if (attempt < MAX_RETRIES && isRetryableError(null, response.status)) {
           console.warn(`[gpt-image-2] attempt ${attempt} failed (${response.status}), retrying in ${RETRY_DELAY_MS}ms...`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));

@@ -1,3 +1,8 @@
+import {
+  OfficialModelModerationError,
+  detectOfficialModelModerationFailure,
+} from '@/utils/officialModelModeration'
+
 interface NanoBananaParams {
   prompt: string
   width: number
@@ -224,12 +229,18 @@ export async function generateNanoBananaImage(params: NanoBananaParams): Promise
 
       const responseText = await response.text()
       if (!response.ok) {
+        if (detectOfficialModelModerationFailure(responseText)) {
+          throw new OfficialModelModerationError()
+        }
         throw new Error(`BananaRouter API failed ${response.status}: ${responseText}`)
       }
 
       const data = JSON.parse(responseText) as BananaRouterResponse
       const imageUrl = extractImageDataUrl(data)
       if (!imageUrl) {
+        if (detectOfficialModelModerationFailure(data)) {
+          throw new OfficialModelModerationError()
+        }
         throw new Error('BananaRouter API 未返回图片')
       }
 

@@ -14,6 +14,11 @@ import { moderateGenerationInput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
+import {
+  OFFICIAL_MODEL_MODERATION_FAILED_CODE,
+  OFFICIAL_MODEL_MODERATION_FAILED_MESSAGE,
+  isOfficialModelModerationError,
+} from '@/utils/officialModelModeration'
 
 export const maxDuration = 650
 
@@ -952,6 +957,16 @@ export async function POST(request: Request) {
       }
     }
     console.error('Error generating image:', error)
+    if (isOfficialModelModerationError(error)) {
+      return NextResponse.json(
+        {
+          code: OFFICIAL_MODEL_MODERATION_FAILED_CODE,
+          error: OFFICIAL_MODEL_MODERATION_FAILED_MESSAGE,
+        },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate image' },
       { status: 500 }
