@@ -14,6 +14,15 @@ const AlipaySdkCtor =
 // 支付宝SDK实例（单例模式）
 let alipaySdkInstance: any = null;
 
+type CreateAlipayPaymentParams = {
+  outTradeNo: string;
+  totalAmount: string;
+  subject: string;
+  returnUrl?: string;
+  notifyUrl?: string;
+  quitUrl?: string;
+};
+
 /**
  * 获取支付宝SDK实例
  */
@@ -59,13 +68,7 @@ export function generateOrderNo(): string {
 /**
  * 创建支付宝PC网页支付
  */
-export async function createAlipayPagePayment(params: {
-  outTradeNo: string;
-  totalAmount: string;
-  subject: string;
-  returnUrl?: string;
-  notifyUrl?: string;
-}): Promise<string> {
+export async function createAlipayPagePayment(params: CreateAlipayPaymentParams): Promise<string> {
   const alipaySdk = getAlipaySdk();
   
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -77,6 +80,30 @@ export async function createAlipayPagePayment(params: {
       total_amount: params.totalAmount,
       subject: params.subject,
       product_code: 'FAST_INSTANT_TRADE_PAY',
+    },
+    returnUrl: params.returnUrl || `${baseUrl}/api/alipay/return`,
+    notify_url: params.notifyUrl || `${baseUrl}/api/alipay/notify`,
+  });
+
+  return result as string;
+}
+
+/**
+ * 创建支付宝手机网站支付
+ */
+export async function createAlipayWapPayment(params: CreateAlipayPaymentParams): Promise<string> {
+  const alipaySdk = getAlipaySdk();
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
+  const result = await alipaySdk.pageExec('alipay.trade.wap.pay', {
+    method: 'GET',
+    bizContent: {
+      out_trade_no: params.outTradeNo,
+      total_amount: params.totalAmount,
+      subject: params.subject,
+      product_code: 'QUICK_WAP_WAY',
+      quit_url: params.quitUrl || `${baseUrl}/pricing`,
     },
     returnUrl: params.returnUrl || `${baseUrl}/api/alipay/return`,
     notify_url: params.notifyUrl || `${baseUrl}/api/alipay/notify`,

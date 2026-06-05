@@ -39,6 +39,11 @@ type SubscriptionPlanGroup = {
   quarterlyPlan?: SubscriptionPlan
 }
 
+function isMobileBrowser() {
+  if (typeof navigator === 'undefined') return false
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+}
+
 export default function PricingPage() {
   const t = createScopedT('pricing')
   const { data: session } = useSession()
@@ -158,6 +163,7 @@ export default function PricingPage() {
 
   const startPayment = async (options: { orderType: 'subscription' | 'points'; productId: number }) => {
     clearPolling()
+    const paymentScene = isMobileBrowser() ? 'mobile' : 'pc'
     if (options.orderType === 'subscription') {
       setPayingPlanId(options.productId)
       setPayingPackageId(null)
@@ -175,6 +181,7 @@ export default function PricingPage() {
           orderType: options.orderType,
           productId: options.productId,
           paymentMethod: 'alipay',
+          paymentScene,
         }),
       })
 
@@ -187,10 +194,14 @@ export default function PricingPage() {
         throw new Error('未获取到支付链接，请稍后重试。')
       }
 
-      console.info('正在跳转支付宝，请在新页面完成支付。')
-      const opened = window.open(data.paymentUrl, '_blank')
-      if (!opened) {
+      console.info('正在跳转支付宝，请完成支付。')
+      if (paymentScene === 'mobile') {
         window.location.href = data.paymentUrl
+      } else {
+        const opened = window.open(data.paymentUrl, '_blank')
+        if (!opened) {
+          window.location.href = data.paymentUrl
+        }
       }
 
       pollOrderStatus(data.orderId)

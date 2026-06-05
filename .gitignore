@@ -52,8 +52,11 @@ next-env.d.ts
 
 .cursor
 
-# local code graph index
+# local code search indexes
 .codegraph/
+.semble/
+.fast-context/
+.fast_context/
 
 # local Claude workspace files
 .claude/
