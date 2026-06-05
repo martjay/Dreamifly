@@ -172,13 +172,14 @@ export async function GET(request: NextRequest) {
 
     const pageItems = filteredMedia.slice(offset, offset + limit)
     const likedIdSet = session?.user
-      ? await getLikedMediaIdsForUser(session.user.id, pageItems.map((item) => item.sourceMediaId))
+      ? await getLikedMediaIdsForUser(session.user.id, pageItems.map((item) => item.id))
       : new Set<string>()
 
     return NextResponse.json({
       success: true,
       items: pageItems.map((item) => ({
-        id: item.sourceMediaId,
+        id: item.id,
+        sourceMediaId: item.sourceMediaId,
         mediaUrl: item.imageUrl,
         mediaType: item.mediaType || 'image',
         prompt: item.prompt || '',
@@ -188,7 +189,7 @@ export async function GET(request: NextRequest) {
         userAvatar: item.userAvatar || '/images/default-avatar.svg',
         userNickname: item.userNickname || '',
         avatarFrameId: item.avatarFrameId,
-        likedByCurrentUser: likedIdSet.has(item.sourceMediaId),
+        likedByCurrentUser: likedIdSet.has(item.id),
       })),
       hasMore: offset + limit < filteredMedia.length,
       total: filteredMedia.length,

@@ -399,6 +399,23 @@ export const communityLike = pgTable("community_like", {
   userImageUnique: uniqueIndex("community_like_user_image_unique").on(table.userId, table.imageId),
 }));
 
+// 社区发布作品收藏表
+export const communityMediaLike = pgTable("community_media_like", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  communityMediaId: text("community_media_id")
+    .notNull()
+    .references(() => communityMedia.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userMediaUnique: uniqueIndex("community_media_like_user_media_unique").on(table.userId, table.communityMediaId),
+  userIdx: index("community_media_like_user_id_idx").on(table.userId),
+  communityMediaIdx: index("community_media_like_media_id_idx").on(table.communityMediaId),
+}));
+
 // 未通过审核图片表
 export const rejectedImages = pgTable("rejected_images", {
   id: text("id").primaryKey(), // UUID

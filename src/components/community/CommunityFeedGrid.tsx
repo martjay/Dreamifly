@@ -11,6 +11,7 @@ import { useSession } from '@/lib/auth-client'
 
 export type CommunityFeedItem = {
   id: string
+  sourceMediaId?: string
   mediaUrl: string
   mediaType: 'image' | 'video'
   prompt: string
@@ -119,8 +120,8 @@ export default function CommunityFeedGrid({
 
   const getDisplayUrl = (item: CommunityFeedItem) => decodedMedia[item.mediaUrl] || item.mediaUrl
 
-  const handleReport = (itemId: string) => {
-    setReportingItemId(itemId)
+  const handleReport = (item: CommunityFeedItem) => {
+    setReportingItemId(item.sourceMediaId || item.id)
     setReportDialogOpen(true)
   }
 
@@ -413,7 +414,7 @@ export default function CommunityFeedGrid({
                     {session?.user && (
                       <button
                         type="button"
-                        onClick={() => handleReport(selectedItem.id)}
+                        onClick={() => handleReport(selectedItem)}
                         className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/76 text-gray-600 shadow-[0_14px_32px_-18px_rgba(15,23,42,0.45)] backdrop-blur-md transition hover:bg-white hover:text-orange-700"
                         aria-label="举报不当内容"
                         title="举报不当内容"
