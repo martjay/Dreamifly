@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { user } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { isDisplayNameWithinLimit, normalizeDisplayName } from '@/utils/displayName';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,16 @@ export async function POST(request: NextRequest) {
     } = {};
 
     if (nickname !== undefined) {
-      updateData.nickname = nickname;
+      const normalizedNickname = normalizeDisplayName(nickname);
+
+      if (normalizedNickname && !isDisplayNameWithinLimit(normalizedNickname)) {
+        return NextResponse.json(
+          { error: 'DISPLAY_NAME_TOO_LONG', code: 'DISPLAY_NAME_TOO_LONG' },
+          { status: 400 }
+        );
+      }
+
+      updateData.nickname = normalizedNickname;
     }
     if (avatar !== undefined) {
       updateData.avatar = avatar;

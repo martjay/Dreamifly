@@ -11,6 +11,7 @@ import AvatarCropper from '@/components/AvatarCropper'
 import AvatarWithFrame from '@/components/AvatarWithFrame'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { usePoints } from '@/contexts/PointsContext'
+import { isDisplayNameWithinLimit, normalizeDisplayName } from '@/utils/displayName'
 
 export default function ProfilePage() {
   const t = createScopedT('auth')
@@ -408,6 +409,13 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     setError('')
     setSuccess('')
+
+    const normalizedNickname = normalizeDisplayName(nickname)
+    if (normalizedNickname && !isDisplayNameWithinLimit(normalizedNickname)) {
+      setError(t('error.nicknameTooLong'))
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -437,14 +445,19 @@ export default function ProfilePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          nickname,
+          nickname: normalizedNickname,
           avatar: avatarUrlToSave,
           avatarFrameId: previewFrameId,
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to update profile')
+        const errorData = await response.json().catch(() => ({}))
+        const errorCode = errorData.code || errorData.error
+        if (errorCode === 'DISPLAY_NAME_TOO_LONG') {
+          throw new Error(t('error.nicknameTooLong'))
+        }
+        throw new Error(errorData.error || t('error.updateFailed'))
       }
 
       // Apply new avatar state and clear pending preview
@@ -454,7 +467,7 @@ export default function ProfilePage() {
       setPendingAvatarFile(null)
       
       // 立即更新全局头像和昵称状态
-      updateProfile(avatarUrlToSave, nickname)
+      updateProfile(avatarUrlToSave, normalizedNickname)
       
       // 更新全局头像框ID
       setAvatarFrameId(previewFrameId)

@@ -5,6 +5,7 @@ import { createScopedT } from '@/lib/strings'
 import { useState, useEffect } from 'react'
 import { signIn, sendVerificationEmail, forgetPassword } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
+import { isDisplayNameWithinLimit, normalizeDisplayName } from '@/utils/displayName'
 import TermsModal from './TermsModal'
 
 interface AuthModalProps {
@@ -86,8 +87,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     }
 
     if (mode === 'register') {
-      if (!nickname) {
-        setError(t('error.nicknameRequired'))
+      const normalizedNickname = normalizeDisplayName(nickname)
+
+      if (!normalizedNickname) {
+        setError(t('error.nameRequired'))
+        return
+      }
+      if (!isDisplayNameWithinLimit(normalizedNickname)) {
+        setError(t('error.displayNameTooLong'))
         return
       }
       if (password !== confirmPassword) {
@@ -182,7 +189,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             body: JSON.stringify({
               email,
               password,
-              name: nickname,
+              name: normalizeDisplayName(nickname),
               image: '/images/default-avatar.svg',
               callbackURL: '/',
             }),
@@ -236,6 +243,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               setError(t('error.emailDotCountNotAllowed'))
             } else if (errorCode === 'UNAUTHORIZED' || errorCode === 'INVALID_TOKEN') {
               setError(t('error.unauthorized'))
+            } else if (errorCode === 'NAME_ALREADY_EXISTS' ||
+                errorMessage === 'NAME_ALREADY_EXISTS' ||
+                errorMessage.includes('NAME_ALREADY_EXISTS')) {
+              setError(t('error.nameAlreadyExists'))
+            } else if (errorCode === 'DISPLAY_NAME_TOO_LONG' ||
+                errorMessage === 'DISPLAY_NAME_TOO_LONG' ||
+                errorMessage.includes('DISPLAY_NAME_TOO_LONG')) {
+              setError(t('error.displayNameTooLong'))
             } else {
               setError(t('error.registerFailed'))
             }
@@ -436,14 +451,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           {mode === 'register' && (
             <div>
               <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-1">
-                {t('nickname')}
+                {t('name')}
               </label>
               <input
                 id="nickname"
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder={t('nicknamePlaceholder')}
+                placeholder={t('namePlaceholder')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent outline-none transition-all"
               />
             </div>

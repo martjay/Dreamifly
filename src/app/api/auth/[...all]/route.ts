@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import { canRegister, recordRegistration } from "@/utils/ipRegistrationLimitManager";
+import { isDisplayNameWithinLimit, normalizeDisplayName } from "@/utils/displayName";
 
 const handler = toNextJsHandler(auth);
 const SIGNUP_EMAIL_PATH = "/api/auth/sign-up/email";
@@ -155,6 +156,8 @@ export const GET = async (request: NextRequest) => {
 };
 
 export const POST = async (request: NextRequest) => {
+  let requestForHandler = request;
+
   // 对于注册请求，验证动态token
   if (request.nextUrl.pathname === SIGNUP_EMAIL_PATH) {
     const authHeader = request.headers.get('Authorization')
@@ -267,18 +270,51 @@ export const POST = async (request: NextRequest) => {
     // 先读取请求体，保存用户输入的昵称和邮箱（请求体只能读取一次）
     let userNickname: string | undefined;
     let userEmail: string | undefined;
+    let payload: Record<string, any> = {};
     try {
       const bodyText = await request.clone().text();
-      const payload = bodyText ? JSON.parse(bodyText) : {};
-      userNickname = payload.name; // 用户输入的昵称
-      userEmail = payload.email; // 用户输入的邮箱
-      userEmail = payload.email; // 用户输入的邮箱
+      payload = bodyText ? JSON.parse(bodyText) : {};
     } catch {
-      // 如果解析失败，继续处理，使用默认值
+      return jsonError("请求体无效，无法读取用户名信息");
     }
 
+    const normalizedName = normalizeDisplayName(payload.name || '');
+
+    if (!normalizedName) {
+      return jsonError("NAME_REQUIRED", "NAME_REQUIRED");
+    }
+
+    if (!isDisplayNameWithinLimit(normalizedName)) {
+      return jsonError("DISPLAY_NAME_TOO_LONG", "DISPLAY_NAME_TOO_LONG");
+    }
+
+    const existingName = await db.execute(sql`
+      SELECT id FROM "user"
+      WHERE lower(trim(name)) = lower(${normalizedName})
+      LIMIT 1
+    `);
+
+    if (existingName.length > 0) {
+      return jsonError("NAME_ALREADY_EXISTS", "NAME_ALREADY_EXISTS");
+    }
+
+    userNickname = normalizedName; // 用户输入的昵称
+    userEmail = payload.email; // 用户输入的邮箱
+    const normalizedHeaders = new Headers(request.headers);
+    normalizedHeaders.set('Content-Type', 'application/json');
+    normalizedHeaders.delete('content-length');
+
+    requestForHandler = new NextRequest(request.url, {
+      method: request.method,
+      headers: normalizedHeaders,
+      body: JSON.stringify({
+        ...payload,
+        name: normalizedName,
+      }),
+    });
+
     // 调用 better-auth 的注册处理
-    const response = await handler.POST(request);
+    const response = await handler.POST(requestForHandler);
     
     // 尝试解析响应数据（无论状态码如何）
     let responseData = null;
