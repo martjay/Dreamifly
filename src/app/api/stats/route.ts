@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { siteStats } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getShanghaiDateKey } from '@/utils/siteStats';
 
 const SITE_START_DATE = '2025-05-20T00:10:17Z'; // 网站启动时间
 
@@ -20,9 +21,7 @@ export async function GET() {
     // 检查上次重置时间是否为今天
     const lastResetDate = stats[0].lastResetDate ? new Date(stats[0].lastResetDate) : new Date();
     const today = new Date();
-    const isSameDay = lastResetDate.getDate() === today.getDate() &&
-                     lastResetDate.getMonth() === today.getMonth() &&
-                     lastResetDate.getFullYear() === today.getFullYear();
+    const isSameDay = getShanghaiDateKey(lastResetDate) === getShanghaiDateKey(today);
 
     // 如果不是今天，重置每日统计数据
     if (!isSameDay) {

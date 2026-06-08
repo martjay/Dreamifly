@@ -4,7 +4,7 @@ import { generateGrokImage } from '@/utils/grokApi'
 import { generateGptImage2 } from '@/utils/gptImage2Api'
 import { generateNanoBananaImage } from '@/utils/nanoBananaApi'
 import { db } from '@/db'
-import { siteStats, modelUsageStats, user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
+import { modelUsageStats, user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
 import { eq, sql, and, lt } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
@@ -19,6 +19,7 @@ import {
   OFFICIAL_MODEL_MODERATION_FAILED_MESSAGE,
   isOfficialModelModerationError,
 } from '@/utils/officialModelModeration'
+import { incrementSiteGenerationStats } from '@/utils/siteStats'
 
 export const maxDuration = 650
 
@@ -875,14 +876,11 @@ export async function POST(request: Request) {
     // 计算总响应时间（秒），包含排队延迟
     const responseTime = (Date.now() - totalStartTime) / 1000
 
-    // 更新统计数据
-    await db.update(siteStats)
-      .set({
-        totalGenerations: sql`${siteStats.totalGenerations} + 1`,
-        dailyGenerations: sql`${siteStats.dailyGenerations} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(siteStats.id, 1))
+    try {
+      await incrementSiteGenerationStats(1)
+    } catch (error) {
+      console.error('Failed to update site generation stats:', error)
+    }
 
     // 记录模型使用统计
     try {

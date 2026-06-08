@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { createHash } from 'crypto'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { siteStats, user } from '@/db/schema'
+import { user } from '@/db/schema'
 import { generateVideo } from '@/utils/videoComfyApi'
 import {
   calculateVideoResolution,
@@ -27,6 +27,7 @@ import {
   type HappyHorseResolution,
 } from '@/utils/happyHorseVideoApi'
 import { moderateHappyHorseInputMedia, moderateVideoGenerationInput } from '@/utils/videoModerationFlow'
+import { incrementSiteGenerationStats } from '@/utils/siteStats'
 
 export const maxDuration = 1500
 
@@ -498,13 +499,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await db.update(siteStats)
-        .set({
-          totalGenerations: sql`${siteStats.totalGenerations} + 1`,
-          dailyGenerations: sql`${siteStats.dailyGenerations} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(siteStats.id, 1))
+      await incrementSiteGenerationStats(1)
     } catch (error) {
       console.error(`[generate-video] [${requestId}] Failed to update site stats:`, error)
     }
