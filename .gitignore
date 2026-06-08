@@ -60,3 +60,4 @@ next-env.d.ts
 
 # local Claude workspace files
 .claude/
+.ace-tool/
