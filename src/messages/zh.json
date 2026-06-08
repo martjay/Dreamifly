@@ -463,7 +463,7 @@
       "nameRequired": "请输入用户名",
       "nicknameRequired": "请输入昵称",
       "nameAlreadyExists": "用户名已被使用，请更换",
-      "displayNameTooLong": "用户名不能超过20个字符，中文占2个字符",
+      "displayNameTooLong": "用户名不能超过20个字符",
       "nicknameTooLong": "昵称不能超过20个字符，中文占2个字符",
       "loginFailed": "登录失败，请检查邮箱和密码",
       "registerFailed": "注册失败，该邮箱可能已被使用",

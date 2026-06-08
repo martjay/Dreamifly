@@ -6,6 +6,10 @@ import { getShanghaiDateKey } from '@/utils/siteStats';
 
 const SITE_START_DATE = '2025-05-20T00:10:17Z'; // 网站启动时间
 
+function normalizeGenerationCount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
 export async function GET() {
   try {
     const stats = await db.select().from(siteStats).where(eq(siteStats.id, 1)).limit(1);
@@ -37,15 +41,15 @@ export async function GET() {
       const updatedStats = await db.select().from(siteStats).where(eq(siteStats.id, 1)).limit(1);
       
       return NextResponse.json({
-        totalGenerations: updatedStats[0].totalGenerations,
-        dailyGenerations: updatedStats[0].dailyGenerations,
+        totalGenerations: normalizeGenerationCount(updatedStats[0]?.totalGenerations),
+        dailyGenerations: normalizeGenerationCount(updatedStats[0]?.dailyGenerations),
         uptime: calculateUptime(),
       });
     }
 
     return NextResponse.json({
-      totalGenerations: stats[0].totalGenerations,
-      dailyGenerations: stats[0].dailyGenerations,
+      totalGenerations: normalizeGenerationCount(stats[0].totalGenerations),
+      dailyGenerations: normalizeGenerationCount(stats[0].dailyGenerations),
       uptime: calculateUptime(),
     });
   } catch (error) {

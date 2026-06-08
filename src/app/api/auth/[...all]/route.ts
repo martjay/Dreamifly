@@ -268,8 +268,6 @@ export const POST = async (request: NextRequest) => {
       }
     }
     // 先读取请求体，保存用户输入的昵称和邮箱（请求体只能读取一次）
-    let userNickname: string | undefined;
-    let userEmail: string | undefined;
     let payload: Record<string, any> = {};
     try {
       const bodyText = await request.clone().text();
@@ -298,8 +296,8 @@ export const POST = async (request: NextRequest) => {
       return jsonError("NAME_ALREADY_EXISTS", "NAME_ALREADY_EXISTS");
     }
 
-    userNickname = normalizedName; // 用户输入的昵称
-    userEmail = payload.email; // 用户输入的邮箱
+    const userNickname = normalizedName; // 用户输入的昵称
+    const userEmail = payload.email; // 用户输入的邮箱
     const normalizedHeaders = new Headers(request.headers);
     normalizedHeaders.set('Content-Type', 'application/json');
     normalizedHeaders.delete('content-length');
