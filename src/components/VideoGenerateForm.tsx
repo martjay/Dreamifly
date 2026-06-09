@@ -167,6 +167,7 @@ const VideoGenerateForm = ({
   const [generationNotice, setGenerationNotice] = useState<string | null>(null)
   const [isNegativePromptEnabled, setIsNegativePromptEnabled] = useState(false)
   const [isRatioOpen, setIsRatioOpen] = useState(false)
+  const [isHappyHorseHelpOpen, setIsHappyHorseHelpOpen] = useState(false)
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'warning' | 'success' | 'info' } | null>(null)
   const [progress, setProgress] = useState(0)
@@ -176,6 +177,7 @@ const VideoGenerateForm = ({
   const referenceInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const happyHorseInputRef = useRef<HTMLInputElement>(null)
+  const happyHorseHelpRef = useRef<HTMLDivElement>(null)
   const ratioDropdownRef = useRef<HTMLDivElement>(null)
 
   const authStatus = isPending ? 'loading' : session?.user ? 'authenticated' : 'unauthenticated'
@@ -196,6 +198,8 @@ const VideoGenerateForm = ({
   const effectiveModel = isHappyHorseAggregate ? resolveHappyHorseModelId(model, mode) : model
   const effectiveModelConfig = (effectiveModel ? getVideoModelById(effectiveModel) : null) ?? currentModelConfig
   const isHappyHorse = currentModelConfig?.provider === 'happyhorse' || Boolean(inferredHappyHorseMode)
+  const happyHorseImageCount = referenceImages.length || (uploadedImage ? 1 : 0)
+  const canAddHappyHorseMedia = !isGenerating && !sourceVideo && happyHorseImageCount < MAX_HAPPYHORSE_REFERENCE_IMAGES
   const isTextToVideo = isHappyHorse && mode === 'text-to-video'
   const isReferenceToVideo = isHappyHorse && mode === 'reference-to-video'
   const isVideoEdit = isHappyHorse && mode === 'video-edit'
@@ -305,6 +309,16 @@ const VideoGenerateForm = ({
     if (isRatioOpen) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isRatioOpen])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (happyHorseHelpRef.current && !happyHorseHelpRef.current.contains(event.target as Node)) {
+        setIsHappyHorseHelpOpen(false)
+      }
+    }
+    if (isHappyHorseHelpOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isHappyHorseHelpOpen])
 
   useEffect(() => {
     let timer: NodeJS.Timeout
@@ -494,6 +508,12 @@ const VideoGenerateForm = ({
       return
     }
 
+    if (videoFiles.length > 0 && imageFiles.length > 0) {
+      setUploadError('图片和视频不能同时上传，请只选择一种素材。')
+      if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+      return
+    }
+
     if (imageFiles.some(file => file.size > 10 * 1024 * 1024)) {
       setUploadError('图片大小不能超过 10MB')
       if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
@@ -515,10 +535,6 @@ const VideoGenerateForm = ({
       }
 
       try {
-        const referenceImageData = imageFiles.length > 0
-          ? await Promise.all(imageFiles.map(imageFile => fileToDataUrl(imageFile).then(stripDataUrlPrefix)))
-          : []
-        const limitedReferenceImages = referenceImageData.slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
         const objectUrl = URL.createObjectURL(file)
         const metadata = await new Promise<{ duration: number; width: number; height: number }>((resolve) => {
           const video = document.createElement('video')
@@ -542,17 +558,13 @@ const VideoGenerateForm = ({
         setSourceVideoSeconds(metadata.duration > 0 ? metadata.duration : null)
         setSourceVideoName(file.name)
         setUploadedImage(null)
-        setReferenceImages(limitedReferenceImages)
+        setReferenceImages([])
         if (metadata.width > 0 && metadata.height > 0) {
           setAspectRatio(metadata.width / metadata.height)
           setWidth(metadata.width)
           setHeight(metadata.height)
         }
-        setUploadError(
-          referenceImageData.length > MAX_HAPPYHORSE_REFERENCE_IMAGES
-            ? `最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
-            : null
-        )
+        setUploadError(null)
         setGenerationNotice(null)
       } catch (error) {
         console.error('Error processing source video:', error)
@@ -565,29 +577,29 @@ const VideoGenerateForm = ({
 
     try {
       const images = await Promise.all(imageFiles.map(file => fileToDataUrl(file).then(stripDataUrlPrefix)))
+      const existingImages = referenceImages.length > 0 ? referenceImages : uploadedImage ? [uploadedImage] : []
+      const combinedImages = [...existingImages, ...images]
+      const limitedImages = combinedImages.slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
+
       setSourceVideo(null)
       setSourceVideoSeconds(null)
       setSourceVideoName(null)
 
-      if (images.length === 1) {
-        setUploadedImage(images[0])
+      if (limitedImages.length === 1) {
+        setUploadedImage(limitedImages[0])
         setReferenceImages([])
-        if (layoutModelConfig) applyVideoLayoutFromImage(images[0], layoutModelConfig, aspectRatio)
+        if (layoutModelConfig) applyVideoLayoutFromImage(limitedImages[0], layoutModelConfig, aspectRatio)
       } else {
-        const limitedImages = images.slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
         setUploadedImage(null)
         setReferenceImages(limitedImages)
         if (layoutModelConfig && limitedImages[0]) applyVideoLayoutFromImage(limitedImages[0], layoutModelConfig, aspectRatio)
-        if (images.length > MAX_HAPPYHORSE_REFERENCE_IMAGES) {
-          setUploadError(`最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`)
-        } else {
-          setUploadError(null)
-        }
       }
 
-      if (images.length === 1) {
-        setUploadError(null)
-      }
+      setUploadError(
+        combinedImages.length > MAX_HAPPYHORSE_REFERENCE_IMAGES
+          ? `最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
+          : null
+      )
       setGenerationNotice(null)
     } catch (error) {
       console.error('Error processing HappyHorse media:', error)
@@ -817,66 +829,84 @@ const VideoGenerateForm = ({
 
         {isHappyHorseAggregate ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div ref={happyHorseHelpRef} className="relative flex items-center gap-2">
               <label className="text-sm font-medium text-gray-900">上传素材</label>
-              <span className="text-xs text-gray-500">
-                {sourceVideo
-                  ? '当前按视频编辑处理'
-                  : referenceImages.length > 0
-                    ? '当前按参考生视频处理'
-                    : uploadedImage
-                      ? '当前按图生视频处理'
-                      : '无素材时按文生视频处理'}
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsHappyHorseHelpOpen((open) => !open)}
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100"
+                aria-label="查看上传素材说明"
+                title="查看上传素材说明"
+              >
+                ?
+              </button>
+              {isHappyHorseHelpOpen && (
+                <div className="absolute left-0 top-7 z-20 max-w-sm rounded-xl border border-orange-200 bg-white p-3 text-xs leading-5 text-gray-600 shadow-lg">
+                  未上传素材按文生视频处理，1 张图片按图生视频，2 张以上图片按参考生视频，视频按视频编辑。图片和视频不能同时上传。
+                </div>
+              )}
             </div>
-            {renderDropzone({
-              title: sourceVideo
-                ? sourceVideoName || '已上传源视频'
-                : uploadedImage
-                  ? '已上传 1 张图片'
-                  : referenceImages.length > 0
-                    ? `已上传 ${referenceImages.length} 张参考图`
-                    : '上传图片或视频',
-              description: sourceVideo
-                ? sourceVideoSeconds ? `检测到 ${Math.ceil(sourceVideoSeconds)} 秒，输出设置为 ${billableSeconds} 秒` : '当前按视频编辑处理'
-                : uploadedImage
-                  ? '当前按图生视频处理'
-                  : referenceImages.length > 0
-                    ? `当前按参考生视频处理，最多 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
-                    : '未上传素材按文生视频处理，1 张图片按图生视频，2 张以上图片按参考生视频，视频按视频编辑。',
-              onClick: () => happyHorseInputRef.current?.click(),
-              children: sourceVideo ? (
-                <div className="relative">
-                  <video src={sourceVideo} className="mx-auto max-h-64 max-w-full rounded-lg shadow-lg" controls />
-                  <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveSourceVideo() }} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-2 text-white">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              ) : uploadedImage ? (
-                <div className="relative">
-                  <img src={imageSrc(uploadedImage)} alt="Uploaded" className="max-w-full max-h-64 mx-auto rounded-lg shadow-lg" />
-                  <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveImage() }} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-2 text-white">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              ) : undefined,
-            })}
+            {happyHorseImageCount === 0 && !sourceVideo && (
+              <button
+                type="button"
+                onClick={() => happyHorseInputRef.current?.click()}
+                disabled={isGenerating}
+                className="flex min-h-[178px] w-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-orange-400/70 bg-white px-6 py-8 text-center transition hover:border-orange-500 hover:bg-orange-50/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <svg className="mb-5 h-16 w-16 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span className="text-base font-semibold text-gray-900">点击或拖拽上传</span>
+              </button>
+            )}
             <input ref={happyHorseInputRef} type="file" accept="image/*,video/*" multiple onChange={handleHappyHorseMediaUpload} className="hidden" />
             {uploadError && (
               <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">
                 {uploadError}
               </div>
             )}
-            {referenceImages.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {referenceImages.map((ref, index) => (
-                  <div key={`${index}-${ref.slice(0, 16)}`} className="relative aspect-square overflow-hidden rounded-lg border border-orange-200 bg-white">
-                    <img src={imageSrc(ref)} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
-                    <button type="button" onClick={() => removeReferenceImage(index)} className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white">
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            {sourceVideo && (
+              <div className="relative overflow-hidden rounded-xl border border-orange-200 bg-white">
+                <video src={sourceVideo} className="max-h-64 w-full object-contain" controls />
+                <button type="button" onClick={handleRemoveSourceVideo} className="absolute right-2 top-2 rounded-full bg-red-500 p-2 text-white shadow-sm">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
+            {(uploadedImage || referenceImages.length > 0) && (
+              <div className="flex flex-wrap gap-3 sm:gap-4">
+                {(referenceImages.length > 0 ? referenceImages : uploadedImage ? [uploadedImage] : []).map((ref, index) => (
+                  <div key={`${index}-${ref.slice(0, 16)}`} className="group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl overflow-hidden border border-orange-400/40 bg-white/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-orange-400/50">
+                    <img src={imageSrc(ref)} alt={`参考图 ${index + 1}`} className="h-full w-full object-contain" />
+                    <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-full text-xs font-semibold text-gray-900 border border-orange-400/40 shadow-lg">
+                      Image{index + 1}
+                    </div>
+                    <button type="button" onClick={() => referenceImages.length > 0 ? removeReferenceImage(index) : handleRemoveImage()} className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full text-gray-900 hover:text-red-500 hover:bg-red-100/20 transition-all duration-300 shadow-lg border border-orange-200/50 hover:border-red-500/50 opacity-0 group-hover:opacity-100">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
                 ))}
+                {canAddHappyHorseMedia && (
+                  <button
+                    type="button"
+                    onClick={() => happyHorseInputRef.current?.click()}
+                    className="group relative w-28 sm:w-32 md:w-36 aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 p-3 border-orange-400/40 bg-gradient-to-br from-white/50 to-white/50 hover:border-orange-400/60 hover:bg-gradient-to-br hover:from-white/60 hover:to-white/60 cursor-pointer hover:shadow-lg hover:shadow-orange-400/10"
+                  >
+                    <div className="flex flex-col items-center justify-center h-full space-y-2 group-hover:scale-105 transition-transform duration-300">
+                      <div className="relative group-hover:animate-pulse">
+                        <svg className="w-5 h-5 text-orange-500/70 group-hover:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <div className="absolute inset-0 bg-gradient-to-r from-orange-100/20 to-amber-100/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-gray-900/90 font-medium text-xs sm:text-sm group-hover:text-gray-900 transition-colors leading-tight">
+                          点击或拖拽上传
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
             )}
           </div>
