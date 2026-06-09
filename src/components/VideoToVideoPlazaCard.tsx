@@ -105,11 +105,11 @@ export default function VideoToVideoPlazaCard({
         {/* 底部标题区域 */}
         <div className="px-1">
           {/* 特征标签 - 位于标题上方 */}
-          <div className="flex gap-1 flex-wrap mb-1.5">
+          <div className="mb-1.5 flex min-w-0 gap-1 overflow-hidden">
             {tags.map((tag, index) => (
               <span
                 key={tag}
-                className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${getTagClassName(tag, index)}`}
+                className={`shrink-0 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium rounded whitespace-nowrap ${getTagClassName(tag, index)}`}
               >
                 {tag}
               </span>
