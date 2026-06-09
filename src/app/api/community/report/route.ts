@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { user, imageReports, userGeneratedImages } from '@/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { user, imageReports, userGeneratedImages, communityMedia } from '@/db/schema'
+import { eq, and, or, sql, inArray } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
@@ -134,13 +134,27 @@ export async function POST(request: Request) {
       )
     }
 
-    // 5. 检查是否重复举报
+    // 5. 先查已发布社区媒体，举报新社区图时使用社区媒体 ID 作为举报主键
+    const publishedMedia = await db.select({
+      id: communityMedia.id,
+      sourceMediaId: communityMedia.sourceMediaId,
+      nsfw: communityMedia.nsfw,
+    })
+      .from(communityMedia)
+      .where(or(eq(communityMedia.id, imageId), eq(communityMedia.sourceMediaId, imageId)))
+      .limit(1)
+
+    const reportImageId = publishedMedia[0]?.id || imageId
+    const sourceMediaId = publishedMedia[0]?.sourceMediaId || imageId
+    const reportTargetIds = Array.from(new Set([reportImageId, sourceMediaId]))
+
+    // 6. 检查是否重复举报
     const existingReport = await db.select({ id: imageReports.id })
       .from(imageReports)
       .where(
         and(
           eq(imageReports.reporterId, session.user.id),
-          eq(imageReports.imageId, imageId)
+          inArray(imageReports.imageId, reportTargetIds)
         )
       )
       .limit(1)
@@ -155,13 +169,17 @@ export async function POST(request: Request) {
       )
     }
 
-    // 6. 验证图片是否存在且未被删除
-    const imageExists = await db.select({ id: userGeneratedImages.id })
+    // 7. 验证图片是否存在且未被删除，兼容旧作品 ID
+    const imageExists = publishedMedia.length > 0 ? [] : await db.select({
+      id: userGeneratedImages.id,
+      reportCount: userGeneratedImages.reportCount,
+      nsfw: userGeneratedImages.nsfw,
+    })
       .from(userGeneratedImages)
       .where(eq(userGeneratedImages.id, imageId))
       .limit(1)
 
-    if (imageExists.length === 0) {
+    if (publishedMedia.length === 0 && imageExists.length === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -171,18 +189,19 @@ export async function POST(request: Request) {
       )
     }
 
-    // 7. 判断用户类型并执行相应的举报逻辑
+    // 8. 判断用户类型并执行相应的举报逻辑
     const reportId = uuidv4()
     
     // 判断是否为一票举报权用户（管理员或优质用户）
     const hasOneVoteRight = userData.isAdmin || userData.isPremium
+    const publishedMediaRecord = publishedMedia[0] || null
 
     await db.transaction(async (tx) => {
-      // 7.1 插入举报记录
+      // 8.1 插入举报记录
       await tx.insert(imageReports).values({
         id: reportId,
         reporterId: session.user.id,
-        imageId: imageId,
+        imageId: reportImageId,
         reason: reason,
         description: description || null,
         createdAt: new Date(),
@@ -190,15 +209,24 @@ export async function POST(request: Request) {
       })
 
       if (hasOneVoteRight) {
-        // 7.2a 一票举报权：直接设置 nsfw=true，不更新 report_count
+        // 8.2a 一票举报权：直接设置 nsfw=true，不更新 report_count
+        if (publishedMediaRecord) {
+          await tx.update(communityMedia)
+            .set({
+              nsfw: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(communityMedia.id, publishedMediaRecord.id))
+        }
+
         await tx.update(userGeneratedImages)
           .set({
             nsfw: true,
             updatedAt: new Date(),
           })
-          .where(eq(userGeneratedImages.id, imageId))
+          .where(eq(userGeneratedImages.id, sourceMediaId))
       } else {
-        // 7.2b 累计举报：增加 report_count，检查是否达到阈值
+        // 8.2b 累计举报：增加 report_count，检查是否达到阈值
         const nsfwThreshold = parseInt(process.env.NSFW_REPORT_THRESHOLD || '3', 10)
         
         // 获取当前举报次数
@@ -207,20 +235,36 @@ export async function POST(request: Request) {
           nsfw: userGeneratedImages.nsfw
         })
           .from(userGeneratedImages)
-          .where(eq(userGeneratedImages.id, imageId))
+          .where(eq(userGeneratedImages.id, sourceMediaId))
           .limit(1)
 
-        if (currentImage.length > 0) {
-          const newReportCount = (currentImage[0].reportCount || 0) + 1
-          const shouldMarkAsNsfw = newReportCount >= nsfwThreshold
+        const reportRows = await tx.select({
+          count: sql<number>`count(*)`,
+        })
+          .from(imageReports)
+          .where(inArray(imageReports.imageId, reportTargetIds))
 
+        const newReportCount = Number(reportRows[0]?.count || 0)
+        const shouldMarkAsNsfw = newReportCount >= nsfwThreshold
+
+        if (currentImage.length > 0) {
           await tx.update(userGeneratedImages)
             .set({
               reportCount: newReportCount,
               nsfw: shouldMarkAsNsfw || currentImage[0].nsfw, // 保持已标记为 nsfw 的状态
               updatedAt: new Date(),
             })
-            .where(eq(userGeneratedImages.id, imageId))
+            .where(eq(userGeneratedImages.id, sourceMediaId))
+
+        }
+
+        if (publishedMediaRecord && shouldMarkAsNsfw) {
+          await tx.update(communityMedia)
+            .set({
+              nsfw: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(communityMedia.id, publishedMediaRecord.id))
         }
       }
     })
