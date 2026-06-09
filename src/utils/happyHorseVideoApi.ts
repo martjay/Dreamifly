@@ -86,11 +86,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 }
 
 function dataUrlParts(value: string): { mimeType: string | null; base64: string } {
-  const match = value.match(/^data:([^;]+);base64,(.+)$/)
-  if (match) {
-    return { mimeType: match[1], base64: match[2] }
+  if (value.startsWith('data:')) {
+    const commaIndex = value.indexOf(',')
+    if (commaIndex > 0) {
+      const header = value.slice(5, commaIndex)
+      return { mimeType: header.split(';')[0] || null, base64: value.slice(commaIndex + 1) }
+    }
   }
-  return { mimeType: null, base64: value.includes(',') ? value.split(',')[1] : value }
+  const commaIndex = value.indexOf(',')
+  return { mimeType: null, base64: commaIndex >= 0 ? value.slice(commaIndex + 1) : value }
 }
 
 function normalizeBase64Image(image: string): { buffer: Buffer; extension: 'jpg' | 'png' | 'webp' } {

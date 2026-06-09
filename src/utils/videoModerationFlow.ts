@@ -67,12 +67,18 @@ async function moderatePromptOnly(promptText: string, env: ModerationEnv): Promi
 }
 
 function normalizeBase64Media(value: string): { buffer: Buffer; mimeType: string } {
-  const match = value.match(/^data:([^;]+);base64,(.+)$/)
-  if (match) {
-    return { buffer: Buffer.from(match[2], 'base64'), mimeType: match[1] }
+  if (value.startsWith('data:')) {
+    const commaIndex = value.indexOf(',')
+    if (commaIndex > 0) {
+      const header = value.slice(5, commaIndex)
+      const mimeType = header.split(';')[0] || 'image/jpeg'
+      return { buffer: Buffer.from(value.slice(commaIndex + 1), 'base64'), mimeType }
+    }
   }
 
-  return { buffer: Buffer.from(value.includes(',') ? value.split(',')[1] : value, 'base64'), mimeType: 'image/jpeg' }
+  const commaIndex = value.indexOf(',')
+  const base64Value = commaIndex >= 0 ? value.slice(commaIndex + 1) : value
+  return { buffer: Buffer.from(base64Value, 'base64'), mimeType: 'image/jpeg' }
 }
 
 function extensionFromMimeType(mimeType: string, kind: 'image' | 'video'): string {

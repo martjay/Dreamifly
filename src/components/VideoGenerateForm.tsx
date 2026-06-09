@@ -495,7 +495,7 @@ const VideoGenerateForm = ({
     }
 
     if (imageFiles.some(file => file.size > 10 * 1024 * 1024)) {
-      setUploadError(t('error.validation.fileSize'))
+      setUploadError('图片大小不能超过 10MB')
       if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
       return
     }
@@ -509,7 +509,7 @@ const VideoGenerateForm = ({
 
       const file = videoFiles[0]
       if (file.size > 120 * 1024 * 1024) {
-        setUploadError('Video file must be 120MB or smaller.')
+        setUploadError('视频大小不能超过 120MB')
         if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
         return
       }
@@ -743,7 +743,7 @@ const VideoGenerateForm = ({
           return
         }
         if (response.status === 503 && errorData.code === 'MAINTENANCE_MODE') {
-          setErrorModal(true, 'maintenance_mode', errorData.error)
+          setGenerationNotice(errorData.error || '视频生成功能维护中，请稍后重试。')
           return
         }
         throw new Error(errorData.error || 'Failed to generate video')
@@ -843,7 +843,7 @@ const VideoGenerateForm = ({
                   ? '当前按图生视频处理'
                   : referenceImages.length > 0
                     ? `当前按参考生视频处理，最多 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
-                    : '不上传素材按文生视频处理；1 张图片按图生视频；2-9 张图片按参考生视频；视频按视频编辑',
+                    : '未上传素材按文生视频处理，1 张图片按图生视频，2 张以上图片按参考生视频，视频按视频编辑。',
               onClick: () => happyHorseInputRef.current?.click(),
               children: sourceVideo ? (
                 <div className="relative">
@@ -862,6 +862,11 @@ const VideoGenerateForm = ({
               ) : undefined,
             })}
             <input ref={happyHorseInputRef} type="file" accept="image/*,video/*" multiple onChange={handleHappyHorseMediaUpload} className="hidden" />
+            {uploadError && (
+              <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">
+                {uploadError}
+              </div>
+            )}
             {referenceImages.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
                 {referenceImages.map((ref, index) => (
@@ -965,7 +970,7 @@ const VideoGenerateForm = ({
           </div>
         )}
 
-        {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+        {uploadError && !isHappyHorseAggregate && <p className="text-sm text-red-600">{uploadError}</p>}
         {moderationPreviewImageUrl && <p className="text-sm text-amber-900">视频审核未通过，请查看生成预览后重试。</p>}
 
         <div>
