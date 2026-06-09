@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
     if (reviewStatus === 'approved') {
       const communityConditions = [
         eq(communityMedia.moderationLevel, 'low'),
+        eq(communityMedia.nsfw, false),
       ]
 
       if (roleFilter !== 'all') {

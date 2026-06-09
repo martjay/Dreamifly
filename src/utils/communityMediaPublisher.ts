@@ -88,6 +88,17 @@ export async function publishCommunityMediaFromGeneratedImage(params: {
     .limit(1)
 
   if (existing[0]) {
+    await db
+      .update(communityMedia)
+      .set({
+        moderationLevel: 'low',
+        nsfw: false,
+        approvedAt: new Date(),
+        approvedBy: params.approvedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(communityMedia.id, existing[0].id))
+
     await copyPublishedTags(params.sourceMediaId, existing[0].id)
     return existing[0].id
   }

@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm'
 
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { user, userGeneratedImages } from '@/db/schema'
+import { communityMedia, user, userGeneratedImages } from '@/db/schema'
 import { publishCommunityMediaFromGeneratedImage } from '@/utils/communityMediaPublisher'
 
 type ManualReviewStatus = 'approved' | 'rejected'
@@ -63,6 +63,14 @@ export async function POST(
         sourceMediaId: id,
         approvedBy: session.user.id,
       })
+    } else {
+      await db
+        .update(communityMedia)
+        .set({
+          nsfw: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(communityMedia.sourceMediaId, id))
     }
 
     await db
