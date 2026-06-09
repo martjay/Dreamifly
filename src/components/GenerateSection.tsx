@@ -16,7 +16,12 @@ import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
-import { calculateVideoLayoutForAspectRatio, getVideoModelById } from '@/utils/videoModelConfig'
+import {
+  calculateVideoLayoutForAspectRatio,
+  getVideoModelById,
+  HAPPYHORSE_AGGREGATE_MODEL_ID,
+  isHappyHorseChildModel,
+} from '@/utils/videoModelConfig'
 import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GenerateSectionProps {
@@ -158,9 +163,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     if (activeTab !== 'video-generation') return
     if (!initialModel) return
 
-    const videoConfig = getVideoModelById(initialModel)
+    const normalizedInitialModel = isHappyHorseChildModel(initialModel) ? HAPPYHORSE_AGGREGATE_MODEL_ID : initialModel
+    const videoConfig = getVideoModelById(normalizedInitialModel)
     if (videoConfig) {
-      setVideoModel(initialModel)
+      setVideoModel(normalizedInitialModel)
     }
   }, [activeTab, initialModel])
 

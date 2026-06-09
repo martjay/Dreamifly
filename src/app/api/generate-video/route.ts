@@ -11,6 +11,7 @@ import {
   calculateVideoResolutionForModel,
   getVideoAspectRatioOptions,
   getVideoModelById,
+  resolveHappyHorseModelId,
   pickClosestAspectRatioLabel,
   type VideoAspectRatioLabel,
   type VideoModelConfig,
@@ -206,6 +207,7 @@ export async function POST(request: Request) {
       resolution,
       referenceImages,
       sourceVideo,
+      videoMode,
     } = body as {
       prompt?: string
       width?: number
@@ -230,7 +232,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    const modelConfig = getVideoModelById(model)
+    const resolvedModel = resolveHappyHorseModelId(model, videoMode)
+    const modelConfig = getVideoModelById(resolvedModel)
     if (!modelConfig) {
       return NextResponse.json({ error: 'Unknown video model' }, { status: 400 })
     }
@@ -345,9 +348,9 @@ export async function POST(request: Request) {
 
     let pointsCostForResponse = 0
     if (!isAdmin) {
-      const baseCost = await getModelBaseCost(model, happyHorseResolution)
+      const baseCost = await getModelBaseCost(resolvedModel, happyHorseResolution)
       if (baseCost === null) {
-        return NextResponse.json({ error: `No points cost configured for video model ${model}` }, { status: 400 })
+        return NextResponse.json({ error: `No points cost configured for video model ${resolvedModel}` }, { status: 400 })
       }
 
       const pointsCost = modelConfig.provider === 'happyhorse'
@@ -363,8 +366,8 @@ export async function POST(request: Request) {
       }
 
       const spendDesc = modelConfig.provider === 'happyhorse'
-        ? `视频生成 - ${model} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
-        : `视频生成 - ${model} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
+        ? `视频生成 - ${resolvedModel} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
+        : `视频生成 - ${resolvedModel} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
 
       spentRecordId = await deductPoints(userId, pointsCost, spendDesc)
       if (!spentRecordId) {
@@ -460,7 +463,7 @@ export async function POST(request: Request) {
             ? parseInt(seed, 10)
             : undefined,
         steps: steps || 4,
-        model,
+        model: resolvedModel,
         image,
         negative_prompt,
       })
@@ -482,7 +485,7 @@ export async function POST(request: Request) {
         videoUrl,
         {
           prompt: promptText,
-          model,
+          model: resolvedModel,
           width: finalWidth,
           height: finalHeight,
           duration: Math.round(videoDurationSeconds),

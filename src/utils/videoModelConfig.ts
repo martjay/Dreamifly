@@ -3,6 +3,7 @@ import { getHomepageAsset } from './homepageAssets'
 const VIDEO_MODEL_ENV_MAP = {
   'Wan2.2-I2V-Lightning': 'WAN_I2V_URL',
   'grok-imagine-1.0-video': 'GROK_VIDEO_API_URL',
+  'happyhorse-1.0': 'HAPPYHORSE_API_URL',
   'happyhorse-1.0-t2v': 'HAPPYHORSE_API_URL',
   'happyhorse-1.0-i2v': 'HAPPYHORSE_API_URL',
   'happyhorse-1.0-r2v': 'HAPPYHORSE_API_URL',
@@ -11,6 +12,33 @@ const VIDEO_MODEL_ENV_MAP = {
 
 export type VideoAspectRatioLabel = '16:9' | '9:16' | '3:2' | '2:3' | '1:1' | '4:3' | '3:4'
 export type VideoModelMode = 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'video-edit'
+
+export const HAPPYHORSE_AGGREGATE_MODEL_ID = 'happyhorse-1.0'
+
+export const HAPPYHORSE_MODEL_BY_MODE: Record<VideoModelMode, string> = {
+  'text-to-video': 'happyhorse-1.0-t2v',
+  'image-to-video': 'happyhorse-1.0-i2v',
+  'reference-to-video': 'happyhorse-1.0-r2v',
+  'video-edit': 'happyhorse-1.0-video-edit',
+}
+
+export function isHappyHorseAggregateModel(modelId: string): boolean {
+  return modelId === HAPPYHORSE_AGGREGATE_MODEL_ID
+}
+
+export function isHappyHorseChildModel(modelId: string): boolean {
+  return Object.values(HAPPYHORSE_MODEL_BY_MODE).includes(modelId)
+}
+
+export function getHappyHorseModeFromModelId(modelId: string): VideoModelMode | null {
+  const entry = Object.entries(HAPPYHORSE_MODEL_BY_MODE).find(([, childModelId]) => childModelId === modelId)
+  return entry ? (entry[0] as VideoModelMode) : null
+}
+
+export function resolveHappyHorseModelId(modelId: string, mode?: VideoModelMode | string | null): string {
+  if (!isHappyHorseAggregateModel(modelId)) return modelId
+  return HAPPYHORSE_MODEL_BY_MODE[(mode as VideoModelMode) || 'text-to-video'] || HAPPYHORSE_MODEL_BY_MODE['text-to-video']
+}
 
 export function aspectRatioLabelToNumber(label: VideoAspectRatioLabel): number {
   const [w, h] = label.split(':').map(Number)
@@ -129,6 +157,17 @@ export const ALL_VIDEO_MODELS: VideoModelConfig[] = [
   },
   {
     ...HAPPYHORSE_COMMON,
+    id: HAPPYHORSE_AGGREGATE_MODEL_ID,
+    name: 'HappyHorse 视频模型',
+    description: 'HappyHorse 视频模型，支持文生视频、图生视频、1-9 张参考图生视频和视频编辑，会根据输入素材匹配生成模式。',
+    image: '/images/video-community/video-demo-11.png',
+    homepageCover: '/images/video-community/video-demo-11.png',
+    tags: ['t2v', 'i2v', 'r2v', 'videoEdit'],
+    mode: 'text-to-video',
+    maxReferenceImages: 9,
+  },
+  {
+    ...HAPPYHORSE_COMMON,
     id: 'happyhorse-1.0-t2v',
     name: 'HappyHorse T2V',
     description: 'HappyHorse 文生视频模型，根据文字提示生成 3-15 秒短视频，适合快速制作动态创意内容。',
@@ -208,7 +247,7 @@ export async function getAvailableVideoModels(): Promise<VideoModelConfig[]> {
       return models
     } catch (error) {
       console.error('Error fetching available video models:', error)
-      return ALL_VIDEO_MODELS.map(withVideoModelOssAssets)
+      return ALL_VIDEO_MODELS.filter(model => !isHappyHorseChildModel(model.id)).map(withVideoModelOssAssets)
     } finally {
       availableVideoModelsRequest = null
     }

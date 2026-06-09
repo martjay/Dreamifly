@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getModelBaseCost } from '@/utils/points';
-import { getVideoModelById } from '@/utils/videoModelConfig';
+import { getVideoModelById, resolveHappyHorseModelId } from '@/utils/videoModelConfig';
 import type { HappyHorseResolution } from '@/utils/happyHorseVideoApi';
 
 function isHappyHorseResolution(value: string | null): value is HappyHorseResolution {
@@ -22,8 +22,9 @@ export async function GET(request: Request) {
     }
 
     // 获取模型基础积分消耗
-    const videoModel = getVideoModelById(modelId);
-    const isHappyHorse = videoModel?.provider === 'happyhorse' || modelId.startsWith('happyhorse-1.0-');
+    const resolvedModelId = resolveHappyHorseModelId(modelId, searchParams.get('videoMode') || 'text-to-video');
+    const videoModel = getVideoModelById(resolvedModelId);
+    const isHappyHorse = videoModel?.provider === 'happyhorse' || resolvedModelId.startsWith('happyhorse-1.0-');
     const resolution = resolutionParam || '720P';
     let happyHorseResolution: HappyHorseResolution | undefined;
 
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       happyHorseResolution = resolution;
     }
 
-    const baseCost = await getModelBaseCost(modelId, happyHorseResolution);
+    const baseCost = await getModelBaseCost(resolvedModelId, happyHorseResolution);
 
     return NextResponse.json({
       baseCost: baseCost,

@@ -10,8 +10,11 @@ import {
   aspectRatioLabelToNumber,
   calculateVideoLayoutForAspectRatio,
   getAvailableVideoModels,
+  getHappyHorseModeFromModelId,
   getVideoAspectRatioOptions,
   getVideoModelById,
+  isHappyHorseAggregateModel,
+  resolveHappyHorseModelId,
   type VideoAspectRatioLabel,
   type VideoModelConfig,
   type VideoModelMode,
@@ -55,7 +58,6 @@ interface VideoGenerateFormProps {
 }
 
 const MAX_HAPPYHORSE_REFERENCE_IMAGES = 9
-
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -80,11 +82,7 @@ function clampSeconds(value: number): number {
 }
 
 function inferHappyHorseMode(modelId: string): VideoModelMode | undefined {
-  if (modelId === 'happyhorse-1.0-t2v') return 'text-to-video'
-  if (modelId === 'happyhorse-1.0-i2v') return 'image-to-video'
-  if (modelId === 'happyhorse-1.0-r2v') return 'reference-to-video'
-  if (modelId === 'happyhorse-1.0-video-edit') return 'video-edit'
-  return undefined
+  return getHappyHorseModeFromModelId(modelId) || undefined
 }
 
 function getVideoInputModerationFailureMessage(reason?: string) {
@@ -177,6 +175,7 @@ const VideoGenerateForm = ({
   const imageInputRef = useRef<HTMLInputElement>(null)
   const referenceInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
+  const happyHorseInputRef = useRef<HTMLInputElement>(null)
   const ratioDropdownRef = useRef<HTMLDivElement>(null)
 
   const authStatus = isPending ? 'loading' : session?.user ? 'authenticated' : 'unauthenticated'
@@ -184,8 +183,18 @@ const VideoGenerateForm = ({
     (model ? availableModels.find(m => m.id === model) ?? null : null) ??
     (model ? getVideoModelById(model) : null)
 
+  const isHappyHorseAggregate = isHappyHorseAggregateModel(model)
   const inferredHappyHorseMode = inferHappyHorseMode(model)
-  const mode = currentModelConfig?.mode ?? inferredHappyHorseMode
+  const autoHappyHorseMode: VideoModelMode = sourceVideo
+    ? 'video-edit'
+    : referenceImages.length > 0
+      ? 'reference-to-video'
+      : uploadedImage
+        ? 'image-to-video'
+        : 'text-to-video'
+  const mode = isHappyHorseAggregate ? autoHappyHorseMode : currentModelConfig?.mode ?? inferredHappyHorseMode
+  const effectiveModel = isHappyHorseAggregate ? resolveHappyHorseModelId(model, mode) : model
+  const effectiveModelConfig = (effectiveModel ? getVideoModelById(effectiveModel) : null) ?? currentModelConfig
   const isHappyHorse = currentModelConfig?.provider === 'happyhorse' || Boolean(inferredHappyHorseMode)
   const isTextToVideo = isHappyHorse && mode === 'text-to-video'
   const isReferenceToVideo = isHappyHorse && mode === 'reference-to-video'
@@ -238,20 +247,21 @@ const VideoGenerateForm = ({
 
   useEffect(() => {
     if (!currentModelConfig) return
-    const defaultSeconds = currentModelConfig.defaultVideoSeconds || 5
+    const defaultSeconds = (effectiveModelConfig || currentModelConfig).defaultVideoSeconds || 5
     setVideoSeconds(defaultSeconds)
     setVideoSecondsInput(String(defaultSeconds))
     setUploadError(null)
     setModerationPreviewImageUrl(null)
-  }, [currentModelConfig?.id])
+  }, [currentModelConfig?.id, effectiveModelConfig?.id])
 
   useEffect(() => {
     let cancelled = false
     const loadCost = async () => {
       if (!model) return
       try {
-        const params = new URLSearchParams({ modelId: model })
+        const params = new URLSearchParams({ modelId: effectiveModel })
         if (isHappyHorse) params.set('resolution', happyHorseResolution)
+        if (isHappyHorseAggregate) params.set('videoMode', mode || 'text-to-video')
         const response = await fetch(`/api/points/model-base-cost?${params.toString()}`)
         if (!response.ok || cancelled) return
         const data = await response.json()
@@ -264,7 +274,7 @@ const VideoGenerateForm = ({
     return () => {
       cancelled = true
     }
-  }, [model, isHappyHorse, happyHorseResolution])
+  }, [model, effectiveModel, isHappyHorse, happyHorseResolution, mode, isHappyHorseAggregate])
 
   useEffect(() => {
     if (baseCost === null) {
@@ -275,15 +285,16 @@ const VideoGenerateForm = ({
   }, [baseCost, isHappyHorse, billableSeconds])
 
   useEffect(() => {
-    if (!currentModelConfig) return
+    const layoutModelConfig = effectiveModelConfig || currentModelConfig
+    if (!layoutModelConfig) return
     if (uploadedImage) {
-      applyVideoLayoutFromImage(uploadedImage, currentModelConfig, aspectRatio)
+      applyVideoLayoutFromImage(uploadedImage, layoutModelConfig, aspectRatio)
     } else if (referenceImages[0]) {
-      applyVideoLayoutFromImage(referenceImages[0], currentModelConfig, aspectRatio)
+      applyVideoLayoutFromImage(referenceImages[0], layoutModelConfig, aspectRatio)
     } else if (!isVideoEdit) {
-      applyVideoLayout(currentModelConfig, aspectRatio || 16 / 9)
+      applyVideoLayout(layoutModelConfig, aspectRatio || 16 / 9)
     }
-  }, [model, uploadedImage, referenceImages[0]])
+  }, [model, effectiveModel, uploadedImage, referenceImages[0]])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -322,7 +333,8 @@ const VideoGenerateForm = ({
     }
   }, [isGenerating, isQueuing])
 
-  const aspectRatioOptions = currentModelConfig ? getVideoAspectRatioOptions(currentModelConfig) : [
+  const layoutModelConfig = effectiveModelConfig || currentModelConfig
+  const aspectRatioOptions = layoutModelConfig ? getVideoAspectRatioOptions(layoutModelConfig) : [
     { value: 16 / 9, label: '16:9' as const },
     { value: 4 / 3, label: '4:3' as const },
     { value: 1, label: '1:1' as const },
@@ -336,9 +348,9 @@ const VideoGenerateForm = ({
   }
 
   const handleAspectRatioChange = (newLabel: VideoAspectRatioLabel) => {
-    if (!currentModelConfig) return
+    if (!layoutModelConfig) return
     const newAspectRatio = aspectRatioLabelToNumber(newLabel)
-    applyVideoLayout(currentModelConfig, newAspectRatio)
+    applyVideoLayout(layoutModelConfig, newAspectRatio)
     setIsRatioOpen(false)
   }
 
@@ -379,7 +391,7 @@ const VideoGenerateForm = ({
       setUploadedImage(base64)
       setUploadError(null)
       setGenerationNotice(null)
-      if (currentModelConfig) applyVideoLayoutFromImage(base64, currentModelConfig, aspectRatio)
+      if (layoutModelConfig) applyVideoLayoutFromImage(base64, layoutModelConfig, aspectRatio)
     } catch (error) {
       console.error('Error processing image:', error)
       setUploadError(t('error.validation.imageProcessing'))
@@ -401,12 +413,13 @@ const VideoGenerateForm = ({
 
     try {
       const nextImages = await Promise.all(imageFiles.map(file => fileToDataUrl(file).then(stripDataUrlPrefix)))
+      const willExceedLimit = referenceImages.length + nextImages.length > MAX_HAPPYHORSE_REFERENCE_IMAGES
       setReferenceImages(prev => {
         const combined = [...prev, ...nextImages].slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
-        if (!uploadedImage && combined[0]) setUploadedImage(combined[0])
+        if (!uploadedImage && combined[0] && !isHappyHorseAggregate) setUploadedImage(combined[0])
         return combined
       })
-      setUploadError(null)
+      setUploadError(willExceedLimit ? `最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张` : null)
       setGenerationNotice(null)
     } catch (error) {
       console.error('Error processing reference images:', error)
@@ -468,9 +481,133 @@ const VideoGenerateForm = ({
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
+  const handleHappyHorseMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    const videoFiles = files.filter(file => file.type.startsWith('video/'))
+    const imageFiles = files.filter(file => file.type.startsWith('image/'))
+
+    if (videoFiles.length + imageFiles.length !== files.length) {
+      setUploadError(t('error.validation.fileType'))
+      if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+      return
+    }
+
+    if (imageFiles.some(file => file.size > 10 * 1024 * 1024)) {
+      setUploadError(t('error.validation.fileSize'))
+      if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+      return
+    }
+
+    if (videoFiles.length > 0) {
+      if (videoFiles.length > 1) {
+        setUploadError('一次只能上传一个源视频。')
+        if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+        return
+      }
+
+      const file = videoFiles[0]
+      if (file.size > 120 * 1024 * 1024) {
+        setUploadError('Video file must be 120MB or smaller.')
+        if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+        return
+      }
+
+      try {
+        const referenceImageData = imageFiles.length > 0
+          ? await Promise.all(imageFiles.map(imageFile => fileToDataUrl(imageFile).then(stripDataUrlPrefix)))
+          : []
+        const limitedReferenceImages = referenceImageData.slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
+        const objectUrl = URL.createObjectURL(file)
+        const metadata = await new Promise<{ duration: number; width: number; height: number }>((resolve) => {
+          const video = document.createElement('video')
+          video.preload = 'metadata'
+          video.onloadedmetadata = () => {
+            resolve({
+              duration: Number.isFinite(video.duration) ? video.duration : 0,
+              width: video.videoWidth || width,
+              height: video.videoHeight || height,
+            })
+            URL.revokeObjectURL(objectUrl)
+          }
+          video.onerror = () => {
+            resolve({ duration: 0, width, height })
+            URL.revokeObjectURL(objectUrl)
+          }
+          video.src = objectUrl
+        })
+        const dataUrl = await fileToDataUrl(file)
+        setSourceVideo(dataUrl)
+        setSourceVideoSeconds(metadata.duration > 0 ? metadata.duration : null)
+        setSourceVideoName(file.name)
+        setUploadedImage(null)
+        setReferenceImages(limitedReferenceImages)
+        if (metadata.width > 0 && metadata.height > 0) {
+          setAspectRatio(metadata.width / metadata.height)
+          setWidth(metadata.width)
+          setHeight(metadata.height)
+        }
+        setUploadError(
+          referenceImageData.length > MAX_HAPPYHORSE_REFERENCE_IMAGES
+            ? `最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
+            : null
+        )
+        setGenerationNotice(null)
+      } catch (error) {
+        console.error('Error processing source video:', error)
+        setUploadError('Failed to process source video.')
+      } finally {
+        if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+      }
+      return
+    }
+
+    try {
+      const images = await Promise.all(imageFiles.map(file => fileToDataUrl(file).then(stripDataUrlPrefix)))
+      setSourceVideo(null)
+      setSourceVideoSeconds(null)
+      setSourceVideoName(null)
+
+      if (images.length === 1) {
+        setUploadedImage(images[0])
+        setReferenceImages([])
+        if (layoutModelConfig) applyVideoLayoutFromImage(images[0], layoutModelConfig, aspectRatio)
+      } else {
+        const limitedImages = images.slice(0, MAX_HAPPYHORSE_REFERENCE_IMAGES)
+        setUploadedImage(null)
+        setReferenceImages(limitedImages)
+        if (layoutModelConfig && limitedImages[0]) applyVideoLayoutFromImage(limitedImages[0], layoutModelConfig, aspectRatio)
+        if (images.length > MAX_HAPPYHORSE_REFERENCE_IMAGES) {
+          setUploadError(`最多支持 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张参考图，已保留前 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`)
+        } else {
+          setUploadError(null)
+        }
+      }
+
+      if (images.length === 1) {
+        setUploadError(null)
+      }
+      setGenerationNotice(null)
+    } catch (error) {
+      console.error('Error processing HappyHorse media:', error)
+      setUploadError(t('error.validation.imageProcessing'))
+    } finally {
+      if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
+    }
+  }
+
   const removeReferenceImage = (index: number) => {
-    setReferenceImages(prev => prev.filter((_, i) => i !== index))
+    setReferenceImages(prev => {
+      const next = prev.filter((_, i) => i !== index)
+      if (!sourceVideo && next.length === 1) {
+        setUploadedImage(next[0])
+        return []
+      }
+      return next
+    })
     setGenerationNotice(null)
+    if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
   }
 
   const handleRemoveSourceVideo = () => {
@@ -479,6 +616,7 @@ const VideoGenerateForm = ({
     setSourceVideoName(null)
     setGenerationNotice(null)
     if (videoInputRef.current) videoInputRef.current.value = ''
+    if (happyHorseInputRef.current) happyHorseInputRef.current.value = ''
   }
 
   const handleOptimizePrompt = async () => {
@@ -494,7 +632,7 @@ const VideoGenerateForm = ({
         prompt: hasPrompt ? prompt : '',
         mode,
         image: uploadedImage || undefined,
-        images: isReferenceToVideo ? referenceImages : undefined,
+        images: isReferenceToVideo || isVideoEdit ? referenceImages : undefined,
         video: isVideoEdit ? sourceVideo || undefined : undefined,
       })
       setPrompt(optimizedPrompt)
@@ -554,7 +692,7 @@ const VideoGenerateForm = ({
         width,
         height,
         aspectRatio,
-        model,
+        model: effectiveModel,
         videoSeconds: isHappyHorse ? billableSeconds : currentModelConfig?.provider === 'grok' ? currentModelConfig.defaultVideoSeconds : undefined,
         resolution: isHappyHorse ? happyHorseResolution : undefined,
         videoMode: mode,
@@ -677,7 +815,67 @@ const VideoGenerateForm = ({
           />
         </div>
 
-        {isTextToVideo ? null : isReferenceToVideo ? (
+        {isHappyHorseAggregate ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-gray-900">上传素材</label>
+              <span className="text-xs text-gray-500">
+                {sourceVideo
+                  ? '当前按视频编辑处理'
+                  : referenceImages.length > 0
+                    ? '当前按参考生视频处理'
+                    : uploadedImage
+                      ? '当前按图生视频处理'
+                      : '无素材时按文生视频处理'}
+              </span>
+            </div>
+            {renderDropzone({
+              title: sourceVideo
+                ? sourceVideoName || '已上传源视频'
+                : uploadedImage
+                  ? '已上传 1 张图片'
+                  : referenceImages.length > 0
+                    ? `已上传 ${referenceImages.length} 张参考图`
+                    : '上传图片或视频',
+              description: sourceVideo
+                ? sourceVideoSeconds ? `检测到 ${Math.ceil(sourceVideoSeconds)} 秒，输出设置为 ${billableSeconds} 秒` : '当前按视频编辑处理'
+                : uploadedImage
+                  ? '当前按图生视频处理'
+                  : referenceImages.length > 0
+                    ? `当前按参考生视频处理，最多 ${MAX_HAPPYHORSE_REFERENCE_IMAGES} 张`
+                    : '不上传素材按文生视频处理；1 张图片按图生视频；2-9 张图片按参考生视频；视频按视频编辑',
+              onClick: () => happyHorseInputRef.current?.click(),
+              children: sourceVideo ? (
+                <div className="relative">
+                  <video src={sourceVideo} className="mx-auto max-h-64 max-w-full rounded-lg shadow-lg" controls />
+                  <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveSourceVideo() }} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-2 text-white">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ) : uploadedImage ? (
+                <div className="relative">
+                  <img src={imageSrc(uploadedImage)} alt="Uploaded" className="max-w-full max-h-64 mx-auto rounded-lg shadow-lg" />
+                  <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveImage() }} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-2 text-white">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ) : undefined,
+            })}
+            <input ref={happyHorseInputRef} type="file" accept="image/*,video/*" multiple onChange={handleHappyHorseMediaUpload} className="hidden" />
+            {referenceImages.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {referenceImages.map((ref, index) => (
+                  <div key={`${index}-${ref.slice(0, 16)}`} className="relative aspect-square overflow-hidden rounded-lg border border-orange-200 bg-white">
+                    <img src={imageSrc(ref)} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
+                    <button type="button" onClick={() => removeReferenceImage(index)} className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : isTextToVideo ? null : isReferenceToVideo ? (
           <div>
             <label className="flex items-center text-sm font-medium text-gray-900 mb-3">
               <img src="/form/image.svg" alt="参考图" className="w-5 h-5 mr-2 text-gray-900" />

@@ -147,6 +147,9 @@ export async function POST(request: NextRequest) {
     }
     if (mode === 'video-edit') {
       content.push({ type: 'video_url', video_url: { url: normalizeDataUrl(video, 'video/mp4') } })
+      images.slice(0, 9).forEach(ref => {
+        content.push({ type: 'image_url', image_url: { url: normalizeDataUrl(ref, 'image/jpeg') } })
+      })
     }
     content.push({ type: 'text', text: getUserText(mode, prompt, hasPrompt) })
 
