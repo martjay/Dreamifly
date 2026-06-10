@@ -26,6 +26,7 @@ import {
 } from 'recharts'
 
 type TimeRange = 'hour' | 'today' | 'yesterday' | 'week' | 'month' | 'all'
+type AllIPSortType = 'callCount' | 'userCount'
 
 interface UserCallRanking {
   userId: string
@@ -48,6 +49,7 @@ interface IPRanking {
   authenticatedCount?: number
   unauthenticatedCount?: number
   userCount?: number
+  activeUserCount?: number
   maxHourlyCallCount?: number
 }
 
@@ -70,6 +72,7 @@ export default function CrawlerAnalysisPage() {
   const [data, setData] = useState<CrawlerAnalysisData | null>(null)
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'users' | 'all-ip' | 'auth-ip' | 'unauth-ip'>('users')
+  const [allIPSortType, setAllIPSortType] = useState<AllIPSortType>('callCount')
   
   // 详情模态框状态
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -446,6 +449,16 @@ export default function CrawlerAnalysisPage() {
     '#c2410c', '#f59e0b', '#9a3412', '#f97316', '#fb923c',
   ]
 
+  const sortedAllIPRanking = data
+    ? [...data.allIPRanking].sort((a, b) => {
+      if (allIPSortType === 'userCount') {
+        return (b.userCount || 0) - (a.userCount || 0) || b.callCount - a.callCount
+      }
+
+      return b.callCount - a.callCount || (b.userCount || 0) - (a.userCount || 0)
+    })
+    : []
+
   // 加载中或权限检查
   if (sessionLoading || checkingAdmin || !isAdmin) {
     return (
@@ -582,7 +595,7 @@ export default function CrawlerAnalysisPage() {
               <>
                 {/* 标签页切换 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex gap-2 border-b border-gray-200">
+                  <div className="flex flex-wrap items-end gap-2 border-b border-gray-200">
                     <button
                       onClick={() => setActiveTab('users')}
                       className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
@@ -623,6 +636,26 @@ export default function CrawlerAnalysisPage() {
                     >
                       未登录用户IP排名 ({data.unauthenticatedIPRanking.length})
                     </button>
+                    {activeTab === 'all-ip' && (
+                      <div className="ml-auto flex items-center gap-2 pb-1">
+                        {[
+                          { key: 'callCount' as const, label: '调用次数' },
+                          { key: 'userCount' as const, label: '登录用户数量' },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            onClick={() => setAllIPSortType(item.key)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                              allIPSortType === item.key
+                                ? 'bg-orange-500 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -770,18 +803,19 @@ export default function CrawlerAnalysisPage() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">登录用户调用</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">未登录用户调用</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">登录用户数量</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">未封禁用户数量</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {data.allIPRanking.length === 0 ? (
+                          {sortedAllIPRanking.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                                 暂无数据
                               </td>
                             </tr>
                           ) : (
-                            data.allIPRanking.map((ip, index) => (
+                            sortedAllIPRanking.map((ip, index) => (
                               <tr key={ip.ipAddress} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold ${
@@ -819,6 +853,11 @@ export default function CrawlerAnalysisPage() {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className="text-sm font-semibold text-blue-600">
                                     {ip.userCount?.toLocaleString() || 0}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-green-600">
+                                    {ip.activeUserCount?.toLocaleString() || 0}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
