@@ -925,6 +925,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
   }, [model, aspectRatio]);
 
+  useEffect(() => {
+    if (isGptImage2Model(model) || model === 'grok-imagine-1.0' || model === 'nano-banana-2' || aspectRatio !== '自适应') {
+      return;
+    }
+
+    const thresholds = getModelThresholds(model);
+    const area = isHighResolution
+      ? thresholds.highResolutionPixels || 1416 * 1416
+      : thresholds.normalResolutionPixels || 1024 * 1024;
+    const ratioNum = 16 / 9;
+    const nextWidth = Math.round(Math.sqrt(area * ratioNum) / 8) * 8;
+    const nextHeight = Math.round(nextWidth / ratioNum / 8) * 8;
+
+    setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
+    setWidth(nextWidth);
+    setHeight(nextHeight);
+  }, [model, aspectRatio, isHighResolution]);
+
   const handleRatioChange = (ratio: string) => {
     setAspectRatio(ratio);
 
