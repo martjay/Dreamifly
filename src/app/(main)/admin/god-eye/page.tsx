@@ -1189,12 +1189,13 @@ export default function GodEyePage() {
               <div className="space-y-4">
                 {/* 筛选区域 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex flex-wrap xl:flex-nowrap gap-4 items-end">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
                     {/* 用户角色筛选 */}
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">用户角色：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={roleFilter}
                         onChange={(e) => {
                           setRoleFilter(e.target.value as RoleFilter)
@@ -1212,7 +1213,7 @@ export default function GodEyePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">人工状态：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[130px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={reviewStatusFilter}
                         onChange={(e) => {
                           setReviewStatusFilter(e.target.value as 'all' | ManualReviewStatus)
@@ -1229,7 +1230,7 @@ export default function GodEyePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">所用模型：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[150px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={reviewModelFilter}
                         onChange={(e) => {
                           setReviewModelFilter(e.target.value)
@@ -1248,7 +1249,7 @@ export default function GodEyePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">参考图：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={referenceImageFilter}
                         onChange={(e) => {
                           setReferenceImageFilter(e.target.value as ReferenceImageFilter)
@@ -1262,9 +1263,11 @@ export default function GodEyePage() {
                         <option value="without">无参考图</option>
                       </select>
                     </div>
+                    </div>
 
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(260px,1fr)_minmax(360px,1.2fr)] gap-4">
                     {/* 搜索 */}
-                    <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                    <div className="flex items-center gap-2 min-w-0">
                       <input
                         type="text"
                         placeholder="搜索用户昵称"
@@ -1286,10 +1289,10 @@ export default function GodEyePage() {
                     </div>
 
                     {/* 日期范围 */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] gap-2 items-center min-w-0">
                       <input
                         type="date"
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={startDate}
                         onChange={(e) => {
                           setStartDate(e.target.value)
@@ -1299,7 +1302,7 @@ export default function GodEyePage() {
                       <span className="text-sm text-gray-500">至</span>
                       <input
                         type="date"
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={endDate}
                         onChange={(e) => {
                           setEndDate(e.target.value)
@@ -1318,6 +1321,7 @@ export default function GodEyePage() {
                           清除
                         </button>
                       )}
+                    </div>
                     </div>
                   </div>
                 </div>
