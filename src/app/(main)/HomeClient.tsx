@@ -39,10 +39,10 @@ const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; videoFallbackSrc: st
     thumbnailFallbackSrc: '/images/video-community/video-demo-10.png',
   },
   'happyhorse-1.0': {
-    videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
-    videoFallbackSrc: '/images/video-community/video-demo-11.mp4',
-    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-11.png'),
-    thumbnailFallbackSrc: '/images/video-community/video-demo-11.png',
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-3.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-3.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-3.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-3.png',
   },
   'happyhorse-1.0-t2v': {
     videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
