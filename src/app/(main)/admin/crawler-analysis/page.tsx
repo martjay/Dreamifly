@@ -119,6 +119,9 @@ export default function CrawlerAnalysisPage() {
     currentIsActive: boolean
     isAdmin: boolean
   } | null>(null)
+  const [selectedIpUserIds, setSelectedIpUserIds] = useState<string[]>([])
+  const [bulkBanUserIds, setBulkBanUserIds] = useState<string[]>([])
+  const [bulkBanLoading, setBulkBanLoading] = useState(false)
 
   // 获取当前用户完整信息（包括头像）
   useEffect(() => {
@@ -254,6 +257,8 @@ export default function CrawlerAnalysisPage() {
     setDetailLoading(true)
     setDetailData(null)
     setDetailActiveTab(activeTab) // 保存当前激活的tab
+    setSelectedIpUserIds([])
+    setBulkBanUserIds([])
 
     try {
       const response = await fetch(
@@ -328,28 +333,33 @@ export default function CrawlerAnalysisPage() {
     closeConfirmDialog()
   }
 
+  const updateUserActive = async (userId: string, isActive: boolean, banReason?: string | null) => {
+    const action = isActive ? '解封' : '封禁'
+    const response = await fetch(`/api/admin/users?_t=${Date.now()}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+      body: JSON.stringify({
+        userId,
+        isActive,
+        ...(isActive === false && banReason !== undefined ? { banReason } : {}),
+      }),
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.error || `${action}失败`)
+    }
+  }
+
   // 执行封禁/解封操作
   const executeToggleUserActive = async (userId: string, isActive: boolean, banReason?: string | null) => {
     const action = isActive ? '解封' : '封禁'
     try {
-      const response = await fetch(`/api/admin/users?_t=${Date.now()}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify({
-          userId,
-          isActive,
-          ...(isActive === false && banReason !== undefined ? { banReason } : {}),
-        }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || `${action}失败`)
-      }
-
+      await updateUserActive(userId, isActive, banReason)
+      
       // 刷新详情数据
       if (detailType === 'ip' && detailTitle) {
         const identifier = detailTitle.replace(' - 详情', '')
@@ -394,6 +404,7 @@ export default function CrawlerAnalysisPage() {
     }
 
     // 如果是封禁操作，显示封禁原因输入模态框
+    setBulkBanUserIds([])
     setPendingBanAction({ userId, currentIsActive, isAdmin })
     setBanReasonInput('')
     setShowBanReasonModal(true)
@@ -403,6 +414,72 @@ export default function CrawlerAnalysisPage() {
   const handleConfirmBan = async () => {
     if (!pendingBanAction) return
     await executeToggleUserActive(pendingBanAction.userId, false, banReasonInput.trim() || null)
+  }
+
+  const handleToggleIpUserSelection = (userId: string) => {
+    setSelectedIpUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId]
+    )
+  }
+
+  const handleToggleAllIpUserSelection = () => {
+    const selectableUserIds = detailData?.ipUsers
+      ?.filter((user) => user.isActive && !user.isAdmin)
+      .map((user) => user.userId) || []
+
+    setSelectedIpUserIds((current) => {
+      const allSelected = selectableUserIds.length > 0 && selectableUserIds.every((id) => current.includes(id))
+      return allSelected ? [] : selectableUserIds
+    })
+  }
+
+  const openBulkBanReasonModal = () => {
+    const validSelectedUserIds = detailData?.ipUsers
+      ?.filter((user) => selectedIpUserIds.includes(user.userId) && user.isActive && !user.isAdmin)
+      .map((user) => user.userId) || []
+
+    if (validSelectedUserIds.length === 0) {
+      showConfirmDialog('无法操作', '请选择可封禁的活跃用户', () => {})
+      return
+    }
+
+    setBulkBanUserIds(validSelectedUserIds)
+    setPendingBanAction(null)
+    setBanReasonInput('')
+    setShowBanReasonModal(true)
+  }
+
+  const handleConfirmBulkBan = async () => {
+    if (bulkBanUserIds.length === 0 || bulkBanLoading) return
+
+    try {
+      setBulkBanLoading(true)
+      const reason = banReasonInput.trim() || null
+      await Promise.all(bulkBanUserIds.map((userId) => updateUserActive(userId, false, reason)))
+
+      setShowBanReasonModal(false)
+      setBanReasonInput('')
+      setPendingBanAction(null)
+      setBulkBanUserIds([])
+      setSelectedIpUserIds([])
+
+      if (detailType === 'ip' && detailTitle) {
+        const identifier = detailTitle.replace(' - 详情', '')
+        await openDetailModal('ip', identifier, detailTitle)
+      }
+      await fetchData()
+    } catch (error: any) {
+      console.error('Error bulk banning users:', error)
+      showConfirmDialog(
+        '操作失败',
+        error.message || '批量封禁用户失败',
+        () => {}
+      )
+    } finally {
+      setBulkBanLoading(false)
+    }
   }
 
   // 格式化时间分布数据用于图表
@@ -458,6 +535,12 @@ export default function CrawlerAnalysisPage() {
       return b.callCount - a.callCount || (b.userCount || 0) - (a.userCount || 0)
     })
     : []
+  const selectableIpUserIds = detailData?.ipUsers
+    ?.filter((user) => user.isActive && !user.isAdmin)
+    .map((user) => user.userId) || []
+  const selectedIpUsers = detailData?.ipUsers
+    ?.filter((user) => selectedIpUserIds.includes(user.userId) && user.isActive && !user.isAdmin) || []
+  const allSelectableIpUsersSelected = selectableIpUserIds.length > 0 && selectableIpUserIds.every((id) => selectedIpUserIds.includes(id))
 
   // 加载中或权限检查
   if (sessionLoading || checkingAdmin || !isAdmin) {
@@ -1060,7 +1143,14 @@ export default function CrawlerAnalysisPage() {
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">{detailTitle}</h2>
               <button
-                onClick={() => setDetailModalOpen(false)}
+                onClick={() => {
+                  setDetailModalOpen(false)
+                  setSelectedIpUserIds([])
+                  setBulkBanUserIds([])
+                  setPendingBanAction(null)
+                  setShowBanReasonModal(false)
+                  setBanReasonInput('')
+                }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1313,12 +1403,34 @@ export default function CrawlerAnalysisPage() {
                   {/* IP对应的用户信息（仅IP详情显示） */}
                   {detailType === 'ip' && detailData.ipUsers && detailData.ipUsers.length > 0 && (
                     <div className="bg-gray-50 rounded-lg p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">使用该IP的登录用户</h3>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-lg font-semibold text-gray-900">使用该IP的登录用户</h3>
+                        <button
+                          onClick={openBulkBanReasonModal}
+                          disabled={selectedIpUsers.length === 0}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            selectedIpUsers.length > 0
+                              ? 'text-white bg-red-500 hover:bg-red-600'
+                              : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                          }`}
+                        >
+                          批量封禁{selectedIpUsers.length > 0 ? `（${selectedIpUsers.length}）` : ''}
+                        </button>
+                      </div>
                       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead className="bg-gray-50 border-b border-gray-200">
                               <tr>
+                                <th className="px-4 py-3 text-left">
+                                  <input
+                                    type="checkbox"
+                                    checked={allSelectableIpUsersSelected}
+                                    disabled={selectableIpUserIds.length === 0}
+                                    onChange={handleToggleAllIpUserSelection}
+                                    className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                  />
+                                </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户信息</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">邮箱</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">身份标识</th>
@@ -1335,6 +1447,15 @@ export default function CrawlerAnalysisPage() {
                                 
                                 return (
                                   <tr key={ipUser.userId} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-4 py-4 whitespace-nowrap">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedIpUserIds.includes(ipUser.userId)}
+                                        disabled={!ipUser.isActive || ipUser.isAdmin}
+                                        onChange={() => handleToggleIpUserSelection(ipUser.userId)}
+                                        className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                      />
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="text-sm font-medium text-gray-900">
                                         {ipUser.userName || ipUser.userNickname || '未设置名称'}
@@ -1613,10 +1734,12 @@ export default function CrawlerAnalysisPage() {
       )}
 
       {/* 封禁原因输入模态框 */}
-      {showBanReasonModal && pendingBanAction && (
+      {showBanReasonModal && (pendingBanAction || bulkBanUserIds.length > 0) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">封禁用户</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {bulkBanUserIds.length > 0 ? `批量封禁用户（${bulkBanUserIds.length}）` : '封禁用户'}
+            </h2>
             
             <div className="space-y-4">
               <div>
@@ -1640,16 +1763,19 @@ export default function CrawlerAnalysisPage() {
                   setShowBanReasonModal(false)
                   setBanReasonInput('')
                   setPendingBanAction(null)
+                  setBulkBanUserIds([])
                 }}
+                disabled={bulkBanLoading}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 取消
               </button>
               <button
-                onClick={handleConfirmBan}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 transition-all"
+                onClick={bulkBanUserIds.length > 0 ? handleConfirmBulkBan : handleConfirmBan}
+                disabled={bulkBanLoading}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 transition-all disabled:cursor-not-allowed disabled:opacity-60"
               >
-                确认封禁
+                {bulkBanLoading ? '封禁中...' : '确认封禁'}
               </button>
             </div>
           </div>
