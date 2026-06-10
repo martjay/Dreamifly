@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { rejectedImages, user } from '@/db/schema'
+import { communityMedia, userGeneratedImages, user } from '@/db/schema'
 import { eq, isNotNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
@@ -11,12 +11,8 @@ function normalizeModel(model: string) {
   return model === 'gpt-image-2' ? DEFAULT_GPT_IMAGE_2_MODEL : model
 }
 
-/**
- * 获取未通过审核图片中使用的所有模型列表（管理员专用）
- */
 export async function GET() {
   try {
-    // 验证管理员权限
     const session = await auth.api.getSession({
       headers: await headers()
     })
@@ -28,7 +24,6 @@ export async function GET() {
       )
     }
 
-    // 检查是否为管理员
     const currentUser = await db.select()
       .from(user)
       .where(eq(user.id, session.user.id))
@@ -41,33 +36,40 @@ export async function GET() {
       )
     }
 
-    // 查询所有不重复的模型
-    const models = await db
+    const generatedModels = await db
       .select({
-        model: rejectedImages.model,
+        model: userGeneratedImages.model,
       })
-      .from(rejectedImages)
-      .where(isNotNull(rejectedImages.model))
-      .groupBy(rejectedImages.model)
+      .from(userGeneratedImages)
+      .where(isNotNull(userGeneratedImages.model))
+      .groupBy(userGeneratedImages.model)
 
-    // 提取模型ID并排序
-    const modelList = models
-      .map(m => m.model)
-      .filter((model): model is string => model !== null)
-      .map(normalizeModel)
-      .filter((model, index, array) => array.indexOf(model) === index)
-      .sort()
+    const communityModels = await db
+      .select({
+        model: communityMedia.model,
+      })
+      .from(communityMedia)
+      .where(isNotNull(communityMedia.model))
+      .groupBy(communityMedia.model)
+
+    const modelList = Array.from(
+      new Set(
+        [...generatedModels, ...communityModels]
+          .map(item => item.model)
+          .filter((model): model is string => model !== null)
+          .map(normalizeModel)
+      )
+    ).sort()
 
     return NextResponse.json({
       success: true,
       models: modelList,
     })
   } catch (error) {
-    console.error('Error fetching models:', error)
+    console.error('Error fetching review image models:', error)
     return NextResponse.json(
       { error: '获取模型列表失败' },
       { status: 500 }
     )
   }
 }
-

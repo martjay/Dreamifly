@@ -163,6 +163,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               setError(t('error.emailDomainBlocked'))
             } else if (validateData.error === 'EMAIL_DOT_COUNT_NOT_ALLOWED') {
               setError(t('error.emailDotCountNotAllowed'))
+            } else if (validateData.error === 'GMAIL_ALIAS_NOT_ALLOWED') {
+              setError(t('error.gmailAliasNotAllowed'))
             } else {
               setError(t('error.emailDomainNotAllowed'))
             }
@@ -241,6 +243,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
                 errorMessage === 'EMAIL_DOT_COUNT_NOT_ALLOWED' ||
                 errorMessage.includes('EMAIL_DOT_COUNT_NOT_ALLOWED')) {
               setError(t('error.emailDotCountNotAllowed'))
+            } else if (errorCode === 'GMAIL_ALIAS_NOT_ALLOWED' ||
+                errorMessage === 'GMAIL_ALIAS_NOT_ALLOWED' ||
+                errorMessage.includes('GMAIL_ALIAS_NOT_ALLOWED')) {
+              setError(t('error.gmailAliasNotAllowed'))
             } else if (errorCode === 'UNAUTHORIZED' || errorCode === 'INVALID_TOKEN') {
               setError(t('error.unauthorized'))
             } else if (errorCode === 'NAME_ALREADY_EXISTS' ||

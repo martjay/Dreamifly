@@ -5,6 +5,24 @@ import { communityMedia, userGeneratedImages, user } from '@/db/schema'
 import { eq, ne, desc, and, or, like, isNull, gte, lte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
+const GPT_IMAGE_2_MODEL_ALIASES = ['gpt-image-2', 'gpt-image-2.0']
+
+function buildModelCondition(column: any, modelFilter: string) {
+  const normalizedModel = modelFilter.trim()
+  if (!normalizedModel || normalizedModel === 'all') {
+    return null
+  }
+
+  if (GPT_IMAGE_2_MODEL_ALIASES.includes(normalizedModel)) {
+    return or(
+      eq(column, 'gpt-image-2'),
+      eq(column, 'gpt-image-2.0')
+    )
+  }
+
+  return eq(column, normalizedModel)
+}
+
 /**
  * 获取通过审核的图片列表（管理员专用）
  * 查询参数：
@@ -15,6 +33,7 @@ import { headers } from 'next/headers'
  * - startDate: 开始日期（YYYY-MM-DD）
  * - endDate: 结束日期（YYYY-MM-DD）
  * - reviewStatus: 人工审核状态（pending | approved | rejected | all）
+ * - model: 所用模型筛选（all 表示全部）
  */
 export async function GET(request: NextRequest) {
   try {
@@ -53,6 +72,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const reviewStatus = searchParams.get('reviewStatus') || 'all'
+    const modelFilter = searchParams.get('model') || 'all'
 
     // 构建筛选条件
     const conditions = []
@@ -67,6 +87,11 @@ export async function GET(request: NextRequest) {
 
     // 仅展示模型审核已通过的内容，作为人工审核池
     conditions.push(eq(userGeneratedImages.moderationLevel, 'low'))
+
+    const generatedModelCondition = buildModelCondition(userGeneratedImages.model, modelFilter)
+    if (generatedModelCondition) {
+      conditions.push(generatedModelCondition)
+    }
 
     // 用户角色筛选
     if (roleFilter !== 'all') {
@@ -129,6 +154,11 @@ export async function GET(request: NextRequest) {
         } else {
           communityConditions.push(eq(communityMedia.userRole, roleFilter))
         }
+      }
+
+      const communityModelCondition = buildModelCondition(communityMedia.model, modelFilter)
+      if (communityModelCondition) {
+        communityConditions.push(communityModelCondition)
       }
 
       if (search.trim()) {

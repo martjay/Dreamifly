@@ -18,6 +18,10 @@ import { filterProfanity } from '@/utils/profanityFilter'
 type TabType = 'approved' | 'rejected' | 'profanity'
 type RoleFilter = 'all' | 'subscribed' | 'premium' | 'oldUser' | 'regular'
 type ManualReviewStatus = 'pending' | 'approved' | 'rejected'
+const DEFAULT_REVIEW_IMAGE_MODEL = 'gpt-image-2.0'
+const normalizeGodEyeModelFilter = (model: string) => (
+  model === 'gpt-image-2' ? DEFAULT_REVIEW_IMAGE_MODEL : model
+)
 
 interface ImageItem {
   id: string
@@ -64,6 +68,8 @@ export default function GodEyePage() {
   const [totalPages, setTotalPages] = useState(0)
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | ManualReviewStatus>('pending')
+  const [reviewModelFilter, setReviewModelFilter] = useState<string>(DEFAULT_REVIEW_IMAGE_MODEL)
+  const [reviewAvailableModels, setReviewAvailableModels] = useState<string[]>([DEFAULT_REVIEW_IMAGE_MODEL])
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -265,6 +271,9 @@ export default function GodEyePage() {
         if (reviewStatusFilter !== 'all') {
           params.set('reviewStatus', reviewStatusFilter)
         }
+        if (reviewModelFilter !== 'all') {
+          params.set('model', reviewModelFilter)
+        }
         if (searchTerm.trim()) {
           params.set('search', searchTerm.trim())
         }
@@ -291,7 +300,30 @@ export default function GodEyePage() {
     }
 
     fetchImages()
-  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, searchTerm, startDate, endDate])
+  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, reviewModelFilter, searchTerm, startDate, endDate])
+
+  // 获取人工审核图片可用模型列表
+  useEffect(() => {
+    if (activeTab !== 'approved' || !isAdmin) return
+
+    const fetchReviewModels = async () => {
+      try {
+        const response = await fetch('/api/admin/god-eye/images/models')
+        if (!response.ok) {
+          throw new Error('Failed to fetch review image models')
+        }
+        const data = await response.json()
+        const models = Array.from(
+          new Set([DEFAULT_REVIEW_IMAGE_MODEL, ...(data.models || [])].map(normalizeGodEyeModelFilter))
+        ) as string[]
+        setReviewAvailableModels(models)
+      } catch (error) {
+        console.error('Error fetching review image models:', error)
+      }
+    }
+
+    fetchReviewModels()
+  }, [activeTab, isAdmin])
 
   // 获取未通过审核图片列表
   useEffect(() => {
@@ -372,7 +404,8 @@ export default function GodEyePage() {
           throw new Error('Failed to fetch models')
         }
         const data = await response.json()
-        setAvailableModels(data.models || [])
+        const models = (data.models || []).map(normalizeGodEyeModelFilter)
+        setAvailableModels(Array.from(new Set(models)) as string[])
       } catch (error) {
         console.error('Error fetching models:', error)
       }
@@ -1151,7 +1184,7 @@ export default function GodEyePage() {
               <div className="space-y-4">
                 {/* 筛选区域 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex flex-wrap gap-4 items-end">
+                  <div className="flex flex-wrap xl:flex-nowrap gap-4 items-end">
                     {/* 用户角色筛选 */}
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">用户角色：</span>
@@ -1188,8 +1221,27 @@ export default function GodEyePage() {
                       </select>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 whitespace-nowrap">所用模型：</span>
+                      <select
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[150px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={reviewModelFilter}
+                        onChange={(e) => {
+                          setReviewModelFilter(e.target.value)
+                          setPage(1)
+                        }}
+                      >
+                        <option value="all">全部</option>
+                        {reviewAvailableModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* 搜索 */}
-                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 flex-1 min-w-[240px]">
                       <input
                         type="text"
                         placeholder="搜索用户昵称"
@@ -1211,7 +1263,7 @@ export default function GodEyePage() {
                     </div>
 
                     {/* 日期范围 */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <input
                         type="date"
                         className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"

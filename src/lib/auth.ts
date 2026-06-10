@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
-import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isValid163Email } from "@/utils/email-domain-validator";
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailLongAliasEmail, isValid163Email } from "@/utils/email-domain-validator";
 
 export const auth = betterAuth({
   baseURL: process.env.NEXT_PUBLIC_BASE_URL || "https://dreamifly.com",
@@ -30,6 +30,10 @@ export const auth = betterAuth({
 
       if (!isEmailDotCountAllowed(user.email)) {
         throw new Error("EMAIL_DOT_COUNT_NOT_ALLOWED");
+      }
+
+      if (isGmailLongAliasEmail(user.email)) {
+        throw new Error("GMAIL_ALIAS_NOT_ALLOWED");
       }
       
       const isAllowed = await isEmailDomainAllowed(user.email);

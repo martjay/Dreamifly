@@ -280,6 +280,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   // 要设置为参考图片的生成图片 URL
   const [generatedImageToSetAsReference, setGeneratedImageToSetAsReference] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(false);
   
   // 用户认证状态
   const authStatus = (!hasMounted || isPending)
@@ -288,6 +289,20 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
   useEffect(() => {
     setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const updateLayout = () => {
+      setIsDesktopLayout(mediaQuery.matches);
+    };
+
+    updateLayout();
+    mediaQuery.addEventListener('change', updateLayout);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateLayout);
+    };
   }, []);
 
   useEffect(() => {
@@ -1188,7 +1203,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         batchSizeError={batchSizeError}
                         imageCountError={imageCountError}
                         batchSizeRef={batchSizeRef}
-                        generatedImageToSetAsReference={generatedImageToSetAsReference}
+                        generatedImageToSetAsReference={!isDesktopLayout ? generatedImageToSetAsReference : null}
                         setIsQueuing={setIsQueuing}
                         isHighResolution={isHighResolution}
                         setIsHighResolution={setIsHighResolution}
@@ -1232,7 +1247,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     batchSizeError={batchSizeError}
                     imageCountError={imageCountError}
                     batchSizeRef={batchSizeRef}
-                    generatedImageToSetAsReference={generatedImageToSetAsReference}
+                    generatedImageToSetAsReference={isDesktopLayout ? generatedImageToSetAsReference : null}
                     setIsQueuing={setIsQueuing}
                     isHighResolution={isHighResolution}
                     setIsHighResolution={setIsHighResolution}

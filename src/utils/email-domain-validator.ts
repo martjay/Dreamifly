@@ -204,6 +204,25 @@ export function isEmailDotCountAllowed(email: string, maxDots = 5): boolean {
 }
 
 /**
+ * 验证 Gmail 长别名邮箱，拦截本地部分超过 20 个字符且包含 + 的地址
+ * @param email 邮箱地址
+ */
+export function isGmailLongAliasEmail(email: string): boolean {
+  const domain = extractDomainFromEmail(email);
+  if (domain !== 'gmail.com') {
+    return false;
+  }
+
+  const parts = email.split('@');
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const localPart = parts[0];
+  return localPart.includes('+') && localPart.length > 20;
+}
+
+/**
  * 获取所有启用的邮箱域名列表
  */
 export async function getAllowedEmailDomains(): Promise<string[]> {
