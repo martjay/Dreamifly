@@ -5,7 +5,10 @@ import { and, eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
 import { communityMedia, user, userGeneratedImages } from '@/db/schema'
-import { publishCommunityMediaFromGeneratedImage } from '@/utils/communityMediaPublisher'
+import {
+  CommunityMediaReferenceImageError,
+  publishCommunityMediaFromGeneratedImage,
+} from '@/utils/communityMediaPublisher'
 
 type ManualReviewStatus = 'approved' | 'rejected'
 
@@ -92,6 +95,10 @@ export async function POST(
     })
   } catch (error) {
     console.error('人工审核作品失败:', error)
+    if (error instanceof CommunityMediaReferenceImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
     return NextResponse.json({ error: '人工审核失败' }, { status: 500 })
   }
 }

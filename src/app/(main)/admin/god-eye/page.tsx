@@ -18,6 +18,7 @@ import { filterProfanity } from '@/utils/profanityFilter'
 type TabType = 'approved' | 'rejected' | 'profanity'
 type RoleFilter = 'all' | 'subscribed' | 'premium' | 'oldUser' | 'regular'
 type ManualReviewStatus = 'pending' | 'approved' | 'rejected'
+type ReferenceImageFilter = 'all' | 'with' | 'without'
 const DEFAULT_REVIEW_IMAGE_MODEL = 'gpt-image-2.0'
 const normalizeGodEyeModelFilter = (model: string) => (
   model === 'gpt-image-2' ? DEFAULT_REVIEW_IMAGE_MODEL : model
@@ -69,6 +70,7 @@ export default function GodEyePage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | ManualReviewStatus>('pending')
   const [reviewModelFilter, setReviewModelFilter] = useState<string>(DEFAULT_REVIEW_IMAGE_MODEL)
+  const [referenceImageFilter, setReferenceImageFilter] = useState<ReferenceImageFilter>('all')
   const [reviewAvailableModels, setReviewAvailableModels] = useState<string[]>([DEFAULT_REVIEW_IMAGE_MODEL])
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -274,6 +276,9 @@ export default function GodEyePage() {
         if (reviewModelFilter !== 'all') {
           params.set('model', reviewModelFilter)
         }
+        if (referenceImageFilter !== 'all' && reviewStatusFilter !== 'approved') {
+          params.set('referenceImages', referenceImageFilter)
+        }
         if (searchTerm.trim()) {
           params.set('search', searchTerm.trim())
         }
@@ -300,7 +305,7 @@ export default function GodEyePage() {
     }
 
     fetchImages()
-  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, reviewModelFilter, searchTerm, startDate, endDate])
+  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, reviewModelFilter, referenceImageFilter, searchTerm, startDate, endDate])
 
   // 获取人工审核图片可用模型列表
   useEffect(() => {
@@ -711,7 +716,7 @@ export default function GodEyePage() {
         return { ...prev, [imageId]: decodedUrl }
       })
     } catch (error) {
-      console.error('前端解码未通过图片失败:', error)
+      console.warn('前端解码未通过图片失败:', error)
     }
   }
 
@@ -740,7 +745,7 @@ export default function GodEyePage() {
 
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, runWorker)
     Promise.all(workers).catch((err) => {
-      console.error('批量解码未通过图片失败:', err)
+      console.warn('批量解码未通过图片失败:', err)
     })
 
     return () => {
@@ -817,7 +822,7 @@ export default function GodEyePage() {
             }))
           }
         } catch (error) {
-          console.error('解码媒体失败:', error)
+          console.warn('解码媒体失败:', error)
         } finally {
           setDecodingApprovedImages(prev => {
             const newSet = new Set(prev)
@@ -830,7 +835,7 @@ export default function GodEyePage() {
 
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, runWorker)
     Promise.all(workers).catch(err => {
-      console.error('批量解码图片失败:', err)
+      console.warn('批量解码图片失败:', err)
     })
 
     return () => {
@@ -858,7 +863,7 @@ export default function GodEyePage() {
             setDecodedReferenceImages(prev => ({ ...prev, [refUrl]: decodedUrl }))
             setZoomedImage(decodedUrl)
           } catch (error) {
-            console.error('解码参考图失败:', error)
+            console.warn('解码参考图失败:', error)
             setZoomedImage(refUrl)
           } finally {
             setDecodingReferenceImages(prev => {
@@ -892,7 +897,7 @@ export default function GodEyePage() {
             setZoomedImage(decodedUrl)
             setZoomedMediaType(mediaType || 'image')
           } catch (error) {
-            console.error('解码媒体失败:', error)
+            console.warn('解码媒体失败:', error)
             setZoomedImage(imageUrl)
             setZoomedMediaType(mediaType || 'image')
           }
@@ -918,7 +923,7 @@ export default function GodEyePage() {
             setZoomedImage(decodedUrl)
             setZoomedMediaType((image.mediaType as 'image' | 'video') || 'image')
           } catch (error) {
-            console.error('解码媒体失败:', error)
+            console.warn('解码媒体失败:', error)
             setZoomedImage(imageUrl)
             setZoomedMediaType((image.mediaType as 'image' | 'video') || 'image')
           }
@@ -1237,6 +1242,24 @@ export default function GodEyePage() {
                             {model}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 whitespace-nowrap">参考图：</span>
+                      <select
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={referenceImageFilter}
+                        onChange={(e) => {
+                          setReferenceImageFilter(e.target.value as ReferenceImageFilter)
+                          setPage(1)
+                        }}
+                        disabled={reviewStatusFilter === 'approved'}
+                        title={reviewStatusFilter === 'approved' ? '已发布社区作品不保存参考图筛选信息' : undefined}
+                      >
+                        <option value="all">全部</option>
+                        <option value="with">有参考图</option>
+                        <option value="without">无参考图</option>
                       </select>
                     </div>
 

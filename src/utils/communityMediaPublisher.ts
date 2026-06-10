@@ -11,6 +11,13 @@ import {
 import { decodeMediaFromStorage, encodeMediaForStorage } from '@/utils/mediaStorage'
 import { uploadToOSS } from '@/utils/oss'
 
+export class CommunityMediaReferenceImageError extends Error {
+  constructor() {
+    super('带参考图的作品不能发布到社区')
+    this.name = 'CommunityMediaReferenceImageError'
+  }
+}
+
 async function fetchMediaBufferFromUrl(mediaUrl: string): Promise<Buffer> {
   const response = await fetch(mediaUrl)
   if (!response.ok) {
@@ -75,10 +82,50 @@ async function copyPublishedTags(sourceMediaId: string, communityMediaId: string
     .onConflictDoNothing()
 }
 
+function hasReferenceImages(referenceImages: unknown): boolean {
+  return Array.isArray(referenceImages) && referenceImages.length > 0
+}
+
 export async function publishCommunityMediaFromGeneratedImage(params: {
   sourceMediaId: string
   approvedBy: string
 }) {
+  const sourceRows = await db
+    .select({
+      id: userGeneratedImages.id,
+      userId: userGeneratedImages.userId,
+      imageUrl: userGeneratedImages.imageUrl,
+      mediaType: userGeneratedImages.mediaType,
+      prompt: userGeneratedImages.prompt,
+      model: userGeneratedImages.model,
+      width: userGeneratedImages.width,
+      height: userGeneratedImages.height,
+      duration: userGeneratedImages.duration,
+      fps: userGeneratedImages.fps,
+      frameCount: userGeneratedImages.frameCount,
+      userRole: userGeneratedImages.userRole,
+      userAvatar: userGeneratedImages.userAvatar,
+      userNickname: userGeneratedImages.userNickname,
+      avatarFrameId: userGeneratedImages.avatarFrameId,
+      referenceImages: userGeneratedImages.referenceImages,
+      moderationLevel: userGeneratedImages.moderationLevel,
+      nsfw: userGeneratedImages.nsfw,
+      manualReviewedAt: userGeneratedImages.manualReviewedAt,
+      createdAt: userGeneratedImages.createdAt,
+    })
+    .from(userGeneratedImages)
+    .where(eq(userGeneratedImages.id, params.sourceMediaId))
+    .limit(1)
+
+  const source = sourceRows[0]
+  if (!source) {
+    throw new Error('来源作品不存在')
+  }
+
+  if (hasReferenceImages(source.referenceImages)) {
+    throw new CommunityMediaReferenceImageError()
+  }
+
   const existing = await db
     .select({
       id: communityMedia.id,
@@ -101,37 +148,6 @@ export async function publishCommunityMediaFromGeneratedImage(params: {
 
     await copyPublishedTags(params.sourceMediaId, existing[0].id)
     return existing[0].id
-  }
-
-  const sourceRows = await db
-    .select({
-      id: userGeneratedImages.id,
-      userId: userGeneratedImages.userId,
-      imageUrl: userGeneratedImages.imageUrl,
-      mediaType: userGeneratedImages.mediaType,
-      prompt: userGeneratedImages.prompt,
-      model: userGeneratedImages.model,
-      width: userGeneratedImages.width,
-      height: userGeneratedImages.height,
-      duration: userGeneratedImages.duration,
-      fps: userGeneratedImages.fps,
-      frameCount: userGeneratedImages.frameCount,
-      userRole: userGeneratedImages.userRole,
-      userAvatar: userGeneratedImages.userAvatar,
-      userNickname: userGeneratedImages.userNickname,
-      avatarFrameId: userGeneratedImages.avatarFrameId,
-      moderationLevel: userGeneratedImages.moderationLevel,
-      nsfw: userGeneratedImages.nsfw,
-      manualReviewedAt: userGeneratedImages.manualReviewedAt,
-      createdAt: userGeneratedImages.createdAt,
-    })
-    .from(userGeneratedImages)
-    .where(eq(userGeneratedImages.id, params.sourceMediaId))
-    .limit(1)
-
-  const source = sourceRows[0]
-  if (!source) {
-    throw new Error('来源作品不存在')
   }
 
   const mediaBuffer = await fetchMediaBufferFromUrl(source.imageUrl)

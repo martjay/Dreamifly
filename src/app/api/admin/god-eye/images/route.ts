@@ -6,6 +6,8 @@ import { eq, ne, desc, and, or, like, isNull, gte, lte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
 const GPT_IMAGE_2_MODEL_ALIASES = ['gpt-image-2', 'gpt-image-2.0']
+const REFERENCE_IMAGE_FILTERS = ['all', 'with', 'without'] as const
+type ReferenceImageFilter = typeof REFERENCE_IMAGE_FILTERS[number]
 
 function buildModelCondition(column: any, modelFilter: string) {
   const normalizedModel = modelFilter.trim()
@@ -23,6 +25,24 @@ function buildModelCondition(column: any, modelFilter: string) {
   return eq(column, normalizedModel)
 }
 
+function normalizeReferenceImageFilter(value: string | null): ReferenceImageFilter {
+  return REFERENCE_IMAGE_FILTERS.includes(value as ReferenceImageFilter)
+    ? value as ReferenceImageFilter
+    : 'all'
+}
+
+function buildReferenceImageCondition(filter: ReferenceImageFilter) {
+  if (filter === 'with') {
+    return sql`jsonb_array_length(coalesce(${userGeneratedImages.referenceImages}, '[]'::jsonb)) > 0`
+  }
+
+  if (filter === 'without') {
+    return sql`jsonb_array_length(coalesce(${userGeneratedImages.referenceImages}, '[]'::jsonb)) = 0`
+  }
+
+  return null
+}
+
 /**
  * 获取通过审核的图片列表（管理员专用）
  * 查询参数：
@@ -34,6 +54,7 @@ function buildModelCondition(column: any, modelFilter: string) {
  * - endDate: 结束日期（YYYY-MM-DD）
  * - reviewStatus: 人工审核状态（pending | approved | rejected | all）
  * - model: 所用模型筛选（all 表示全部）
+ * - referenceImages: 参考图筛选（all | with | without）
  */
 export async function GET(request: NextRequest) {
   try {
@@ -73,6 +94,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
     const reviewStatus = searchParams.get('reviewStatus') || 'all'
     const modelFilter = searchParams.get('model') || 'all'
+    const referenceImageFilter = normalizeReferenceImageFilter(searchParams.get('referenceImages'))
 
     // 构建筛选条件
     const conditions = []
@@ -91,6 +113,11 @@ export async function GET(request: NextRequest) {
     const generatedModelCondition = buildModelCondition(userGeneratedImages.model, modelFilter)
     if (generatedModelCondition) {
       conditions.push(generatedModelCondition)
+    }
+
+    const referenceImageCondition = buildReferenceImageCondition(referenceImageFilter)
+    if (referenceImageCondition) {
+      conditions.push(referenceImageCondition)
     }
 
     // 用户角色筛选
