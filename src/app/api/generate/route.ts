@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     // 先解析请求体，后续额度逻辑需要根据模型判断是否允许使用免费额度抵扣
     const body = await request.json()
     let prompt: string
-    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt } = body
+    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt, aspectRatio } = body
     let generationSteps = Number(steps)
     if (model === 'Wai-SDXL-V170') {
       generationSteps = generationSteps >= 30 ? 30 : 20
@@ -843,7 +843,7 @@ export async function POST(request: Request) {
     if (model === 'grok-imagine-1.0') {
       imageUrl = await generateGrokImage({ prompt, width, height })
     } else if (isGptImage2Model(model)) {
-      imageUrl = await generateGptImage2({ prompt, width, height, images })
+      imageUrl = await generateGptImage2({ prompt, width, height, images, aspectRatio })
     } else if (model === 'nano-banana-2') {
       imageUrl = await generateNanoBananaImage({ prompt, width, height, negative_prompt, seed: seed ? parseInt(seed) : undefined, images })
     } else {

@@ -561,7 +561,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         }
       }
     }
-    if (batch_size < 1 || batch_size > 2) {
+    if (batch_size < 1 || batch_size > 4) {
       setBatchSizeError(t('error.validation.batchSizeRange'));
       batchSizeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       hasError = true;
@@ -640,6 +640,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               batch_size,
               model,
               images: uploadedImages,
+              aspectRatio,
             }),
           });
 

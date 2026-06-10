@@ -9,6 +9,7 @@ interface GptImage2Params {
   width: number;
   height: number;
   images?: string[];
+  aspectRatio?: string;
 }
 
 interface GptImage2Response {
@@ -144,7 +145,7 @@ export async function generateGptImage2(params: GptImage2Params): Promise<string
     throw new Error('GPT-image-2 API key is not configured. Please set BANANA_ROUTER_API_KEY.');
   }
 
-  const size = getGptImage2SizeString(params.width, params.height);
+  const size = params.aspectRatio === '自适应' ? 'auto' : getGptImage2SizeString(params.width, params.height);
   const quality = deriveQuality(params.width, params.height);
   const inputImages = params.images ?? [];
 

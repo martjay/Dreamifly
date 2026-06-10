@@ -118,7 +118,7 @@
         },
         "batch_size": {
           "label": "生成数量",
-          "hint": "一次生成的图片数量（1-2）"
+          "hint": "一次生成的图片数量（1-4）"
         },
         "denoising_strength": {
           "label": "降噪强度",
