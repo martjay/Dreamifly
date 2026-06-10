@@ -979,13 +979,14 @@ export default function CrawlerAnalysisPage() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP地址</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">调用次数</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">登录用户数量</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">未封禁用户数量</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {data.authenticatedIPRanking.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                 暂无数据
                               </td>
                             </tr>
@@ -1022,6 +1023,11 @@ export default function CrawlerAnalysisPage() {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className="text-sm font-semibold text-blue-600">
                                     {ip.userCount?.toLocaleString() || 0}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-green-600">
+                                    {ip.activeUserCount?.toLocaleString() || 0}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">

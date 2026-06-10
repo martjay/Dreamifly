@@ -214,8 +214,10 @@ export async function GET(request: Request) {
         ipAddress: modelUsageStats.ipAddress,
         callCount: sql<number>`count(*)::int`,
         userCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.userId} is not null)::int`,
+        activeUserCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.userId} is not null and ${user.isActive} = true)::int`,
       })
       .from(modelUsageStats)
+      .leftJoin(user, eq(modelUsageStats.userId, user.id))
       .where(and(...authenticatedIPRankingWhereConditions))
       .groupBy(modelUsageStats.ipAddress)
       .orderBy(sql`count(*) DESC`)
@@ -359,6 +361,7 @@ export async function GET(request: Request) {
           ipAddress: item.ipAddress,
           callCount: Number(item.callCount),
           userCount: Number(item.userCount),
+          activeUserCount: Number(item.activeUserCount),
         })),
         unauthenticatedIPRanking: unauthenticatedIPRanking.map((item) => ({
           ipAddress: item.ipAddress,
