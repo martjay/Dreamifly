@@ -453,6 +453,15 @@ MIT License | © 2025 Dreamify Project
 - **[LoongXia](https://loongxia.cn)**  
   一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的 QQ/微信/飞书专属机器人吧~
 
+
+<a href="https://www.star-history.com/?repos=LastLighter%2FDreamifly&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LastLighter/Dreamifly&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LastLighter/Dreamifly&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LastLighter/Dreamifly&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ---
 
 💡 **让 AI 绘画变得简单，释放你的无限创意。**  
