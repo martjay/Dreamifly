@@ -20,7 +20,7 @@ export const metadata: Metadata = {
         url: `${siteUrl}/images/dreamifly-logo.jpg`,
         width: 256,
         height: 256,
-        alt: 'Dreamifly Logo',
+        alt: 'Dreamifly 梦飞 Logo',
       },
     ],
     type: 'website',

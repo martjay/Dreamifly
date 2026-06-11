@@ -1,13 +1,14 @@
 {
   "site": {
-    "title": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
-    "description": "Dreamifly 提供免费在线 AI 绘画与视频生成服务，支持文生图、图生图、图生视频等多种创作方式，涵盖动漫、插画、写实等风格，无需注册即可快速体验，适合灵感探索、内容制作与创作爱好者使用。"
+    "title": "Dreamifly 梦飞 - 免费 AI 绘画/视频在线生成工具",
+    "description": "Dreamifly 梦飞提供免费在线 AI 绘画与视频生成服务，支持文生图、图生图、图生视频等多种创作方式，涵盖动漫、插画、写实等风格，无需注册即可快速体验，适合灵感探索、内容制作与创作爱好者使用。"
   },
   "home": {
     "hero": {
       "titlePrefix": "简单且免费的",
       "titleHighlight": "AI图像视频创作工具",
-      "description": "Dreamifly - 免费 AI 绘画/视频在线生成工具",
+      "description": "Dreamifly 梦飞 - 免费 AI 绘画/视频在线生成工具",
+      "siteName": "Dreamifly 梦飞",
       "startButton": "开始创作",
       "contactButton": "联系我们",
       "imageCaption": "AI艺术",
@@ -251,27 +252,27 @@
       "title": "常见问题",
       "questions": [
         {
-          "q": "什么是Dreamifly？",
-          "a": "Dreamifly 是一个基于多种 AI 绘画与视觉模型的在线文生图（text to image）、图生图（image to image）服务网站，也是优秀的 AI 设计绘图工具，支持现实、动漫、插画、3D 等多风格作品，可在此自由发挥创意。平台提供免费额度与基础体验，需要更高用量时可选购订阅套餐获取额外额度。"
+          "q": "什么是Dreamifly 梦飞？",
+          "a": "Dreamifly 梦飞是一个基于多种 AI 绘画与视觉模型的在线文生图（text to image）、图生图（image to image）服务网站，也是优秀的 AI 设计绘图工具，支持现实、动漫、插画、3D 等多风格作品，可在此自由发挥创意。平台提供免费额度与基础体验，需要更高用量时可选购订阅套餐获取额外额度。"
         },
         {
-          "q": "Dreamifly 是免费的吗？",
+          "q": "Dreamifly 梦飞是免费的吗？",
           "a": "可以免费使用：我们提供一定的免费生图额度，满足日常体验与创作。若你需要更多生成次数或更高配额，可通过订阅套餐购买额外额度。"
         },
         {
-          "q": "Dreamifly能创作什么样的图像？",
+          "q": "Dreamifly 梦飞能创作什么样的图像？",
           "a": "各种各样的风格，贴近现实的场景，艺术性的插画，动漫风格的画像等等。"
         },
         {
-          "q": "Dreamifly生成的图像用于商业用途吗？",
+          "q": "Dreamifly 梦飞生成的图像用于商业用途吗？",
           "a": "当然，你拥有对生成图形的使用权，不论个人还是商业目的都完全没问题。"
         },
         {
-          "q": "Dreamifly提供哪些模型？",
+          "q": "Dreamifly 梦飞提供哪些模型？",
           "a": "当前接入的模型包括但不限于 Z-Image、Nano Banana2、Grok、wan2.2，以及 HiDream-I1 满血版、Flux.1-Dev 等，并会持续扩展与更新。"
         },
         {
-          "q": "我需要创建一个帐户并登录才能使用 Dreamifly 吗？",
+          "q": "我需要创建一个帐户并登录才能使用 Dreamifly 梦飞 吗？",
           "a": "不，你可以直接使用我们的生图功能。"
         }
       ]
@@ -327,7 +328,7 @@
       "joinGroup": {
         "title": "加入官方QQ群",
         "subtitle": "获取最新模型动态、问题反馈与灵感交流，一起愉快地交流AI绘画吧！",
-        "qrAlt": "Dreamifly QQ群二维码",
+        "qrAlt": "Dreamifly 梦飞 QQ群二维码",
         "cta": "扫码加入"
       },
       "intro": {
@@ -401,7 +402,7 @@
     "cta": "画同款"
   },
   "footer": {
-    "copyright": "Dreamifly 版权所有"
+    "copyright": "Dreamifly 梦飞 版权所有"
   },
   "auth": {
     "login": "登录",
@@ -494,7 +495,7 @@
     "agreeToTerms": "我已阅读并同意",
     "termsAndPrivacy": "《用户协议与隐私政策》",
     "terms": {
-      "title": "Dreamifly 用户协议与隐私政策",
+      "title": "Dreamifly 梦飞 用户协议与隐私政策",
       "close": "我已阅读"
     }
   },

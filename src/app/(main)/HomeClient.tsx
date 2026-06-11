@@ -368,7 +368,7 @@ export default function HomeClient() {
                   </div>
                   <div className="flex flex-col">
                     <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent">
-                      Dreamifly
+                      {t('hero.siteName')}
                     </h2>
                     <p className="text-sm text-gray-700 mt-1">
                       {t('hero.description')}
