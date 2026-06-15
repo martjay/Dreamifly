@@ -90,8 +90,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   const { refreshPoints } = usePoints()
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
+  const promptValueRef = useRef(initialPrompt || '')
   const promptEditedRef = useRef(false)
   const initialPromptKeyRef = useRef(initialPromptKey || '')
+  const [pendingRestoredPrompt, setPendingRestoredPrompt] = useState<string | null>(null)
   const [negativePrompt, setNegativePrompt] = useState('');
   const [width, setWidth] = useState(DEFAULT_IMAGE_WIDTH);
   const [height, setHeight] = useState(DEFAULT_IMAGE_HEIGHT);
@@ -336,16 +338,40 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   }, [authStatus, batch_size]);
 
   useEffect(() => {
+    promptValueRef.current = prompt
+  }, [prompt])
+
+  useEffect(() => {
     const nextPromptKey = initialPromptKey || ''
     if (initialPromptKeyRef.current !== nextPromptKey) {
       initialPromptKeyRef.current = nextPromptKey
       promptEditedRef.current = false
+      setPendingRestoredPrompt(null)
     }
 
     if (!promptEditedRef.current) {
       setPrompt(initialPrompt || '')
+      setPendingRestoredPrompt(null)
+    } else if (initialPrompt?.trim() && promptValueRef.current.trim() !== initialPrompt.trim()) {
+      setPendingRestoredPrompt(initialPrompt)
     }
   }, [initialPrompt, initialPromptKey]);
+
+  useEffect(() => {
+    if (!pendingRestoredPrompt) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPendingRestoredPrompt(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [pendingRestoredPrompt])
 
   useEffect(() => {
     if (initialModel) {
@@ -907,6 +933,14 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
     }
   };
 
+  const applyPendingRestoredPrompt = () => {
+    if (!pendingRestoredPrompt) return
+
+    promptEditedRef.current = true
+    setPrompt(pendingRestoredPrompt)
+    setPromptError(null)
+    setPendingRestoredPrompt(null)
+  }
 
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
   const hideImageRatioSelector = false;
@@ -1696,6 +1730,49 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
                 我知道了
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {pendingRestoredPrompt && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          onClick={() => setPendingRestoredPrompt(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restored-prompt-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 11h8M8 15h5m-7 5h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 id="restored-prompt-title" className="mb-3 text-lg font-semibold text-gray-900">
+              同款提示词已读取
+            </h3>
+            <p className="mb-6 text-sm leading-6 text-gray-600">
+              当前输入框已有内容，是否替换为刚读取到的同款提示词？
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setPendingRestoredPrompt(null)}
+                className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              >
+                保留当前输入
+              </button>
+              <button
+                type="button"
+                onClick={applyPendingRestoredPrompt}
+                className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:from-orange-600 hover:to-amber-600"
+              >
+                使用同款提示词
+              </button>
+            </div>
           </div>
         </div>
       )}
