@@ -19,6 +19,7 @@ import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
 import { getVideoModelDescription, getVideoModelDisplayTags } from '@/utils/videoModelDisplay'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
+import { buildCreatePromptParams } from '@/utils/createPromptTransfer'
 
 interface FAQItem {
   q: string;
@@ -198,9 +199,12 @@ export default function HomeClient() {
             // 使用从数据库获取的图片，确保包含 userAvatar、userNickname、model 和 avatarFrameId
             const dbImages = data.images.map((img: any) => ({
               id: img.id,
+              communityMediaId: img.communityMediaId,
+              sourceMediaId: img.sourceMediaId,
               image: img.image,
               prompt: img.prompt,
               model: img.model || '',
+              mediaType: 'image' as const,
               userAvatar: img.userAvatar || '/images/default-avatar.svg',
               userNickname: img.userNickname || '',
               avatarFrameId: img.avatarFrameId || null,
@@ -224,6 +228,7 @@ export default function HomeClient() {
                   ...work,
                   id: `default-${work.id}-${index}`, // 确保ID唯一
                   model: '默认',
+                  mediaType: 'image' as const,
                   userNickname: '默认',
                 }))
               
@@ -273,21 +278,19 @@ export default function HomeClient() {
     fetchCommunityImages()
   }, [])
 
-  const navigateToCreate = (promptText?: string, modelId?: string) => {
-    const params = new URLSearchParams()
-    if (promptText) {
-      params.set('prompt', promptText)
-    }
-    // 只有当模型ID存在且不是"默认"时才传递模型参数
-    if (modelId && modelId.trim() !== '' && modelId !== '默认') {
-      params.set('model', modelId)
-    }
+  const navigateToCreate = (work: CommunityWork) => {
+    const params = buildCreatePromptParams({
+      communityMediaId: work.communityMediaId,
+      prompt: work.prompt,
+      model: work.model,
+      mediaType: work.mediaType || (work.video ? 'video' : 'image'),
+    })
     const query = params.toString()
     router.push(transferUrl(`/create${query ? `?${query}` : ''}`))
   }
 
-  const handleGenerateSame = (promptText: string, modelId?: string) => {
-    navigateToCreate(promptText, modelId)
+  const handleGenerateSame = (work: CommunityWork) => {
+    navigateToCreate(work)
   };
 
   const handleContactClick = () => {
@@ -596,7 +599,7 @@ export default function HomeClient() {
             <div className="animate-fadeInUp animation-delay-300">
               <CommunityMasonry
                 works={communityWorks}
-                onGenerateSame={(prompt, model) => handleGenerateSame(prompt, model)}
+                onGenerateSame={(work) => handleGenerateSame(work)}
                 onPreview={(img) => setZoomedImage(img)}
                 generateSameText={t('community.generateSame')}
               />

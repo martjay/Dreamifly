@@ -27,6 +27,7 @@ import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel
 interface GenerateSectionProps {
   communityWorks: { prompt: string }[];
   initialPrompt?: string;
+  initialPromptKey?: string;
   initialModel?: string;
   activeTab?: 'generate' | 'video-generation';
   onTabChange?: (tab: 'generate' | 'video-generation') => void;
@@ -81,7 +82,7 @@ function getInputModerationFailureMessage(reason?: string, mediaType: 'image' | 
   return '内容未通过审核，请调整后重试'
 }
 
-const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
+const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
   const t = createScopedT('home.generate')
   const tHome = createScopedT('home')
   const router = useRouter()
@@ -89,6 +90,8 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const { refreshPoints } = usePoints()
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
+  const promptEditedRef = useRef(false)
+  const initialPromptKeyRef = useRef(initialPromptKey || '')
   const [negativePrompt, setNegativePrompt] = useState('');
   const [width, setWidth] = useState(DEFAULT_IMAGE_WIDTH);
   const [height, setHeight] = useState(DEFAULT_IMAGE_HEIGHT);
@@ -333,8 +336,16 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   }, [authStatus, batch_size]);
 
   useEffect(() => {
-    setPrompt(initialPrompt || '');
-  }, [initialPrompt]);
+    const nextPromptKey = initialPromptKey || ''
+    if (initialPromptKeyRef.current !== nextPromptKey) {
+      initialPromptKeyRef.current = nextPromptKey
+      promptEditedRef.current = false
+    }
+
+    if (!promptEditedRef.current) {
+      setPrompt(initialPrompt || '')
+    }
+  }, [initialPrompt, initialPromptKey]);
 
   useEffect(() => {
     if (initialModel) {
@@ -594,6 +605,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       setIsOptimizing(true);
       
       finalPrompt = await optimizePrompt(prompt);
+      promptEditedRef.current = true
       setPrompt(finalPrompt); // 更新UI显示优化后的prompt
       setIsOptimizing(false);
     } 
@@ -870,6 +882,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const handleRandomPrompt = () => {
     if (communityWorks.length === 0) return;
     const randomIndex = Math.floor(Math.random() * communityWorks.length);
+    promptEditedRef.current = true
     setPrompt(communityWorks[randomIndex].prompt);
   };
 
@@ -884,6 +897,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     setIsOptimizing(true);
     try {
       const optimizedPrompt = await optimizePrompt(prompt, model);
+      promptEditedRef.current = true
       setPrompt(optimizedPrompt);
     } catch (error) {
       console.error('Failed to optimize prompt:', error);
@@ -1186,6 +1200,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 <PromptInput
                   prompt={prompt}
                   setPrompt={(value) => {
+                    promptEditedRef.current = true
                     setPrompt(value)
                     if (value.trim()) {
                       setPromptError(null)

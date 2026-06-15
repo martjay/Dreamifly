@@ -110,7 +110,8 @@ export async function GET(request: NextRequest) {
 
     const recentImages = await db
       .select({
-        id: communityMedia.sourceMediaId,
+        communityMediaId: communityMedia.id,
+        sourceMediaId: communityMedia.sourceMediaId,
         imageUrl: communityMedia.mediaUrl,
         prompt: communityMedia.prompt,
         model: communityMedia.model,
@@ -184,7 +185,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       images: selectedImages.map((img) => ({
-        id: img.id, // 使用数据库中的实际ID
+        id: img.sourceMediaId, // 保持原有字段语义，避免影响举报等来源作品逻辑
+        communityMediaId: img.communityMediaId,
+        sourceMediaId: img.sourceMediaId,
         image: img.imageUrl,
         prompt: img.prompt || '',
         model: img.model || '',

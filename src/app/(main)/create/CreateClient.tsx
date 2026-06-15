@@ -11,6 +11,7 @@ import { transferUrl } from '@/utils/locale'
 import community from '../communityWorks'
 import videoCommunityWorks from '../videoCommunityWorks'
 import { useSession } from '@/lib/auth-client'
+import { buildCreatePromptParams, readPromptDraft } from '@/utils/createPromptTransfer'
 
 export default function CreateClient() {
   const COMMUNITY_SHOWCASE_LIMIT = 6
@@ -29,12 +30,95 @@ export default function CreateClient() {
     setActiveTab(newTab)
   }, [searchParams])
 
-  const initialPrompt = useMemo(() => {
-    return searchParams.get('prompt') || ''
+  const initialPromptKey = useMemo(() => {
+    const source = searchParams.get('source')
+    const id = searchParams.get('id')
+    const draft = searchParams.get('draft')
+    const prompt = searchParams.get('prompt')
+
+    if (source === 'community' && id) return `community:${id}`
+    if (draft) return `draft:${draft}`
+    if (prompt) return `prompt:${prompt}`
+    return ''
   }, [searchParams])
 
-  const initialModel = useMemo(() => {
-    return searchParams.get('model') || ''
+  const [initialPrompt, setInitialPrompt] = useState(() => searchParams.get('prompt') || '')
+  const [initialModel, setInitialModel] = useState(() => searchParams.get('model') || '')
+  const [promptRestoreMessage, setPromptRestoreMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const source = searchParams.get('source')
+    const id = searchParams.get('id')
+    const draft = searchParams.get('draft')
+    const promptParam = searchParams.get('prompt') || ''
+    const modelParam = searchParams.get('model') || ''
+
+    setInitialModel(modelParam)
+    setPromptRestoreMessage(null)
+
+    if (source === 'community' && id) {
+      const controller = new AbortController()
+      setInitialPrompt('')
+
+      const restoreCommunityPrompt = async () => {
+        try {
+          const response = await fetch(`/api/community/media/${encodeURIComponent(id)}`, {
+            signal: controller.signal,
+          })
+          const data = await response.json()
+
+          if (controller.signal.aborted) return
+
+          if (!response.ok || !data.success) {
+            setPromptRestoreMessage(data.error || '作品信息不可用，请重新输入提示词')
+            return
+          }
+
+          const item = data.item || {}
+          setInitialPrompt(item.prompt || '')
+
+          if (!modelParam && item.model) {
+            setInitialModel(item.model)
+          }
+
+          if (item.mediaType === 'video') {
+            setActiveTab('video-generation')
+          }
+        } catch (error) {
+          if (controller.signal.aborted) return
+          console.error('Failed to restore community prompt:', error)
+          setPromptRestoreMessage('暂时无法读取同款提示词，请稍后重试')
+        }
+      }
+
+      restoreCommunityPrompt()
+
+      return () => controller.abort()
+    }
+
+    if (draft) {
+      const result = readPromptDraft(draft)
+
+      if (result.status === 'found') {
+        setInitialPrompt(result.draft.prompt)
+        if (!modelParam && result.draft.model) {
+          setInitialModel(result.draft.model)
+        }
+        if (result.draft.tab === 'video' || result.draft.mediaType === 'video') {
+          setActiveTab('video-generation')
+        }
+      } else {
+        setInitialPrompt('')
+        setPromptRestoreMessage(
+          result.status === 'expired'
+            ? '同款内容已过期，请重新点击画同款'
+            : '同款内容不可用，请重新输入提示词'
+        )
+      }
+      return
+    }
+
+    setInitialPrompt(promptParam)
   }, [searchParams])
   
   // 社区作品数据状态
@@ -50,6 +134,7 @@ export default function CreateClient() {
       video: work.video, // 添加视频字段
       prompt: work.prompt,
       model: '视频生成',
+      mediaType: 'video',
       userAvatar: '/images/default-avatar.svg',
       userNickname: '默认',
       avatarFrameId: null,
@@ -74,9 +159,12 @@ export default function CreateClient() {
             // 使用从数据库获取的图片，确保包含 userAvatar、userNickname、model 和 avatarFrameId
             const dbImages: CommunityWork[] = data.images.map((img: any) => ({
               id: img.id,
+              communityMediaId: img.communityMediaId,
+              sourceMediaId: img.sourceMediaId,
               image: img.image,
               prompt: img.prompt,
               model: img.model || '',
+              mediaType: 'image',
               userAvatar: img.userAvatar || '/images/default-avatar.svg',
               userNickname: img.userNickname || '',
               avatarFrameId: img.avatarFrameId || null,
@@ -100,6 +188,7 @@ export default function CreateClient() {
                   ...work,
                   id: `default-${work.id}-${index}`, // 确保ID唯一
                   model: '默认',
+                  mediaType: 'image',
                   userNickname: '默认',
                 }))
               
@@ -175,17 +264,15 @@ export default function CreateClient() {
     }
   }
 
-  const navigateToCreate = async (promptText?: string, modelId?: string, imageUrl?: string) => {
-    const params = new URLSearchParams()
-    if (promptText) params.set('prompt', promptText)
-    // 只有当模型ID存在且不是"默认"时才传递模型参数
-    if (modelId && modelId.trim() !== '' && modelId !== '默认') {
-      params.set('model', modelId)
-    }
-    // 如果当前是视频生成模式，保持tab参数
-    if (activeTab === 'video-generation') {
-      params.set('tab', 'video')
-    }
+  const navigateToCreate = async (work: CommunityWork, imageUrl?: string) => {
+    const mediaType = work.mediaType || (work.video || activeTab === 'video-generation' ? 'video' : 'image')
+    const params = buildCreatePromptParams({
+      communityMediaId: work.communityMediaId,
+      prompt: work.prompt,
+      model: work.model,
+      mediaType,
+      tab: activeTab === 'video-generation' ? 'video' : undefined,
+    })
     const query = params.toString()
     router.push(transferUrl(`/create${query ? `?${query}` : ''}`))
 
@@ -195,7 +282,7 @@ export default function CreateClient() {
       if (base64) {
         sessionStorage.setItem('videoReferenceImage', base64)
         // 触发自定义事件，通知GenerateSection
-        window.dispatchEvent(new CustomEvent('videoReferenceImageReady', { detail: { base64, prompt: promptText } }))
+        window.dispatchEvent(new CustomEvent('videoReferenceImageReady', { detail: { base64, prompt: work.prompt } }))
       }
     }
 
@@ -252,9 +339,17 @@ export default function CreateClient() {
       )}
 
       <main className="transition-all duration-300 mx-auto lg:pl-40 pt-10 sm:pt-8 lg:pt-2 lg:mt-0">
+        {promptRestoreMessage && (
+          <div className="mx-auto mb-4 max-w-[1260px] px-3 sm:px-5">
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800 shadow-sm">
+              {promptRestoreMessage}
+            </div>
+          </div>
+        )}
         <GenerateSection
           communityWorks={activeTab === 'video-generation' ? videoWorks : communityWorks}
           initialPrompt={initialPrompt}
+          initialPromptKey={initialPromptKey}
           initialModel={initialModel}
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -309,7 +404,7 @@ export default function CreateClient() {
             <div className="animate-fadeInUp animation-delay-300">
               <CommunityMasonry
                 works={activeTab === 'video-generation' ? videoWorks : communityWorks}
-                onGenerateSame={(prompt, model, imageUrl) => navigateToCreate(prompt, model, imageUrl)}
+                onGenerateSame={(work, imageUrl) => navigateToCreate(work, imageUrl)}
                 onPreview={(img) => setZoomedImage(img)}
                 generateSameText={t('community.generateSame')}
               />

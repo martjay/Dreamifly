@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createScopedT } from '@/lib/strings'
 import CommunityFeedGrid, { type CommunityFeedItem } from '@/components/community/CommunityFeedGrid'
 import { transferUrl } from '@/utils/locale'
+import { buildCreatePromptParams } from '@/utils/createPromptTransfer'
 
 type TagRecommendation = {
   id: number | string
@@ -103,14 +104,12 @@ export default function CommunityPageClient() {
 
   const handleGenerateSame = useCallback(
     (item: CommunityFeedItem) => {
-      const params = new URLSearchParams()
-      const prompt = item.prompt.trim()
-      const model = item.model.trim()
-
-      if (prompt) params.set('prompt', prompt)
-      if (model) params.set('model', model)
-      if (item.mediaType === 'video') params.set('tab', 'video')
-
+      const params = buildCreatePromptParams({
+        communityMediaId: item.id,
+        prompt: item.prompt,
+        model: item.model,
+        mediaType: item.mediaType,
+      })
       const query = params.toString()
       router.push(transferUrl(`/create${query ? `?${query}` : ''}`))
     },

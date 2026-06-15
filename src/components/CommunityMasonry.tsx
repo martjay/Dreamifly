@@ -9,9 +9,12 @@ import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 
 export type CommunityWork = {
   id: string | number
+  communityMediaId?: string
+  sourceMediaId?: string
   image: string
   prompt: string
   model?: string
+  mediaType?: 'image' | 'video'
   userAvatar?: string
   userNickname?: string
   avatarFrameId?: string | number | null
@@ -41,7 +44,7 @@ export default function CommunityMasonry({
   generateSameText,
 }: {
   works: CommunityWork[]
-  onGenerateSame: (prompt: string, model?: string, imageUrl?: string) => void
+  onGenerateSame: (work: CommunityWork, imageUrl?: string) => void
   onPreview?: (imageUrl: string) => void
   generateSameText: string
 }) {
@@ -399,7 +402,7 @@ export default function CommunityMasonry({
                           e.stopPropagation()
                           // 传递图片URL以便自动上传
                           const imageUrl = work.video ? work.image : getDisplayUrl(work.image)
-                          onGenerateSame(work.prompt, model, imageUrl)
+                          onGenerateSame(work, imageUrl)
                         }}
                         className="mt-2.5 sm:mt-5 w-full rounded-xl sm:rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 px-2.5 py-1.5 sm:px-4 sm:py-3 text-[11px] sm:text-sm font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:from-orange-400 hover:to-amber-400 active:scale-[0.99]"
                       >
