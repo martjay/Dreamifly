@@ -182,6 +182,18 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
   }
 
+  const handleImageModelChange = (nextModel: string) => {
+    setModel(nextModel)
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.delete('tab')
+    params.set('model', nextModel)
+    const query = params.toString()
+    router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
+  }
+
   // 监听视频参考图片就绪事件
   useEffect(() => {
     const handleVideoReferenceImageReady = (event: CustomEvent) => {
@@ -1211,7 +1223,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         batch_size={batch_size}
                         setBatchSize={setBatchSize}
                         model={model}
-                        setModel={setModel}
+                        setModel={handleImageModelChange}
                         status={authStatus}
                         promptRef={promptRef}
                         communityWorks={communityWorks}
@@ -1255,7 +1267,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     batch_size={batch_size}
                     setBatchSize={setBatchSize}
                     model={model}
-                    setModel={setModel}
+                    setModel={handleImageModelChange}
                     status={authStatus}
                     promptRef={promptRef}
                     communityWorks={communityWorks}
