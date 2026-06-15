@@ -1736,15 +1736,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
 
       {pendingRestoredPrompt && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
-          onClick={() => setPendingRestoredPrompt(null)}
+          className="pointer-events-none fixed left-0 right-0 top-4 z-[80] flex justify-center px-4 sm:top-6"
         >
           <div
             role="dialog"
-            aria-modal="true"
             aria-labelledby="restored-prompt-title"
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
+            className="pointer-events-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-orange-100"
+            style={{ animation: 'slideDown 0.22s ease-out forwards' }}
           >
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-orange-600">
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
