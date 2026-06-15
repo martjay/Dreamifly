@@ -11,7 +11,7 @@ import { transferUrl } from '@/utils/locale'
 import community from '../communityWorks'
 import videoCommunityWorks from '../videoCommunityWorks'
 import { useSession } from '@/lib/auth-client'
-import { buildCreatePromptParams, readPromptDraft } from '@/utils/createPromptTransfer'
+import { buildCreatePromptParams, readCreatePageDraft, readPromptDraft } from '@/utils/createPromptTransfer'
 
 export default function CreateClient() {
   const COMMUNITY_SHOWCASE_LIMIT = 6
@@ -52,9 +52,30 @@ export default function CreateClient() {
     const draft = searchParams.get('draft')
     const promptParam = searchParams.get('prompt') || ''
     const modelParam = searchParams.get('model') || ''
+    const promptEdited = searchParams.get('promptEdited') === '1'
 
     setInitialModel(modelParam)
     setPromptRestoreMessage(null)
+
+    if (initialPromptKey) {
+      const pageDraftResult = readCreatePageDraft(initialPromptKey)
+
+      if (pageDraftResult.status === 'found') {
+        setInitialPrompt(pageDraftResult.draft.prompt)
+        if (!modelParam && pageDraftResult.draft.model) {
+          setInitialModel(pageDraftResult.draft.model)
+        }
+        if (pageDraftResult.draft.tab === 'video' || pageDraftResult.draft.mediaType === 'video') {
+          setActiveTab('video-generation')
+        }
+        return
+      }
+    }
+
+    if (promptEdited) {
+      setInitialPrompt('')
+      return
+    }
 
     if (source === 'community' && id) {
       const controller = new AbortController()
@@ -119,7 +140,7 @@ export default function CreateClient() {
     }
 
     setInitialPrompt(promptParam)
-  }, [searchParams])
+  }, [searchParams, initialPromptKey])
   
   // 社区作品数据状态
   const [communityWorks, setCommunityWorks] = useState<CommunityWork[]>(

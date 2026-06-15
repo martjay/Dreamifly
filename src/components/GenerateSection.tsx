@@ -1,5 +1,5 @@
 import { createScopedT } from '@/lib/strings'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import GenerateForm from './GenerateForm'
@@ -16,6 +16,7 @@ import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS
 import { usePoints } from '@/contexts/PointsContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
+import { saveCreatePageDraft } from '@/utils/createPromptTransfer'
 import {
   calculateVideoLayoutForAspectRatio,
   getVideoModelById,
@@ -116,6 +117,31 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const activeTab = externalActiveTab || 'generate';
+  const markPromptEditedInUrl = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('promptEdited') === '1') return
+
+    params.set('promptEdited', '1')
+    const query = params.toString()
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+    )
+  }, [])
+  const savePromptDraft = useCallback((nextPrompt: string, nextModel = model) => {
+    if (!initialPromptKey) return
+
+    markPromptEditedInUrl()
+    saveCreatePageDraft(initialPromptKey, {
+      prompt: nextPrompt,
+      model: nextModel,
+      mediaType: activeTab === 'video-generation' ? 'video' : 'image',
+      tab: activeTab === 'video-generation' ? 'video' : 'generate',
+    })
+  }, [activeTab, initialPromptKey, markPromptEditedInUrl, model])
   // 视频生成相关状态
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoNegativePrompt, setVideoNegativePrompt] = useState('');
@@ -177,6 +203,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
 
   const handleVideoModelChange = (nextModel: string) => {
     setVideoModel(nextModel)
+    // 模型切换也标记为已编辑，并保存页面草稿
+    promptEditedRef.current = true
+    savePromptDraft(promptValueRef.current, nextModel)
 
     if (typeof window === 'undefined') return
 
@@ -189,6 +218,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
 
   const handleImageModelChange = (nextModel: string) => {
     setModel(nextModel)
+    // 模型切换也标记为已编辑，并保存页面草稿
+    promptEditedRef.current = true
+    savePromptDraft(promptValueRef.current, nextModel)
 
     if (typeof window === 'undefined') return
 
@@ -339,7 +371,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
 
   useEffect(() => {
     promptValueRef.current = prompt
-  }, [prompt])
+    if (promptEditedRef.current) {
+      savePromptDraft(prompt)
+    }
+  }, [prompt, savePromptDraft])
+
+  useEffect(() => {
+    const saveBeforeUnload = () => {
+      if (promptEditedRef.current) {
+        savePromptDraft(promptValueRef.current)
+      }
+    }
+
+    window.addEventListener('pagehide', saveBeforeUnload)
+
+    return () => {
+      window.removeEventListener('pagehide', saveBeforeUnload)
+    }
+  }, [savePromptDraft])
 
   useEffect(() => {
     const nextPromptKey = initialPromptKey || ''
@@ -633,6 +682,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
       finalPrompt = await optimizePrompt(prompt);
       promptEditedRef.current = true
       setPrompt(finalPrompt); // 更新UI显示优化后的prompt
+      savePromptDraft(finalPrompt)
       setIsOptimizing(false);
     } 
     
@@ -908,8 +958,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   const handleRandomPrompt = () => {
     if (communityWorks.length === 0) return;
     const randomIndex = Math.floor(Math.random() * communityWorks.length);
+    const nextPrompt = communityWorks[randomIndex].prompt
     promptEditedRef.current = true
-    setPrompt(communityWorks[randomIndex].prompt);
+    setPrompt(nextPrompt);
+    savePromptDraft(nextPrompt)
   };
 
   const handleOptimizePrompt = async () => {
@@ -925,6 +977,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
       const optimizedPrompt = await optimizePrompt(prompt, model);
       promptEditedRef.current = true
       setPrompt(optimizedPrompt);
+      savePromptDraft(optimizedPrompt)
     } catch (error) {
       console.error('Failed to optimize prompt:', error);
       // 可以在这里添加错误提示
@@ -938,6 +991,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
 
     promptEditedRef.current = true
     setPrompt(pendingRestoredPrompt)
+    savePromptDraft(pendingRestoredPrompt)
     setPromptError(null)
     setPendingRestoredPrompt(null)
   }
@@ -1236,6 +1290,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
                   setPrompt={(value) => {
                     promptEditedRef.current = true
                     setPrompt(value)
+                    savePromptDraft(value)
                     if (value.trim()) {
                       setPromptError(null)
                     }
