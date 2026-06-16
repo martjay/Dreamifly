@@ -58,19 +58,23 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     e.preventDefault()
     setError('')
     setSuccess('')
+    const normalizedEmail = email.trim().toLowerCase()
 
     // Validation
-    if (!email) {
+    if (!normalizedEmail) {
       setError(t('error.emailRequired'))
       return
     }
-    if (!validateEmail(email)) {
+    if (!validateEmail(normalizedEmail)) {
       setError(t('error.invalidEmail'))
       return
     }
+    if (normalizedEmail !== email) {
+      setEmail(normalizedEmail)
+    }
 
     // 特殊验证163邮箱：只允许纯数字+@163.com（仅在注册时验证）
-    if (mode === 'register' && !validate163Email(email)) {
+    if (mode === 'register' && !validate163Email(normalizedEmail)) {
       setError(t('error.163EmailNotAllowed'))
       return
     }
@@ -112,7 +116,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     try {
       if (mode === 'login') {
         const result = await signIn.email({
-          email,
+          email: normalizedEmail,
           password,
         })
 
@@ -148,7 +152,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           // 获取动态token（使用服务器时间）
           const token = await generateDynamicTokenWithServerTime()
           
-          const validateResponse = await fetch(`/api/auth/validate-email-domain?email=${encodeURIComponent(email)}`, {
+          const validateResponse = await fetch(`/api/auth/validate-email-domain?email=${encodeURIComponent(normalizedEmail)}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -189,7 +193,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               'Authorization': `Bearer ${registerToken}`
             },
             body: JSON.stringify({
-              email,
+              email: normalizedEmail,
               password,
               name: normalizeDisplayName(nickname),
               image: '/images/default-avatar.svg',
@@ -273,7 +277,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         }
       } else if (mode === 'reset') {
         const result = await forgetPassword({
-          email,
+          email: normalizedEmail,
           redirectTo: '/reset-password',
         })
 
@@ -297,10 +301,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     }
   }
 
+  const switchMode = (nextMode: 'login' | 'register' | 'reset') => {
+    setMode(nextMode)
+    setError('')
+    setSuccess('')
+  }
+
   const handleResendVerification = async () => {
-    if (!email) {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
       setError(t('error.emailRequired'))
       return
+    }
+    if (normalizedEmail !== email) {
+      setEmail(normalizedEmail)
     }
 
     setLoading(true)
@@ -309,7 +324,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
 
     try {
       const result = await sendVerificationEmail({
-        email,
+        email: normalizedEmail,
         callbackURL: '/',
       })
       
@@ -585,7 +600,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             <div className="text-right">
               <button
                 type="button"
-                onClick={() => setMode('reset')}
+                onClick={() => switchMode('reset')}
                 className="text-sm text-orange-500 hover:text-orange-600 transition-colors"
               >
                 {t('forgotPassword')}
@@ -625,7 +640,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             <p className="text-gray-600">
               {t('noAccount')}{' '}
               <button
-                onClick={() => setMode('register')}
+                type="button"
+                onClick={() => switchMode('register')}
                 className="text-orange-500 hover:text-orange-600 font-semibold transition-colors"
               >
                 {t('signUpNow')}
@@ -636,7 +652,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             <p className="text-gray-600">
               {t('hasAccount')}{' '}
               <button
-                onClick={() => setMode('login')}
+                type="button"
+                onClick={() => switchMode('login')}
                 className="text-orange-500 hover:text-orange-600 font-semibold transition-colors"
               >
                 {t('signInNow')}
@@ -645,7 +662,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           )}
           {mode === 'reset' && (
             <button
-              onClick={() => setMode('login')}
+              type="button"
+              onClick={() => switchMode('login')}
               className="text-orange-500 hover:text-orange-600 font-semibold transition-colors"
             >
               {t('backToLogin')}

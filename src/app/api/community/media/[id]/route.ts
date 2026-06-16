@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { headers } from 'next/headers'
 import { eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { communityMedia, user } from '@/db/schema'
-import { auth } from '@/lib/auth'
+import { communityMedia } from '@/db/schema'
 
 const I2I_MODELS = ['Qwen-Image-Edit', 'Flux-Kontext']
 const PUBLIC_USER_ROLES = ['premium', 'oldUser', 'regular']
@@ -26,45 +24,11 @@ function containsCommunityBlockWords(text: string, words: string[]) {
   })
 }
 
-async function checkCommunityAccess() {
-  const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC !== 'false'
-  if (isPublic) return null
-
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  })
-
-  if (!session?.user) {
-    return NextResponse.json(
-      { success: false, code: 'unauthorized', error: '未授权，请先登录' },
-      { status: 401 }
-    )
-  }
-
-  const currentUser = await db
-    .select({ isAdmin: user.isAdmin })
-    .from(user)
-    .where(eq(user.id, session.user.id))
-    .limit(1)
-
-  if (currentUser.length === 0 || !currentUser[0].isAdmin) {
-    return NextResponse.json(
-      { success: false, code: 'forbidden', error: '无权限访问，需要管理员权限' },
-      { status: 403 }
-    )
-  }
-
-  return null
-}
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const accessError = await checkCommunityAccess()
-    if (accessError) return accessError
-
     const { id } = await params
     const mediaId = id?.trim()
 

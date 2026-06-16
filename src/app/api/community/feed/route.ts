@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { communityMedia, user } from '@/db/schema'
-import { and, desc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm'
+import { communityMedia } from '@/db/schema'
+import { and, desc, inArray, isNull, notInArray, or } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import {
@@ -32,37 +32,6 @@ function containsCommunityBlockWords(text: string, words: string[]): boolean {
   })
 }
 
-async function checkCommunityAccess() {
-  const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC !== 'false'
-  if (isPublic) return null
-
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  })
-
-  if (!session?.user) {
-    return NextResponse.json(
-      { success: false, error: '未授权，请先登录' },
-      { status: 401 }
-    )
-  }
-
-  const currentUser = await db
-    .select({ isAdmin: user.isAdmin })
-    .from(user)
-    .where(eq(user.id, session.user.id))
-    .limit(1)
-
-  if (currentUser.length === 0 || !currentUser[0].isAdmin) {
-    return NextResponse.json(
-      { success: false, error: '无权限访问，需要管理员权限' },
-      { status: 403 }
-    )
-  }
-
-  return null
-}
-
 type CommunityFeedItem = {
   id: string
   sourceMediaId: string
@@ -84,9 +53,6 @@ function scoreHotness(item: CommunityFeedItem, tagCount: number) {
 export async function GET(request: NextRequest) {
   try {
     const requestHeaders = await headers()
-    const accessError = await checkCommunityAccess()
-    if (accessError) return accessError
-
     const session = await auth.api.getSession({
       headers: requestHeaders,
     })

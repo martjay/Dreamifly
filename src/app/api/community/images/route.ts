@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { communityMedia, user } from '@/db/schema'
-import { desc, or, and, isNull, inArray, eq, notInArray } from 'drizzle-orm'
-import { auth } from '@/lib/auth'
-import { headers } from 'next/headers'
+import { communityMedia } from '@/db/schema'
+import { desc, or, and, isNull, inArray, notInArray } from 'drizzle-orm'
 
 /**
  * 获取社区展示图片
@@ -12,10 +10,6 @@ import { headers } from 'next/headers'
  * 排除图生图模型（Qwen-Image-Edit、Flux-Kontext）
  * 排除视频类型，只展示图片
  * 根据屏蔽词列表过滤提示词中包含屏蔽词的图片
- *
- * 访问控制：
- * - 如果环境变量 COMMUNITY_IMAGES_PUBLIC 为 false，则只对管理员开放
- * - 未设置或为其他值时，对所有用户开放
  *
  * 屏蔽词配置：
  * - 直接在代码中配置 JSON 数组
@@ -62,45 +56,11 @@ function containsCommunityBlockWords(text: string, words: string[]): boolean {
 }
 export async function GET(request: NextRequest) {
   try {
-    const headersList = await headers()
     const requestedLimit = Number(request.nextUrl.searchParams.get('limit') || '')
     const displayLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.min(Math.floor(requestedLimit), 24)
       : 12
 
-    // 默认公开，只有显式配置为 false 时才限制为管理员可见
-    const isPublic = process.env.COMMUNITY_IMAGES_PUBLIC !== 'false'
-
-    if (!isPublic) {
-      const session = await auth.api.getSession({
-        headers: headersList
-      })
-
-      if (!session?.user) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: '未授权，请先登录'
-          },
-          { status: 401 }
-        )
-      }
-
-      const currentUser = await db.select()
-        .from(user)
-        .where(eq(user.id, session.user.id))
-        .limit(1)
-
-      if (currentUser.length === 0 || !currentUser[0].isAdmin) {
-        return NextResponse.json(
-          { 
-            success: false,
-            error: '无权限访问，需要管理员权限' 
-          },
-          { status: 403 }
-        )
-      }
-    }
     // 获取最近600张已发布社区图片（按创建时间降序）
     // 通过 community_media 表中的 userRole 字段过滤掉管理员和付费用户
     // 只选择：premium（优质用户）、oldUser（首批用户）、regular（普通用户）或 null（旧数据）
