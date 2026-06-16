@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { communityMedia } from '@/db/schema'
-import { and, desc, inArray, isNull, notInArray, or } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import {
