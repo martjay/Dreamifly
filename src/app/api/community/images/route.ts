@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { communityMedia } from '@/db/schema'
-import { desc, or, and, isNull, inArray, notInArray } from 'drizzle-orm'
+import { desc, or, and, eq, isNull, inArray, notInArray } from 'drizzle-orm'
 
 /**
  * 获取社区展示图片
