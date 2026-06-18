@@ -145,7 +145,7 @@ OSS_BUCKET=xxx
 # OSS 访问的 Endpoint（访问域名或节点地址）
 OSS_ENDPOINT=https://xxx.xxx.com
 
-# 头像审核 API 配置（可选）
+# 头像审核 API 配置（必填，未配置会拒绝头像上传）
 AVATAR_MODERATION_BASE_URL='https://your-moderation-api.com/v1'
 AVATAR_MODERATION_API_KEY='your-api-key'
 AVATAR_MODERATION_MODEL='Qwen/Qwen3-VL-8B-Instruct-FP8'
@@ -157,7 +157,7 @@ AVATAR_MODERATION_PROMPT='请判断图片的内容与文字是否可以在公共
 > - API 地址需支持 CORS 且开放 `/prompt` 接口
 > - 至少配置一个模型 URL 即可开始使用
 > - **提示词优化**：优先使用 `PROMPT_OPTIMIZATION_*` 环境变量，如果未设置则回退到 `OPEN_AI_API`（向后兼容）
-> - **头像审核**：如果未配置 `AVATAR_MODERATION_BASE_URL`，则跳过头像审核直接上传
+> - **头像审核**：头像上传必须配置 `AVATAR_MODERATION_BASE_URL`，审核未通过或审核服务不可用时会拒绝上传
 
 ### 4. 初始化数据库
 

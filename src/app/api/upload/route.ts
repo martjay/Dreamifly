@@ -65,33 +65,35 @@ export async function POST(request: Request) {
     const moderationPrompt = process.env.AVATAR_MODERATION_PROMPT || 
       '请判断图片的内容与文字是否可以在公共场所展示，评判标准包括但不限于不应该包含"黄色"、"血腥"、"过于夸张的暴力场景"，你只需输出是或者否即可'
 
-    // 如果配置了审核服务，则进行审核
-    if (moderationBaseUrl) {
-      try {
-        const isApproved = await moderateAvatar(
-          buffer,
-          file.name,
-          moderationBaseUrl,
-          moderationApiKey,
-          moderationModel,
-          moderationPrompt
-        )
+    if (!moderationBaseUrl?.trim()) {
+      return NextResponse.json(
+        { error: '头像审核服务未配置，暂时无法上传头像' },
+        { status: 503 }
+      )
+    }
 
-        if (!isApproved) {
-          return NextResponse.json(
-            { error: '头像审核未通过，请上传符合规范的图片' },
-            { status: 400 }
-          )
-        }
-      } catch (error) {
-        console.error('头像审核过程出错:', error)
-        // 审核服务出错时，可以选择阻止上传或允许上传
-        // 这里选择阻止上传以确保安全
+    try {
+      const isApproved = await moderateAvatar(
+        buffer,
+        file.name,
+        moderationBaseUrl,
+        moderationApiKey,
+        moderationModel,
+        moderationPrompt
+      )
+
+      if (!isApproved) {
         return NextResponse.json(
-          { error: '头像审核服务暂时不可用，请稍后重试' },
-          { status: 503 }
+          { error: '头像审核未通过，请上传符合规范的图片' },
+          { status: 400 }
         )
       }
+    } catch (error) {
+      console.error('头像审核过程出错:', error)
+      return NextResponse.json(
+        { error: '头像审核服务暂时不可用，请稍后重试' },
+        { status: 503 }
+      )
     }
 
     // 审核通过后，删除旧头像（如果存在）

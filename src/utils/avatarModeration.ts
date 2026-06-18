@@ -110,14 +110,14 @@ export async function moderateAvatar(
       return false
     }
     
-    // 判断是否通过审核（返回"是"或包含"通过"等关键词表示通过）
-    if (result === '是' || result === 'yes' || result.includes('通过') || result.includes('pass')) {
-      return true
-    }
-    
     // 返回"否"或包含"不通过"等关键词表示不通过
     if (result === '否' || result === 'no' || result.includes('不通过') || result.includes('fail')) {
       return false
+    }
+
+    // 判断是否通过审核（返回"是"或包含"通过"等关键词表示通过）
+    if (result === '是' || result === 'yes' || result.includes('通过') || result.includes('pass')) {
+      return true
     }
 
     // 如果结果不明确，默认不通过（安全起见）

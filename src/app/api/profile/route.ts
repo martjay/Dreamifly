@@ -5,6 +5,36 @@ import { user } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { isDisplayNameWithinLimit, normalizeDisplayName } from '@/utils/displayName';
 
+function getConfiguredOssHost(): string | null {
+  const endpoint = process.env.OSS_ENDPOINT?.trim();
+  if (!endpoint) return null;
+
+  try {
+    return new URL(endpoint.startsWith('http') ? endpoint : `https://${endpoint}`).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedAvatarUrl(avatar: string, currentAvatar?: string | null): boolean {
+  if (avatar === currentAvatar) return true;
+  if (avatar === '/images/default-avatar.svg') return true;
+  if (avatar.startsWith('/images/')) return true;
+
+  try {
+    const avatarUrl = new URL(avatar);
+    const ossHost = getConfiguredOssHost();
+    const bucket = process.env.OSS_BUCKET?.trim();
+    const hostAllowed =
+      Boolean(ossHost && avatarUrl.hostname === ossHost) ||
+      Boolean(ossHost && bucket && avatarUrl.hostname === `${bucket}.${ossHost}`);
+
+    return hostAllowed && avatarUrl.pathname.startsWith('/avatars/');
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 验证用户身份
@@ -40,7 +70,21 @@ export async function POST(request: NextRequest) {
       updateData.nickname = normalizedNickname;
     }
     if (avatar !== undefined) {
-      updateData.avatar = avatar;
+      const currentUser = await db
+        .select({ avatar: user.avatar })
+        .from(user)
+        .where(eq(user.id, session.user.id))
+        .limit(1);
+      const currentAvatar = currentUser[0]?.avatar;
+
+      if (typeof avatar !== 'string' || !avatar.trim() || !isAllowedAvatarUrl(avatar.trim(), currentAvatar)) {
+        return NextResponse.json(
+          { error: '头像地址无效，请重新上传头像' },
+          { status: 400 }
+        );
+      }
+
+      updateData.avatar = avatar.trim();
     }
     if (avatarFrameId !== undefined) {
       // 如果avatarFrameId为null，直接设置为null
