@@ -12,11 +12,15 @@ interface PointsContextType {
 const PointsContext = createContext<PointsContextType | undefined>(undefined)
 
 export function PointsProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession()
+  const { data: session, isPending: sessionLoading } = useSession()
   const [pointsBalance, setPointsBalance] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   const refreshPoints = async () => {
+    if (sessionLoading) {
+      return
+    }
+
     if (!session?.user) {
       setPointsBalance(null)
       return
@@ -40,7 +44,7 @@ export function PointsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshPoints()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user])
+  }, [session?.user, sessionLoading])
 
   return (
     <PointsContext.Provider value={{ pointsBalance, isLoading, refreshPoints }}>

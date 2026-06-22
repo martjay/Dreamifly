@@ -19,20 +19,24 @@ interface AvatarContextType {
 const AvatarContext = createContext<AvatarContextType | undefined>(undefined)
 
 export function AvatarProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession()
+  const { data: session, isPending: sessionLoading } = useSession()
   const [avatar, setAvatar] = useState('/images/default-avatar.svg')
   const [nickname, setNickname] = useState('')
   const [avatarFrameId, setAvatarFrameId] = useState<number | null>(null)
 
   // 监听session变化，更新头像、昵称和头像框
   useEffect(() => {
+    if (sessionLoading) {
+      return
+    }
+
     if (session?.user) {
       const user = session.user as ExtendedUser
       setAvatar(user.avatar || '/images/default-avatar.svg')
       setNickname(user.nickname || user.name || '')
       setAvatarFrameId(user.avatarFrameId ?? null)
     }
-  }, [session?.user])
+  }, [session?.user, sessionLoading])
 
   // 更新头像的方法
   const updateAvatar = (newAvatar: string) => {
