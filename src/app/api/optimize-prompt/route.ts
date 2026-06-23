@@ -56,7 +56,7 @@ function modelSupportsChinese(modelId: string | undefined): boolean {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  let optimizationModel = process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8';
+  const optimizationModel = process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8';
   let modelCallStarted = false;
   let statsRecorded = false;
 

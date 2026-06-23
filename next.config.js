@@ -40,7 +40,6 @@ const nextConfig = {
   outputFileTracingExcludes: {
     '*': [
       '**/.git/**',
-      '**/.next/**',
       '**/node_modules/**',
       '**/.cache/**',
       '**/trace',
