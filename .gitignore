@@ -48,6 +48,15 @@ next-env.d.ts
 /logs
 /tmp
 
+# project local artifacts
+/Data/
+/Image/
+/Log/
+/Temp/
+/Sql/
+/Config/
+/Test/
+
 # docs
 /docs
 TODO.md

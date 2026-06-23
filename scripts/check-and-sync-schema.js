@@ -87,6 +87,8 @@ const schemaDefinition = {
     user_id: 'text',
     response_time: 'real',
     is_authenticated: 'boolean',
+    is_success: 'boolean',
+    model_type: 'text',
     ip_address: 'text',
     created_at: 'timestamp',
   },

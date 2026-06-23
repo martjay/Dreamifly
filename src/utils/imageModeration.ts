@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { parseVisualRiskLevel, type VisualRiskLevel } from './visualModeration'
+import { getElapsedSeconds, recordModelUsage } from './modelUsageStats'
 
 /**
  * 审核生成的图片，返回视觉风险等级。
@@ -12,42 +13,60 @@ export async function moderateGeneratedImage(
   model: string,
   prompt: string
 ): Promise<VisualRiskLevel> {
+  const startTime = Date.now()
   const client = new OpenAI({
     baseURL: baseUrl,
     apiKey: apiKey || 'dummy-key',
   })
 
-  const mimeType = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
-  const base64Media = imageBuffer.toString('base64')
-  const response = await client.chat.completions.create({
-    model,
-    temperature: 0,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64Media}`,
+  try {
+    const mimeType = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+    const base64Media = imageBuffer.toString('base64')
+    const response = await client.chat.completions.create({
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${base64Media}`,
+              },
             },
-          },
-        ],
-      },
-    ],
-    stream: false,
-    chat_template_kwargs: { enable_thinking: false },
-  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
+          ],
+        },
+      ],
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
-  const rawResult = response.choices[0]?.message?.content?.trim()
-  const level = parseVisualRiskLevel(rawResult)
-  if (!level) {
-    console.warn('图片视觉审核结果不明确:', rawResult)
-    throw new Error('图片视觉审核结果不明确')
+    const rawResult = response.choices[0]?.message?.content?.trim()
+    const level = parseVisualRiskLevel(rawResult)
+    if (!level) {
+      console.warn('图片视觉审核结果不明确:', rawResult)
+      throw new Error('图片视觉审核结果不明确')
+    }
+
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    })
+
+    return level
+  } catch (error) {
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
+    throw error
   }
-
-  return level
 }
 
 function normalizeModerationAnswer(rawResult: string | null | undefined): string {
@@ -76,6 +95,7 @@ export async function moderatePrompt(
   model: string,
   moderationPrompt: string
 ): Promise<boolean> {
+  const startTime = Date.now()
   try {
     const client = new OpenAI({
       baseURL: baseUrl,
@@ -109,20 +129,44 @@ export async function moderatePrompt(
     const violationSemantics = promptUsesViolationSemantics(moderationPrompt)
 
     if (yes || no) {
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: true,
+      })
       return violationSemantics ? no : yes
     }
 
     if (result.includes('不通过') || result.includes('fail') || result.includes('reject')) {
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: true,
+      })
       return false
     }
 
     if (result.includes('通过') || result.includes('pass') || result.includes('approve')) {
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: true,
+      })
       return true
     }
 
     console.warn('提示词审核结果不明确:', rawResult)
     throw new Error('提示词审核结果不明确')
   } catch (error) {
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
     console.error('提示词审核失败:', error)
     throw new Error(`提示词审核失败: ${error instanceof Error ? error.message : '未知错误'}`)
   }

@@ -4,16 +4,17 @@ import { generateGrokImage } from '@/utils/grokApi'
 import { generateGptImage2 } from '@/utils/gptImage2Api'
 import { generateNanoBananaImage } from '@/utils/nanoBananaApi'
 import { db } from '@/db'
-import { modelUsageStats, user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
+import { user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
 import { eq, sql, and, lt } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { randomUUID, createHash } from 'crypto'
+import { createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
 import { moderateGenerationInput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats'
 import {
   OFFICIAL_MODEL_MODERATION_FAILED_CODE,
   OFFICIAL_MODEL_MODERATION_FAILED_MESSAGE,
@@ -69,19 +70,21 @@ function validateDynamicToken(providedToken: string): boolean {
 
 export async function POST(request: Request) {
   const clientIP = getClientIP(request)
+  const totalStartTime = Date.now()
   
   // 在 try 块外声明，以便在 catch 块中也能访问
   let isAdmin = false
   // 当前请求使用的模型ID（用于在 catch 中判断是否为 nano-banana-2）
   let currentModelId: string | null = null
+  let currentUserId: string | null = null
+  let currentIsAuthenticated = false
+  let generationModelCallStarted = false
+  let generationStatsRecorded = false
   // 如果本次请求已成功扣除积分，则记录消费记录ID，方便失败时返还
   let spentRecordId: string | null = null
   let consumedDailyQuota = false
   
   try {
-    // 记录总开始时间（包含排队延迟）
-    const totalStartTime = Date.now()
-    
     // 首先检查IP黑名单（在所有其他检查之前）
     if (clientIP) {
       const blacklistedIP = await db.select()
@@ -118,10 +121,9 @@ export async function POST(request: Request) {
     
     // 获取用户信息（用于IP并发控制）
     let isPremium = false
-    let currentUserId: string | null = null
-    
     if (session?.user) {
       currentUserId = session.user.id
+      currentIsAuthenticated = true
       const currentUser = await db.select({
         isAdmin: user.isAdmin,
         isPremium: user.isPremium,
@@ -840,6 +842,7 @@ export async function POST(request: Request) {
 
     // 调用图片生成 API（grok/nano-banana-2 使用独立 API，其他模型使用 ComfyUI）
     let imageUrl: string
+    generationModelCallStarted = true
     if (model === 'grok-imagine-1.0') {
       imageUrl = await generateGrokImage({ prompt, width, height })
     } else if (isGptImage2Model(model)) {
@@ -874,7 +877,7 @@ export async function POST(request: Request) {
     }
 
     // 计算总响应时间（秒），包含排队延迟
-    const responseTime = (Date.now() - totalStartTime) / 1000
+    const responseTime = getElapsedSeconds(totalStartTime)
 
     try {
       await incrementSiteGenerationStats(1)
@@ -883,24 +886,16 @@ export async function POST(request: Request) {
     }
 
     // 记录模型使用统计
-    try {
-      // 创建当前时间的Date对象（JavaScript Date内部存储为UTC时间戳）
-      // PostgreSQL的timestamptz会自动处理时区转换
-      const now = new Date()
-      
-      await db.insert(modelUsageStats).values({
-        id: randomUUID(),
-        modelName: model,
-        userId: session?.user?.id || null,
-        responseTime,
-        isAuthenticated: !!session?.user,
-        ipAddress: clientIP,
-        createdAt: now,
-      })
-    } catch (error) {
-      // 记录统计失败不应该影响主流程
-      console.error('Failed to record model usage stats:', error)
-    }
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'image_generation',
+      responseTime,
+      isSuccess: true,
+      userId: session?.user?.id || null,
+      isAuthenticated: !!session?.user,
+      ipAddress: clientIP,
+    })
+    generationStatsRecorded = true
 
     // 如果用户已登录，同步保存生成的图片（输入审核已通过，可跳过保存内二次审核）
     if (session?.user) {
@@ -934,6 +929,24 @@ export async function POST(request: Request) {
           : undefined,
     })
   } catch (error) {
+    const shouldRecordGenerationFailure =
+      generationModelCallStarted &&
+      !generationStatsRecorded &&
+      !isOfficialModelModerationError(error)
+
+    if (shouldRecordGenerationFailure && currentModelId) {
+      await recordModelUsage({
+        modelName: currentModelId,
+        modelType: 'image_generation',
+        responseTime: getElapsedSeconds(totalStartTime),
+        isSuccess: false,
+        userId: currentUserId,
+        isAuthenticated: currentIsAuthenticated,
+        ipAddress: clientIP,
+      })
+      generationStatsRecorded = true
+    }
+
     // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
     if (spentRecordId && (currentModelId === 'nano-banana-2' || isGptImage2Model(currentModelId))) {
       console.log('[图像生成API] 图像生成失败，开始返还积分', { spentRecordId })

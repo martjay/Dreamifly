@@ -7,6 +7,15 @@ import { headers } from 'next/headers'
 
 type TimeRange = 'hour' | 'today' | 'yesterday' | 'week' | 'month' | 'all'
 
+const MODERATION_AND_PROMPT_MODEL_NAME = '审核与提示词优化模型（qwenvl）'
+
+function getDisplayModelName(modelName: string, modelType: string): string {
+  if (modelType === 'moderation' || modelType === 'prompt_optimization') {
+    return MODERATION_AND_PROMPT_MODEL_NAME
+  }
+  return modelName
+}
+
 function getTimeRangeDate(range: TimeRange): Date {
   const now = new Date()
   
@@ -130,25 +139,29 @@ export async function GET(request: Request) {
     const callCounts = await db
       .select({
         modelName: modelUsageStats.modelName,
+        modelType: modelUsageStats.modelType,
         count: sql<number>`count(*)::int`,
         authenticatedCount: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = true)::int`,
         unauthenticatedCount: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = false)::int`,
+        successfulCount: sql<number>`count(*) filter (where ${modelUsageStats.isSuccess} = true)::int`,
+        failedCount: sql<number>`count(*) filter (where ${modelUsageStats.isSuccess} = false)::int`,
       })
       .from(modelUsageStats)
       .where(and(...whereConditions))
-      .groupBy(modelUsageStats.modelName)
+      .groupBy(modelUsageStats.modelName, modelUsageStats.modelType)
 
     // 获取平均响应时间统计（区分登录和未登录）
     const avgResponseTimes = await db
       .select({
         modelName: modelUsageStats.modelName,
+        modelType: modelUsageStats.modelType,
         isAuthenticated: modelUsageStats.isAuthenticated,
         avgResponseTime: sql<number>`avg(${modelUsageStats.responseTime})`,
         count: sql<number>`count(*)::int`,
       })
       .from(modelUsageStats)
       .where(and(...whereConditions))
-      .groupBy(modelUsageStats.modelName, modelUsageStats.isAuthenticated)
+      .groupBy(modelUsageStats.modelName, modelUsageStats.modelType, modelUsageStats.isAuthenticated)
 
     // 按日期分组统计（用于图表显示）
     // 对于hour范围，按分钟统计；today和yesterday范围按小时统计；其他范围按天统计
@@ -157,59 +170,130 @@ export async function GET(request: Request) {
           .select({
             date: sql<string>`date_trunc('minute', ${modelUsageStats.createdAt})::text`,
             modelName: modelUsageStats.modelName,
+            modelType: modelUsageStats.modelType,
             count: sql<number>`count(*)::int`,
           })
           .from(modelUsageStats)
           .where(and(...whereConditions))
-          .groupBy(sql`date_trunc('minute', ${modelUsageStats.createdAt})`, modelUsageStats.modelName)
+          .groupBy(sql`date_trunc('minute', ${modelUsageStats.createdAt})`, modelUsageStats.modelName, modelUsageStats.modelType)
           .orderBy(modelUsageStats.modelName, sql`date_trunc('minute', ${modelUsageStats.createdAt})`)
       : timeRange === 'today' || timeRange === 'yesterday'
       ? await db
           .select({
             date: sql<string>`date_trunc('hour', ${modelUsageStats.createdAt})::text`,
             modelName: modelUsageStats.modelName,
+            modelType: modelUsageStats.modelType,
             count: sql<number>`count(*)::int`,
           })
           .from(modelUsageStats)
           .where(and(...whereConditions))
-          .groupBy(sql`date_trunc('hour', ${modelUsageStats.createdAt})`, modelUsageStats.modelName)
+          .groupBy(sql`date_trunc('hour', ${modelUsageStats.createdAt})`, modelUsageStats.modelName, modelUsageStats.modelType)
           .orderBy(modelUsageStats.modelName, sql`date_trunc('hour', ${modelUsageStats.createdAt})`)
       : await db
           .select({
             date: sql<string>`date_trunc('day', ${modelUsageStats.createdAt})::text`,
             modelName: modelUsageStats.modelName,
+            modelType: modelUsageStats.modelType,
             count: sql<number>`count(*)::int`,
           })
           .from(modelUsageStats)
           .where(and(...whereConditions))
-          .groupBy(sql`date_trunc('day', ${modelUsageStats.createdAt})`, modelUsageStats.modelName)
+          .groupBy(sql`date_trunc('day', ${modelUsageStats.createdAt})`, modelUsageStats.modelName, modelUsageStats.modelType)
           .orderBy(modelUsageStats.modelName, sql`date_trunc('day', ${modelUsageStats.createdAt})`)
 
     // 格式化数据
-    const modelStats = callCounts.map((callCount) => {
+    const modelStatsMap = new Map<string, {
+      modelName: string
+      totalCalls: number
+      authenticatedCalls: number
+      unauthenticatedCalls: number
+      successfulCalls: number
+      failedCalls: number
+      responseTimeAuthenticatedTotal: number
+      responseTimeAuthenticatedCount: number
+      responseTimeUnauthenticatedTotal: number
+      responseTimeUnauthenticatedCount: number
+    }>()
+
+    callCounts.forEach((callCount) => {
+      const displayModelName = getDisplayModelName(callCount.modelName, callCount.modelType)
       const authAvgTime = avgResponseTimes.find(
-        (t) => t.modelName === callCount.modelName && t.isAuthenticated === true
+        (t) => t.modelName === callCount.modelName && t.modelType === callCount.modelType && t.isAuthenticated === true
       )
       const unauthAvgTime = avgResponseTimes.find(
-        (t) => t.modelName === callCount.modelName && t.isAuthenticated === false
+        (t) => t.modelName === callCount.modelName && t.modelType === callCount.modelType && t.isAuthenticated === false
       )
 
-      return {
-        modelName: callCount.modelName,
-        totalCalls: Number(callCount.count),
-        authenticatedCalls: Number(callCount.authenticatedCount),
-        unauthenticatedCalls: Number(callCount.unauthenticatedCount),
-        avgResponseTimeAuthenticated: authAvgTime ? Number(authAvgTime.avgResponseTime) : null,
-        avgResponseTimeUnauthenticated: unauthAvgTime ? Number(unauthAvgTime.avgResponseTime) : null,
+      const totalCalls = Number(callCount.count)
+      const successfulCalls = Number(callCount.successfulCount)
+      const authenticatedCalls = Number(callCount.authenticatedCount)
+      const unauthenticatedCalls = Number(callCount.unauthenticatedCount)
+      const existing = modelStatsMap.get(displayModelName) || {
+        modelName: displayModelName,
+        totalCalls: 0,
+        authenticatedCalls: 0,
+        unauthenticatedCalls: 0,
+        successfulCalls: 0,
+        failedCalls: 0,
+        responseTimeAuthenticatedTotal: 0,
+        responseTimeAuthenticatedCount: 0,
+        responseTimeUnauthenticatedTotal: 0,
+        responseTimeUnauthenticatedCount: 0,
       }
+
+      existing.totalCalls += totalCalls
+      existing.authenticatedCalls += authenticatedCalls
+      existing.unauthenticatedCalls += unauthenticatedCalls
+      existing.successfulCalls += successfulCalls
+      existing.failedCalls += Number(callCount.failedCount)
+
+      if (authAvgTime) {
+        const authCount = Number(authAvgTime.count)
+        existing.responseTimeAuthenticatedTotal += Number(authAvgTime.avgResponseTime) * authCount
+        existing.responseTimeAuthenticatedCount += authCount
+      }
+
+      if (unauthAvgTime) {
+        const unauthCount = Number(unauthAvgTime.count)
+        existing.responseTimeUnauthenticatedTotal += Number(unauthAvgTime.avgResponseTime) * unauthCount
+        existing.responseTimeUnauthenticatedCount += unauthCount
+      }
+
+      modelStatsMap.set(displayModelName, existing)
     })
 
+    const modelStats = Array.from(modelStatsMap.values())
+      .map((stat) => ({
+        modelName: stat.modelName,
+        totalCalls: stat.totalCalls,
+        authenticatedCalls: stat.authenticatedCalls,
+        unauthenticatedCalls: stat.unauthenticatedCalls,
+        successfulCalls: stat.successfulCalls,
+        failedCalls: stat.failedCalls,
+        successRate: stat.totalCalls > 0 ? Number(((stat.successfulCalls / stat.totalCalls) * 100).toFixed(2)) : 0,
+        avgResponseTimeAuthenticated: stat.responseTimeAuthenticatedCount > 0
+          ? stat.responseTimeAuthenticatedTotal / stat.responseTimeAuthenticatedCount
+          : null,
+        avgResponseTimeUnauthenticated: stat.responseTimeUnauthenticatedCount > 0
+          ? stat.responseTimeUnauthenticatedTotal / stat.responseTimeUnauthenticatedCount
+          : null,
+      }))
+      .sort((a, b) => {
+        if (b.totalCalls !== a.totalCalls) return b.totalCalls - a.totalCalls
+        return a.modelName.localeCompare(b.modelName)
+      })
+
     // 格式化每日统计数据
-    const dailyData = dailyStats.map((stat) => ({
-      date: stat.date,
-      modelName: stat.modelName,
-      count: Number(stat.count),
-    }))
+    const dailyDataMap = new Map<string, { date: string; modelName: string; count: number }>()
+    dailyStats.forEach((stat) => {
+      const displayModelName = getDisplayModelName(stat.modelName, stat.modelType)
+      const key = `${stat.date}::${displayModelName}`
+      const existing = dailyDataMap.get(key) || { date: stat.date, modelName: displayModelName, count: 0 }
+      existing.count += Number(stat.count)
+      dailyDataMap.set(key, existing)
+    })
+
+    const dailyData = Array.from(dailyDataMap.values())
 
     // 获取总计数据
     const totalStats = await db
@@ -217,6 +301,8 @@ export async function GET(request: Request) {
         totalCalls: sql<number>`count(*)::int`,
         authenticatedCalls: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = true)::int`,
         unauthenticatedCalls: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = false)::int`,
+        successfulCalls: sql<number>`count(*) filter (where ${modelUsageStats.isSuccess} = true)::int`,
+        failedCalls: sql<number>`count(*) filter (where ${modelUsageStats.isSuccess} = false)::int`,
       })
       .from(modelUsageStats)
       .where(and(...whereConditions))
@@ -408,15 +494,21 @@ export async function GET(request: Request) {
     }
 
     // 设置响应头，禁用缓存
+    const totalCalls = totalStats[0] ? Number(totalStats[0].totalCalls) : 0
+    const successfulCalls = totalStats[0] ? Number(totalStats[0].successfulCalls) : 0
+
     return NextResponse.json(
       {
         timeRange,
         modelStats,
         dailyData,
         totalStats: {
-          totalCalls: totalStats[0] ? Number(totalStats[0].totalCalls) : 0,
+          totalCalls,
           authenticatedCalls: totalStats[0] ? Number(totalStats[0].authenticatedCalls) : 0,
           unauthenticatedCalls: totalStats[0] ? Number(totalStats[0].unauthenticatedCalls) : 0,
+          successfulCalls,
+          failedCalls: totalStats[0] ? Number(totalStats[0].failedCalls) : 0,
+          successRate: totalCalls > 0 ? Number(((successfulCalls / totalCalls) * 100).toFixed(2)) : 0,
           activeUsers: activeUsers[0] ? Number(activeUsers[0].count) : 0,
           authenticatedIPs: authenticatedIPs[0] ? Number(authenticatedIPs[0].count) : 0,
           unauthenticatedIPs: unauthenticatedIPs[0] ? Number(unauthenticatedIPs[0].count) : 0,

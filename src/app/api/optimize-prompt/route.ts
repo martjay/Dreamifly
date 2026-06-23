@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ALL_MODELS } from '@/utils/modelConfig';
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -54,6 +55,11 @@ function modelSupportsChinese(modelId: string | undefined): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  let optimizationModel = process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8';
+  let modelCallStarted = false;
+  let statsRecorded = false;
+
   try {
     const { prompt, modelId } = await request.json();
 
@@ -183,7 +189,7 @@ You are now ready to optimize the user's text-to-image prompt.`;
 
     // 构建请求体
     const requestBody: ChatCompletionRequest = {
-      model: process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8',
+      model: optimizationModel,
       messages: [
         {
           role: "system",
@@ -210,6 +216,7 @@ You are now ready to optimize the user's text-to-image prompt.`;
     // 使用新的 API Key 环境变量，如果没有则使用默认值
     const apiKey = process.env.PROMPT_OPTIMIZATION_API_KEY || 'ollama';
     
+    modelCallStarted = true;
     const response = await fetch(fullApiUrl, {
       method: 'POST',
       headers: {
@@ -236,6 +243,14 @@ You are now ready to optimize the user's text-to-image prompt.`;
       throw new Error('No response content received from LLM service');
     }
 
+    await recordModelUsage({
+      modelName: optimizationModel,
+      modelType: 'prompt_optimization',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    });
+    statsRecorded = true;
+
     return NextResponse.json({
       success: true,
       originalPrompt: prompt,
@@ -243,6 +258,16 @@ You are now ready to optimize the user's text-to-image prompt.`;
     });
 
   } catch (error) {
+    if (modelCallStarted && !statsRecorded) {
+      await recordModelUsage({
+        modelName: optimizationModel,
+        modelType: 'prompt_optimization',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: false,
+      });
+      statsRecorded = true;
+    }
+
     console.error('Error in optimize-prompt API:', error);
     
     return NextResponse.json(

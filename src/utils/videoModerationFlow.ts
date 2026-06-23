@@ -3,6 +3,7 @@ import { DEFAULT_PROMPT_MODERATION_PROMPT } from './moderationFlow'
 import { moderateAvatar } from './avatarModeration'
 import OpenAI from 'openai'
 import type { VisualRiskLevel } from './visualModeration'
+import { getElapsedSeconds, recordModelUsage } from './modelUsageStats'
 
 export type VideoModerationFailureReason = 'prompt' | 'image' | 'video' | 'service_error'
 
@@ -112,38 +113,56 @@ async function moderateVideoDataUrl(
   mimeType: string,
   env: ModerationEnv
 ): Promise<boolean> {
+  const startTime = Date.now()
   const client = new OpenAI({
     baseURL: env.baseUrl,
     apiKey: env.apiKey || 'dummy-key',
   })
 
-  const response = await client.chat.completions.create({
-    model: env.model,
-    temperature: 0,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: env.mediaModerationPrompt },
-          {
-            type: 'video_url',
-            video_url: {
-              url: `data:${mimeType};base64,${videoBuffer.toString('base64')}`,
+  try {
+    const response = await client.chat.completions.create({
+      model: env.model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: env.mediaModerationPrompt },
+            {
+              type: 'video_url',
+              video_url: {
+                url: `data:${mimeType};base64,${videoBuffer.toString('base64')}`,
+              },
             },
-          },
-        ],
-      },
-    ],
-    stream: false,
-    chat_template_kwargs: { enable_thinking: false },
-  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
+          ],
+        },
+      ],
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
-  const approved = isApprovedModerationAnswer(response.choices[0]?.message?.content)
-  if (approved === null) {
-    throw new Error('Video moderation result is unclear')
+    const approved = isApprovedModerationAnswer(response.choices[0]?.message?.content)
+    if (approved === null) {
+      throw new Error('Video moderation result is unclear')
+    }
+
+    await recordModelUsage({
+      modelName: env.model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    })
+
+    return approved
+  } catch (error) {
+    await recordModelUsage({
+      modelName: env.model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
+    throw error
   }
-
-  return approved
 }
 
 async function moderateMediaInput(
