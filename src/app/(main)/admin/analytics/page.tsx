@@ -117,6 +117,37 @@ const FALLBACK_COLORS = [
 ]
 
 const FAILURE_RATE_COLOR = '#22c55e'
+const MODEL_SUCCESS_RATE_AXIS_WIDTH = 380
+
+type AxisTickPayload = {
+  value?: string | number
+}
+
+type ModelNameAxisTickProps = {
+  y?: number
+  payload?: AxisTickPayload
+}
+
+const renderModelNameAxisTick = ({ y = 0, payload }: ModelNameAxisTickProps) => (
+  <foreignObject x={0} y={y - 12} width={MODEL_SUCCESS_RATE_AXIS_WIDTH - 20} height={24}>
+    <div
+      style={{
+        alignItems: 'center',
+        color: '#6b7280',
+        display: 'flex',
+        fontSize: 12,
+        height: 24,
+        justifyContent: 'flex-end',
+        lineHeight: '24px',
+        overflow: 'visible',
+        paddingRight: 16,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {String(payload?.value ?? '')}
+    </div>
+  </foreignObject>
+)
 
 // 获取模型颜色
 const getModelColor = (modelName: string, index: number = 0): string => {
@@ -1070,7 +1101,7 @@ export default function AnalyticsPage() {
                     <BarChart
                       data={successRateChartData}
                       layout="vertical"
-                      margin={{ top: 8, right: 56, left: 24, bottom: 8 }}
+                      margin={{ top: 8, right: 120, left: 0, bottom: 8 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
                       <XAxis
@@ -1083,9 +1114,10 @@ export default function AnalyticsPage() {
                       <YAxis
                         type="category"
                         dataKey="modelName"
-                        width={160}
+                        width={MODEL_SUCCESS_RATE_AXIS_WIDTH}
                         stroke="#6b7280"
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        tick={renderModelNameAxisTick}
+                        tickLine={false}
                       />
                       <Tooltip
                         contentStyle={{

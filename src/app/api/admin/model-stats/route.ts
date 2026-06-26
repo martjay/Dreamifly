@@ -7,7 +7,7 @@ import { headers } from 'next/headers'
 
 type TimeRange = 'hour' | 'today' | 'yesterday' | 'week' | 'month' | 'all'
 
-const MODERATION_AND_PROMPT_MODEL_NAME = '审核与提示词优化模型（qwenvl）'
+const MODERATION_AND_PROMPT_MODEL_NAME = '审核模型(qwenvl)'
 
 function getDisplayModelName(modelName: string, modelType: string): string {
   if (modelType === 'moderation' || modelType === 'prompt_optimization') {

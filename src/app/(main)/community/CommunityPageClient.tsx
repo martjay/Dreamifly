@@ -122,7 +122,7 @@ export default function CommunityPageClient() {
       : tagRecommendations
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fffaf5_38%,#ffffff_100%)] px-5 pb-16 pt-24 sm:px-8 sm:pt-12 lg:px-12 xl:px-16 2xl:px-20">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fffaf5_38%,#ffffff_100%)] px-5 pb-16 pt-24 sm:px-8 sm:pt-12 lg:ml-48 lg:px-12 xl:px-16 2xl:px-20">
       <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-8 px-1 sm:px-6">
         <section className="space-y-5 sm:space-y-6">
           <div className="flex flex-col gap-3 rounded-[32px] border border-orange-100 bg-white/80 p-3.5 shadow-sm backdrop-blur sm:gap-5 sm:p-6">

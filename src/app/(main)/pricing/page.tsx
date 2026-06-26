@@ -338,14 +338,14 @@ export default function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="flex min-h-screen items-center justify-center bg-white lg:ml-48">
         <div className="h-12 w-12 animate-spin rounded-full border-2 border-orange-100 border-t-orange-400" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f] lg:ml-48">
       {showLoginPromptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-[24px] bg-white p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
