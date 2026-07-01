@@ -503,10 +503,10 @@
     "title": "友链",
     "subtitle": "发现精彩的AI工具和平台",
     "description": "我们与优秀的AI工具平台合作，为您提供更多创作可能",
-    "loongxia": {
-      "name": "LoongXia",
-      "url": "loongxia.cn",
-      "description": "一个简单好用的 7 *24 在线龙虾Agent 产品,  快来打造你的QQ/微信/飞书专属机器人吧~"
+    "imagifly": {
+      "name": "Imagifly",
+      "url": "imagifly.net",
+      "description": "AI 图像与视频创作工作室，支持文本、参考图和风格预设生成作品"
     },
     "manbo": {
       "name": "曼波配音生成器",

@@ -679,10 +679,10 @@ export default function HomeClient() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {/* LoongXia 友链 */}
+              {/* Imagifly 友链 */}
               <div className="group animate-fadeInUp animation-delay-400">
                 <Link
-                  href="https://loongxia.cn"
+                  href="https://imagifly.net"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block bg-gray-200/50 backdrop-blur-sm p-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-orange-400/30 hover:border-orange-400/50"
@@ -690,8 +690,8 @@ export default function HomeClient() {
                                      <div className="flex items-center gap-4 mb-4">
                      <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden">
                        <Image
-                         src="/images/LoongXia.jpg"
-                         alt="LoongXia Logo"
+                         src="/images/Imagifly.png"
+                         alt="Imagifly Logo"
                          width={48}
                          height={48}
                          className="w-full h-full object-cover"
@@ -699,12 +699,12 @@ export default function HomeClient() {
                        />
                      </div>
                     <div>
-                                             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-800 transition-colors">{tFriends('loongxia.name')}</h3>
-                       <p className="text-sm text-gray-600">{tFriends('loongxia.url')}</p>
+                                             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-800 transition-colors">{tFriends('imagifly.name')}</h3>
+                       <p className="text-sm text-gray-600">{tFriends('imagifly.url')}</p>
                      </div>
                    </div>
                    <p className="text-gray-700 text-sm leading-relaxed">
-                     {tFriends('loongxia.description')}
+                     {tFriends('imagifly.description')}
                    </p>
                    <div className="mt-4 flex items-center text-orange-700 text-sm group-hover:text-orange-600 transition-colors">
                      <span>{tFriends('visitSite')}</span>
