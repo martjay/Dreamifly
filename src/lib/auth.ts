@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
+import { user } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
 import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailLongAliasEmail, isValid163Email } from "@/utils/email-domain-validator";
 
@@ -9,6 +11,24 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          try {
+            await db
+              .update(user)
+              .set({
+                lastLoginAt: sql`(now() at time zone 'UTC')`,
+              })
+              .where(eq(user.id, session.userId));
+          } catch (error) {
+            console.error("Failed to update last login time:", error);
+          }
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true, // 启用邮箱验证要求
