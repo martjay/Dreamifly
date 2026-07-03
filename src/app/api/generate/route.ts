@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   
   // 在 try 块外声明，以便在 catch 块中也能访问
   let isAdmin = false
-  // 当前请求使用的模型ID（用于在 catch 中判断是否为 nano-banana-2）
+  // 当前请求使用的模型ID（用于在 catch 中记录失败和返还积分）
   let currentModelId: string | null = null
   let currentUserId: string | null = null
   let currentIsAuthenticated = false
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
     if (!prompt?.trim()) {
       return NextResponse.json({ error: '请输入提示词' }, { status: 400 })
     }
-    // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
+    // 记录当前模型ID，供 catch 中记录失败和返还积分
     currentModelId = model
     // 第三方独立计费模型只走积分，不消耗免费额度
     const usesFreeQuota = model !== 'nano-banana-2' && !isGptImage2Model(model)
@@ -773,10 +773,8 @@ export async function POST(request: Request) {
               }
             }
 
-            // 仅对第三方独立计费模型记录消费记录ID，方便后续失败时返还积分
-            if (model === 'nano-banana-2' || isGptImage2Model(model)) {
-              spentRecordId = deductResult
-            }
+            // 记录所有已成功扣费的消费记录ID，方便后续失败时返还积分
+            spentRecordId = deductResult
           }
         } else if (!hasQuota) {
           // 模型未配置积分消耗，且用户已超出额度
@@ -947,8 +945,8 @@ export async function POST(request: Request) {
       generationStatsRecorded = true
     }
 
-    // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
-    if (spentRecordId && (currentModelId === 'nano-banana-2' || isGptImage2Model(currentModelId))) {
+    // 如果已经扣除了积分，但图像生成流程失败，则尝试返还积分
+    if (spentRecordId) {
       console.log('[图像生成API] 图像生成失败，开始返还积分', { spentRecordId })
       try {
         const refundSuccess = await refundPoints(
