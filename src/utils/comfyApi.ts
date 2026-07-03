@@ -288,13 +288,19 @@ function setQwenImageT2IorkflowParams(workflow: any, params: GenerateParams) {
   }
 }
 
+function setLoadImageInput(workflow: any, nodeId: string, image?: string) {
+  if (!image || !workflow[nodeId]?.inputs) return;
+  workflow[nodeId].inputs.image = image;
+  workflow[nodeId].inputs.upload = 'image';
+}
+
 function setQwenImageEditorkflowParams(workflow: any, params: GenerateParams) {
   if(params.images && params.images.length >= 1){
-    workflow["78"].inputs.image = params.images?.[0];
+    setLoadImageInput(workflow, "78", params.images?.[0]);
     if(params.images.length >= 2){
-      workflow["79"].inputs.image = params.images?.[1];
+      setLoadImageInput(workflow, "79", params.images?.[1]);
       if(params.images.length == 3){
-        workflow["80"].inputs.image = params.images?.[2];
+        setLoadImageInput(workflow, "80", params.images?.[2]);
       }
     }
   }

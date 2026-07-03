@@ -679,7 +679,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
     if (isChinesePrompt && prompt.trim() && !supportsChinese) {
       setIsOptimizing(true);
       
-      finalPrompt = await optimizePrompt(prompt);
+      finalPrompt = await optimizePrompt(prompt, model, { images: uploadedImages });
       promptEditedRef.current = true
       setPrompt(finalPrompt); // 更新UI显示优化后的prompt
       savePromptDraft(finalPrompt)
@@ -965,7 +965,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   };
 
   const handleOptimizePrompt = async () => {
-    if (!prompt.trim()) {
+    if (!prompt.trim() && uploadedImages.length === 0) {
       // 如果没有提示词，可以显示提示信息
       return;
     }
@@ -974,7 +974,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
     // 这样用户可以多次优化，尝试不同的效果
     setIsOptimizing(true);
     try {
-      const optimizedPrompt = await optimizePrompt(prompt, model);
+      const optimizedPrompt = await optimizePrompt(prompt, model, { images: uploadedImages });
       promptEditedRef.current = true
       setPrompt(optimizedPrompt);
       savePromptDraft(optimizedPrompt)
@@ -1302,6 +1302,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
                   onOptimizePrompt={handleOptimizePrompt}
                   isGenerating={isGenerating}
                   isOptimizing={isOptimizing}
+                  canOptimizePrompt={Boolean(prompt.trim()) || uploadedImages.length > 0}
                   communityWorks={communityWorks}
                   promptRef={promptRef}
                   aspectRatio={aspectRatio}

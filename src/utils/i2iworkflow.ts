@@ -941,7 +941,8 @@ export const QwenImageEditWorkflow = {
   },
   "78": {
     "inputs": {
-      "image": "source.jpg"
+      "image": "source.jpg",
+      "upload": "image"
     },
     "class_type": "LoadImage",
     "_meta": {
