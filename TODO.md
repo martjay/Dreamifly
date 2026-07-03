@@ -118,3 +118,32 @@
 
 待确认：
 - OSS 中已存在的历史违规头像是否需要批量替换为默认头像并删除源文件。
+
+## 2026-07-03 创作页社区画同款链路排查
+
+状态：待排查，未实现
+
+需求说明：
+- 创作页面中的社区作品“画同款”可能存在提示词或参考素材恢复异常。
+- 初步观察到社区页、首页和创作页内的“画同款”入口使用的参数来源不完全一致，需要统一确认。
+- 视频同款链路中，社区提示词进入创作页后可能只同步到图片提示词状态，未同步到视频提示词输入框。
+
+影响范围：
+- 社区页“画同款”入口：`src/app/(main)/community/CommunityPageClient.tsx`
+- 首页社区展示“画同款”入口：`src/app/(main)/HomeClient.tsx`
+- 创作页社区展示“画同款”入口：`src/app/(main)/create/CreateClient.tsx`
+- 创作页提示词恢复与图片/视频表单状态：`src/components/GenerateSection.tsx`
+- 社区同款详情接口：`src/app/api/community/media/[id]/route.ts`
+- 画同款参数传递工具：`src/utils/createPromptTransfer.ts`
+
+已发现的可疑点：
+- 社区 feed 页面传递的是 `communityMedia.id`，而首页/创作页社区展示依赖 `communityMediaId`；默认静态补位作品没有 `communityMediaId`，会退回草稿或提示词传递方式。
+- `/api/community/media/[id]` 当前按社区作品 ID 查询，如果入口传入来源作品 ID，可能读取失败。
+- 视频“画同款”进入创作页后，需要确认 `initialPrompt` 是否同步到 `videoPrompt`，否则视频生成输入框可能为空。
+- 创作页内同页跳转时，`promptEdited`、页面草稿和 URL 参数变化可能影响同款提示词恢复。
+
+待确认：
+- 问题是否只发生在创作页内的社区展示，还是社区页、首页入口也会出现。
+- 图片同款和视频同款是否都受影响。
+- 默认静态作品是否仍需要支持“画同款”，以及是否允许继续使用草稿传递。
+- 是否需要统一所有入口只传 `communityMediaId`，并为无社区 ID 的静态作品单独降级处理。
