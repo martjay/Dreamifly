@@ -63,13 +63,21 @@
 - 状态：已实现，复测待补充
 - 数据库影响：无
 - 改动范围：`src/utils/dynamicToken.ts`、`src/app/(main)/admin/cdk/page.tsx`、`src/app/api/admin/cdk/route.ts`、`src/utils/cdkManager.ts`、`scripts/test-dynamic-token-cache.mjs`
-- 动态 token：首次调用仍请求 `/api/time`，之后 30 秒内复用服务端时间 offset；并发首次调用合并为同一个 `/api/time` 请求；保留 `/api/time` 失败后使用本地时间的降级逻辑；预留 `resetServerTimeOffset()` 供后续 401 后刷新重试使用。
-- 服务端 token 窗口：当前服务端校验实际接受“当前分钟 + 上一分钟”，不是注释里的“±1 分钟”。30 秒 offset 复用主要风险是客户端本地时钟在 TTL 内向未来跳变超过 60 秒。
+- 动态 token：首次调用仍请求 `/api/time`，之后 30 秒内复用服务端返回的 `timeString`；并发首次调用合并为同一个 `/api/time` 请求；保留 `/api/time` 失败后使用本地时间的降级逻辑；预留 `resetServerTimeOffset()` 供后续 401 后刷新重试使用。
+- 服务端 token 窗口：当前服务端校验实际接受“当前分钟 + 上一分钟”，不是注释里的“±1 分钟”。客户端必须使用服务端返回的 `timeString` 生成 token，不能缓存 timestamp offset 后再按浏览器本地时区格式化。
 - 优化前基线：线上 `/api/time` p50 为 356.7ms，p95 为 464.5ms。
 - 预期效果：登录态首屏 30 秒内 `/api/time` 请求数从 `K` 降到 `1`；线上 p50 口径下，前置网络往返理论减少约 `(K - 1) × 356ms`。
 - CDK 调试请求：全仓 `127.0.0.1:7243/ingest` 调试 fetch 从 30 处降到 0；实际清理范围为 CDK 页面 18 处、CDK 管理接口 6 处、`deleteCDK` 工具 6 处。
 - 已完成代码级验证：动态 token 聚焦测试覆盖 30 秒复用、并发合并、TTL 过期刷新和 `resetServerTimeOffset()`；全仓精确搜索确认 `127.0.0.1:7243/ingest`、`#region agent log`、`#endregion` 无残留。
 - 待复测：PC 和移动端登录态首屏网络瀑布，重点对比 `/api/time` 请求数；CDK 删除流程确认不再出现 `127.0.0.1:7243` 请求；图片生成、视频生成、工作流修复/放大、用户额度、管理员检查、登录注册和邮箱域名校验确认动态 token 仍通过校验。
+
+动态 token 时区热修记录：
+- 状态：已实现，本地待在 `TZ=UTC` 服务端模式下复测
+- 数据库影响：无
+- 触发原因：线上 `/api/time` 返回的 `timeString` 为 UTC 口径，浏览器在 Asia/Shanghai 下按 timestamp 重新格式化会相差 8 小时，导致 `/api/admin/check`、`/api/generate` 等动态 token 校验失败。
+- 修复方式：保留 30 秒 TTL 和 inflight 合并，但缓存服务端返回的 `timeString`，不再缓存 offset，也不再由客户端本地时区重新格式化服务端时间。
+- 已验证：补充动态 token 聚焦测试，覆盖服务端 UTC `timeString` 与客户端本地格式化相差 8 小时时仍使用服务端 `timeString` 生成 token。
+- 待复测：本地 `TZ=UTC` 启动服务后验证后台入口和图片生成；线上 Tekton 构建后验证后台入口、图片生成、视频生成和工作流修复/放大。
 
 Tekton 构建兼容性修复记录：
 - 状态：已实现，本地 Next 构建已通过，Tekton 待复测

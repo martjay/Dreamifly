@@ -46,26 +46,19 @@ function createMockDate(nowRef) {
   }
 }
 
-function createTimeResponse() {
-  const now = new Date()
+function createTimeResponse(timeString = '202607061200') {
   return {
     ok: true,
     async json() {
       return {
-        timestamp: now.getTime(),
-        timeString: [
-          now.getFullYear(),
-          String(now.getMonth() + 1).padStart(2, '0'),
-          String(now.getDate()).padStart(2, '0'),
-          String(now.getHours()).padStart(2, '0'),
-          String(now.getMinutes()).padStart(2, '0'),
-        ].join(''),
+        timestamp: new Date('2026-07-06T04:00:00Z').getTime(),
+        timeString,
       }
     },
   }
 }
 
-test('reuses the server time offset for sequential token generation inside the ttl', async () => {
+test('reuses the server time string for sequential token generation inside the ttl', async () => {
   process.env.NEXT_PUBLIC_API_KEY = 'test-key'
   let fetchCount = 0
   const dynamicToken = loadDynamicToken(async () => {
@@ -98,7 +91,7 @@ test('deduplicates concurrent server time requests', async () => {
   assert.equal(tokens.every((token) => typeof token === 'string' && token.length > 0), true)
 })
 
-test('refreshes the server time offset after the ttl expires', async () => {
+test('refreshes the server time string after the ttl expires', async () => {
   process.env.NEXT_PUBLIC_API_KEY = 'test-key'
   const nowRef = { value: new Date('2026-07-06T12:00:00Z').getTime() }
   const DateImpl = createMockDate(nowRef)
@@ -108,7 +101,7 @@ test('refreshes the server time offset after the ttl expires', async () => {
     return {
       ok: true,
       async json() {
-        return { timestamp: nowRef.value }
+        return { timeString: fetchCount === 1 ? '202607061200' : '202607061201' }
       },
     }
   }, { DateImpl })
@@ -124,7 +117,25 @@ test('refreshes the server time offset after the ttl expires', async () => {
   assert.equal(fetchCount, 2)
 })
 
-test('resetServerTimeOffset clears the cached server time offset', async () => {
+test('uses the server timeString directly instead of local timezone formatting', async () => {
+  process.env.NEXT_PUBLIC_API_KEY = 'test-key'
+  const dynamicToken = loadDynamicToken(async () => ({
+    ok: true,
+    async json() {
+      return {
+        timestamp: new Date('2026-07-06T04:12:00Z').getTime(),
+        timeString: '202607060412',
+      }
+    },
+  }))
+
+  const token = await dynamicToken.generateDynamicTokenWithServerTime()
+
+  assert.equal(token, dynamicToken.generateDynamicToken('202607060412'))
+  assert.notEqual(token, dynamicToken.generateDynamicToken('202607061212'))
+})
+
+test('resetServerTimeOffset clears the cached server time string', async () => {
   process.env.NEXT_PUBLIC_API_KEY = 'test-key'
   let fetchCount = 0
   const dynamicToken = loadDynamicToken(async () => {

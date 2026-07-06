@@ -1,11 +1,11 @@
 import MD5 from 'crypto-js/md5'
 
-const SERVER_TIME_OFFSET_TTL_MS = 30 * 1000
+const SERVER_TIME_STRING_TTL_MS = 30 * 1000
 
-let serverTimeOffsetMs: number | null = null
-let serverTimeOffsetFetchedAt = 0
-let inflightTimeRequest: Promise<number> | null = null
-let offsetVersion = 0
+let cachedServerTimeString: string | null = null
+let serverTimeStringFetchedAt = 0
+let inflightTimeRequest: Promise<string> | null = null
+let timeStringVersion = 0
 
 function formatTimeString(date: Date): string {
   const year = date.getFullYear()
@@ -16,7 +16,7 @@ function formatTimeString(date: Date): string {
   return `${year}${month}${day}${hour}${minute}`
 }
 
-async function fetchServerTimeOffset(version: number): Promise<number> {
+async function fetchServerTimeString(version: number): Promise<string> {
   const response = await fetch('/api/time', {
     cache: 'no-store',
     headers: {
@@ -30,30 +30,29 @@ async function fetchServerTimeOffset(version: number): Promise<number> {
 
   const data = await response.json()
   const receivedAt = Date.now()
-  const serverTimestamp = Number(data.timestamp)
+  const serverTimeString = data.timeString
 
-  if (!Number.isFinite(serverTimestamp)) {
+  if (typeof serverTimeString !== 'string' || !/^\d{12}$/.test(serverTimeString)) {
     throw new Error('Invalid server time response')
   }
 
-  const offset = serverTimestamp - receivedAt
-  if (version === offsetVersion) {
-    serverTimeOffsetMs = offset
-    serverTimeOffsetFetchedAt = receivedAt
+  if (version === timeStringVersion) {
+    cachedServerTimeString = serverTimeString
+    serverTimeStringFetchedAt = receivedAt
   }
 
-  return offset
+  return serverTimeString
 }
 
-async function getServerTimeOffset(): Promise<number> {
+async function getServerTimeString(): Promise<string> {
   const now = Date.now()
-  if (serverTimeOffsetMs !== null && now - serverTimeOffsetFetchedAt < SERVER_TIME_OFFSET_TTL_MS) {
-    return serverTimeOffsetMs
+  if (cachedServerTimeString !== null && now - serverTimeStringFetchedAt < SERVER_TIME_STRING_TTL_MS) {
+    return cachedServerTimeString
   }
 
   if (!inflightTimeRequest) {
-    const version = offsetVersion
-    const request = fetchServerTimeOffset(version)
+    const version = timeStringVersion
+    const request = fetchServerTimeString(version)
     const trackedRequest = request.finally(() => {
       if (inflightTimeRequest === trackedRequest) {
         inflightTimeRequest = null
@@ -66,9 +65,9 @@ async function getServerTimeOffset(): Promise<number> {
 }
 
 export function resetServerTimeOffset(): void {
-  offsetVersion += 1
-  serverTimeOffsetMs = null
-  serverTimeOffsetFetchedAt = 0
+  timeStringVersion += 1
+  cachedServerTimeString = null
+  serverTimeStringFetchedAt = 0
   inflightTimeRequest = null
 }
 
@@ -106,9 +105,8 @@ export function generateDynamicToken(serverTimeString?: string): string {
  */
 export async function generateDynamicTokenWithServerTime(): Promise<string> {
   try {
-    const offset = await getServerTimeOffset()
-    const serverTime = new Date(Date.now() + offset)
-    return generateDynamicToken(formatTimeString(serverTime))
+    const serverTimeString = await getServerTimeString()
+    return generateDynamicToken(serverTimeString)
   } catch (error) {
     console.warn('Failed to fetch server time, using local time as fallback:', error)
     // 降级方案：如果获取服务器时间失败，使用本地时间
