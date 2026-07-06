@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import AvatarWithFrame from '@/components/AvatarWithFrame'
 import ReportDialog from '@/components/ReportDialog'
 import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
+import { useVisibleMediaKeys } from '@/hooks/useVisibleMediaKeys'
 import { formatCommunityTime } from '@/utils/communityTime'
 import { getMediaDisplayUrl, isEncryptedImage } from '@/utils/imageDisplay'
 import { useSession } from '@/lib/auth-client'
@@ -49,10 +50,18 @@ export default function CommunityFeedGrid({
   const [copiedPromptItemId, setCopiedPromptItemId] = useState<string | null>(null)
   const { data: session } = useSession()
   const { checkAndDownload, DownloadTermsModalWrapper } = useDownloadWithTerms()
+  const { visibleKeys: visibleMediaUrls, registerElement: registerMediaElement } = useVisibleMediaKeys(
+    items.map((item) => item.mediaUrl)
+  )
 
   useEffect(() => {
-    const pendingItems = items.filter(
-      (item) => isEncryptedImage(item.mediaUrl) && !decodedMedia[item.mediaUrl] && !decodingMedia.has(item.mediaUrl)
+    const decodeCandidates = selectedItem ? [...items, selectedItem] : items
+    const pendingItems = decodeCandidates.filter(
+      (item) =>
+        (visibleMediaUrls.has(item.mediaUrl) || selectedItem?.mediaUrl === item.mediaUrl) &&
+        isEncryptedImage(item.mediaUrl) &&
+        !decodedMedia[item.mediaUrl] &&
+        !decodingMedia.has(item.mediaUrl)
     )
 
     if (pendingItems.length === 0) return
@@ -93,7 +102,7 @@ export default function CommunityFeedGrid({
     return () => {
       cancelled = true
     }
-  }, [items, decodedMedia, decodingMedia])
+  }, [items, selectedItem, visibleMediaUrls, decodedMedia, decodingMedia])
 
   useEffect(() => {
     setLikedItemIds(new Set(items.filter((item) => item.likedByCurrentUser).map((item) => item.id)))
@@ -216,17 +225,21 @@ export default function CommunityFeedGrid({
       showVideoControls?: boolean
       containerClassName?: string
       intrinsicMedia?: boolean
+      shouldLoad?: boolean
     }
   ) => {
     const displayUrl = getDisplayUrl(item)
-    const isDecoding = isEncryptedImage(item.mediaUrl) && !decodedMedia[item.mediaUrl]
+    const shouldLoad = options.shouldLoad ?? true
+    const isDecoding = shouldLoad && isEncryptedImage(item.mediaUrl) && !decodedMedia[item.mediaUrl]
     const isIntrinsic = options.intrinsicMedia ?? false
 
     return (
       <div
         className={`relative overflow-hidden ${isIntrinsic ? 'inline-flex max-w-full items-center justify-center' : 'h-full w-full'} ${options.containerClassName ?? 'bg-gray-100'}`}
       >
-        {isDecoding ? (
+        {!shouldLoad ? (
+          <div className={`${isIntrinsic ? 'min-h-[240px] min-w-[180px]' : 'absolute inset-0'} bg-gray-100`} />
+        ) : isDecoding ? (
           <div className={`flex items-center justify-center ${isIntrinsic ? 'min-h-[240px] min-w-[180px]' : 'absolute inset-0'}`}>
             <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-orange-500" />
           </div>
@@ -306,10 +319,12 @@ export default function CommunityFeedGrid({
           const nickname = item.userNickname?.trim() || '匿名用户'
           const model = item.model?.trim() || '未知模型'
           const avatar = item.userAvatar || '/images/default-avatar.svg'
+          const shouldLoadMedia = visibleMediaUrls.has(item.mediaUrl)
 
           return (
             <article
               key={item.id}
+              ref={registerMediaElement(item.mediaUrl)}
               role="button"
               tabIndex={0}
               aria-label={`查看${nickname}发布的${item.mediaType === 'video' ? '视频' : '图片'}`}
@@ -330,6 +345,7 @@ export default function CommunityFeedGrid({
                     className:
                       'h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] group-focus-visible:scale-[1.03]',
                     showVideoBadge: true,
+                    shouldLoad: shouldLoadMedia,
                   })}
                 </div>
               </div>

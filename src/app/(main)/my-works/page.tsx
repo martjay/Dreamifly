@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { isEncryptedImage, getImageDisplayUrl, getVideoDisplayUrl } from '@/utils/imageDisplay'
 import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
+import { useVisibleMediaKeys } from '@/hooks/useVisibleMediaKeys'
 import ModerationConsentModal from '@/components/ModerationConsentModal'
 import RestrictedMediaMask from '@/components/RestrictedMediaMask'
 import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
@@ -70,6 +71,9 @@ export default function MyWorksPage() {
   const [likedTotalCount, setLikedTotalCount] = useState(0)
   const [loadingMoreGenerated, setLoadingMoreGenerated] = useState(false)
   const [loadingMoreLiked, setLoadingMoreLiked] = useState(false)
+  const { visibleKeys: visibleMediaUrls, registerElement: registerMediaElement } = useVisibleMediaKeys(
+    [...images, ...likedImages].map((image) => image.imageUrl)
+  )
 
   useEffect(() => {
     if (isPending) return
@@ -137,7 +141,7 @@ export default function MyWorksPage() {
 
   // 解码加密媒体（图片和视频，批量处理）
   useEffect(() => {
-    const mediaToDecode = [...images, ...likedImages]
+    const mediaToDecode = [...images, ...likedImages].filter((image) => visibleMediaUrls.has(image.imageUrl))
     if (!mediaToDecode.length) return
 
     const encryptedMedia = mediaToDecode.filter(
@@ -189,7 +193,7 @@ export default function MyWorksPage() {
     return () => {
       cancelled = true
     }
-  }, [images, likedImages, decodedImages, decodingImages])
+  }, [images, likedImages, visibleMediaUrls, decodedImages, decodingImages])
 
   // 获取媒体显示URL（支持图片和视频）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -479,7 +483,8 @@ export default function MyWorksPage() {
       {imageList.map((image) => {
         const mediaType = image.mediaType || 'image'
         const displayUrl = getDisplayUrl(image.imageUrl, mediaType)
-        const isDecoding = isEncryptedImage(image.imageUrl) && !decodedImages[image.imageUrl]
+        const shouldLoadMedia = visibleMediaUrls.has(image.imageUrl)
+        const isDecoding = shouldLoadMedia && isEncryptedImage(image.imageUrl) && !decodedImages[image.imageUrl]
         const isVideo = mediaType === 'video'
         const masked = shouldShowMask(image)
         const canView = canViewOriginal(image)
@@ -489,14 +494,19 @@ export default function MyWorksPage() {
         const infoDate = section === 'liked' && image.likedAt ? image.likedAt : image.createdAt
 
         return (
-          <div key={`${section}-${image.id}`} className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all hover:shadow-xl">
+          <div
+            key={`${section}-${image.id}`}
+            ref={registerMediaElement(image.imageUrl)}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all hover:shadow-xl"
+          >
             <div className="relative aspect-square overflow-hidden bg-gray-100">
-              {isDecoding && (
+              {!shouldLoadMedia ? (
+                <div className="absolute inset-0 bg-gray-100" />
+              ) : isDecoding ? (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-100">
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-orange-500"></div>
                 </div>
-              )}
-              {isVideo ? (
+              ) : isVideo ? (
                 <div
                   className={`absolute inset-0 group ${canView ? 'cursor-pointer' : 'cursor-default'}`}
                   onClick={(e) => {
