@@ -53,13 +53,13 @@ async function getServerTimeOffset(): Promise<number> {
 
   if (!inflightTimeRequest) {
     const version = offsetVersion
-    let request: Promise<number>
-    request = fetchServerTimeOffset(version).finally(() => {
-      if (inflightTimeRequest === request) {
+    const request = fetchServerTimeOffset(version)
+    const trackedRequest = request.finally(() => {
+      if (inflightTimeRequest === trackedRequest) {
         inflightTimeRequest = null
       }
     })
-    inflightTimeRequest = request
+    inflightTimeRequest = trackedRequest
   }
 
   return inflightTimeRequest
