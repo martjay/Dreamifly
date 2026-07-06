@@ -14,8 +14,8 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useSession, signOut } from '@/lib/auth-client'
 import { useAvatar } from '@/contexts/AvatarContext'
 import { usePoints } from '@/contexts/PointsContext'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 import AvatarWithFrame from './AvatarWithFrame'
-import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 
 export default function Navbar() {
   const t = createScopedT('nav')
@@ -23,10 +23,11 @@ export default function Navbar() {
   const { data: session, isPending: sessionLoading } = useSession()
   const { avatar: globalAvatar, nickname: globalNickname, avatarFrameId } = useAvatar()
   const { pointsBalance } = usePoints()
+  const { summary } = useUserSummary()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const isAdmin = Boolean(summary?.user.isAdmin)
   const headerUserMenuRef = useRef<HTMLDivElement>(null)
   const sidebarUserMenuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
@@ -35,38 +36,6 @@ export default function Navbar() {
   const isPricingActive = pathname === pricingPath || pathname?.startsWith(`${pricingPath}/`)
   const communityPath = transferUrl('/community')
   const isCommunityActive = pathname === communityPath || pathname?.startsWith(`${communityPath}/`)
-
-  // 检查管理员和优质用户状态
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      if (sessionLoading) {
-        return
-      }
-
-      if (!session?.user) {
-        setIsAdmin(false)
-        return
-      }
-
-      try {
-        // 获取动态 token
-        const token = await generateDynamicTokenWithServerTime()
-        
-        const response = await fetch('/api/admin/check', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        const data = await response.json()
-        setIsAdmin(data.isAdmin || false)
-      } catch (error) {
-        console.error('Failed to check user status:', error)
-        setIsAdmin(false)
-      }
-    }
-
-    checkUserStatus()
-  }, [session?.user, sessionLoading])
 
   useEffect(() => {
     if (!showUserMenu) return

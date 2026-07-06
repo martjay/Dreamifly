@@ -13,7 +13,7 @@ import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
-import { usePoints } from '@/contexts/PointsContext'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
 import { saveCreatePageDraft } from '@/utils/createPromptTransfer'
@@ -88,7 +88,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   const tHome = createScopedT('home')
   const router = useRouter()
   const { data: session, isPending } = useSession()
-  const { refreshPoints } = usePoints()
+  const { summary, refreshSummary } = useUserSummary()
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const promptValueRef = useRef(initialPrompt || '')
@@ -504,25 +504,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
   const refreshPostGenerationState = async () => {
     if (!session?.user) return
 
-    refreshPoints().catch(err => {
-      console.error('Failed to refresh points:', err);
-    });
-
     try {
-      const token = await generateDynamicTokenWithServerTime();
-      const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-        setHasQuota(quota);
+      const nextSummary = await refreshSummary()
+      if (nextSummary?.quota) {
+        setHasQuota(nextSummary.quota.hasQuota)
       }
     } catch (error) {
-      console.error('Failed to refresh quota:', error);
+      console.error('Failed to refresh user summary:', error);
     }
   }
 
@@ -1185,46 +1173,14 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, init
     fetchModelBaseCost();
   }, [model, authStatus]);
   
-  // 获取用户额度信息（仅对已登录用户）
   useEffect(() => {
     if (authStatus !== 'authenticated') {
       setHasQuota(null);
       return;
     }
 
-    const fetchQuota = async () => {
-      try {
-        const token = await generateDynamicTokenWithServerTime();
-        const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          // 管理员不限次，视为有额度
-          const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-          setHasQuota(quota);
-        } else {
-          setHasQuota(null);
-        }
-      } catch (error) {
-        console.error('Failed to fetch quota:', error);
-        setHasQuota(null);
-      }
-    };
-
-    fetchQuota();
-    
-    // 定期刷新额度信息（每30秒）
-    const interval = setInterval(() => {
-      if (authStatus === 'authenticated') {
-        fetchQuota();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [authStatus]);
+    setHasQuota(summary?.quota?.hasQuota ?? null);
+  }, [authStatus, summary?.quota?.hasQuota]);
   
   // 计算预计消耗和额外消耗（仅对已登录用户）
   useEffect(() => {

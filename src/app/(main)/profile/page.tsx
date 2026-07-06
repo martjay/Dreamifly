@@ -10,7 +10,7 @@ import { useAvatar } from '@/contexts/AvatarContext'
 import AvatarCropper from '@/components/AvatarCropper'
 import AvatarWithFrame from '@/components/AvatarWithFrame'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
-import { usePoints } from '@/contexts/PointsContext'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 import { isDisplayNameWithinLimit, normalizeDisplayName } from '@/utils/displayName'
 
 export default function ProfilePage() {
@@ -18,7 +18,13 @@ export default function ProfilePage() {
   const router = useRouter()
   const { data: session, isPending } = useSession()
   const { avatar: globalAvatar, nickname: globalNickname, avatarFrameId, updateProfile, setAvatarFrameId } = useAvatar()
-  const { refreshPoints } = usePoints()
+  const { summary, isLoading: summaryLoading, refreshSummary } = useUserSummary()
+  const sessionUser = session?.user
+  const sessionUserId = sessionUser?.id
+  const summaryUser = summary?.user
+  const summaryCheckIn = summary?.checkIn
+  const availableAvatarFrameIds = summaryUser?.availableAvatarFrameIds ?? ''
+  const summaryCheckedIn = summaryCheckIn?.checkedIn
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [nickname, setNickname] = useState('')
@@ -45,24 +51,6 @@ export default function ProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
-  // Quota state
-  const [quota, setQuota] = useState<{
-    todayCount: number
-    maxDailyRequests: number | null
-    isAdmin: boolean
-    isPremium: boolean
-    isOldUser: boolean
-    isActive: boolean
-  } | null>(null)
-  const [quotaLoading, setQuotaLoading] = useState(false)
-
-  const [subscription, setSubscription] = useState<{
-    isSubscribed: boolean
-    planType: string | null
-    expiresAt: string | null
-  } | null>(null)
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
-
   // CDK state
   const [cdkCode, setCdkCode] = useState('')
   const [cdkRedeeming, setCdkRedeeming] = useState(false)
@@ -81,7 +69,6 @@ export default function ProfilePage() {
   // Check-in state
   const [checkedIn, setCheckedIn] = useState<boolean | null>(null)
   const [checkInLoading, setCheckInLoading] = useState(false)
-  const [checkInStatusLoading, setCheckInStatusLoading] = useState(false)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
   const [checkInResult, setCheckInResult] = useState<{
     points: number
@@ -96,27 +83,30 @@ export default function ProfilePage() {
   const [previewFrameId, setPreviewFrameId] = useState<number | null>(null)
   const [framesLoading, setFramesLoading] = useState(false)
 
+  const quota = summary?.quota ?? null
+  const quotaLoading = summaryLoading && !quota
+  const subscription = summary?.subscription ?? null
+  const subscriptionLoading = summaryLoading && !subscription
+  const checkInStatusLoading = summaryLoading && checkedIn === null
 
-  // 监听session变化，更新用户数据
+
   useEffect(() => {
-    if (session?.user) {
-      const user = session.user as ExtendedUser
-      setNickname(user.nickname || '')
-      setAvatar(user.avatar || '/images/default-avatar.svg')
-      setPreviewFrameId(user.avatarFrameId ?? null)
+    if (summaryUser) {
+      setNickname(summaryUser.nickname || '')
+      setAvatar(summaryUser.avatar || '/images/default-avatar.svg')
+      setPreviewFrameId(summaryUser.avatarFrameId ?? null)
     }
-  }, [session])
+  }, [summaryUser])
 
   // 获取用户可用的头像框列表
   useEffect(() => {
     const fetchAvailableFrames = async () => {
-      if (!session?.user) return
+      if (!sessionUserId) return
 
       setFramesLoading(true)
       try {
-        const user = session.user as ExtendedUser
-        const availableFrameIds = user.availableAvatarFrameIds
-          ? user.availableAvatarFrameIds.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id))
+        const availableFrameIds = availableAvatarFrameIds
+          ? availableAvatarFrameIds.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id))
           : []
 
         // 如果用户没有可用头像框ID列表，则不显示任何头像框选项
@@ -145,7 +135,7 @@ export default function ProfilePage() {
     }
 
     fetchAvailableFrames()
-  }, [session])
+  }, [sessionUserId, availableAvatarFrameIds])
 
   // 同步全局头像和昵称状态到本地状态
   useEffect(() => {
@@ -156,103 +146,16 @@ export default function ProfilePage() {
     setNickname(globalNickname)
   }, [globalNickname])
 
-  // 获取今日额度信息
   useEffect(() => {
-    const fetchQuota = async () => {
-      if (!session?.user) return
-      
-      setQuotaLoading(true)
-      try {
-        // 获取动态token（使用服务器时间）
-        const token = await generateDynamicTokenWithServerTime()
-        
-        // 添加时间戳参数以避免缓存
-        const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setQuota(data)
-        }
-      } catch (error) {
-        console.error('Error fetching quota:', error)
-      } finally {
-        setQuotaLoading(false)
-      }
-    }
-
-    fetchQuota()
-  }, [session])
-
-  // 获取订阅状态
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      if (!session?.user) return
-
-      setSubscriptionLoading(true)
-      try {
-        const res = await fetch(`/api/subscription/status?t=${Date.now()}`, {
-          credentials: 'include',
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setSubscription({
-            isSubscribed: Boolean(data.isSubscribed),
-            planType: data.subscription?.planType ?? null,
-            expiresAt: data.expiresAt ?? null,
-          })
-        }
-      } catch (error) {
-        console.error('Error fetching subscription status:', error)
-      } finally {
-        setSubscriptionLoading(false)
-      }
-    }
-
-    fetchSubscription()
-  }, [session])
-
-  // 检查签到状态 - 页面加载时立即检查
-  useEffect(() => {
-    const fetchCheckInStatus = async () => {
-      if (!session?.user) {
-        setCheckedIn(null)
-        return
-      }
-
-      setCheckInStatusLoading(true)
-      try {
-        const res = await fetch(`/api/points/check-status?t=${Date.now()}`, {
-          credentials: 'include',
-        })
-        if (res.ok) {
-          const data = await res.json()
-          // 确保正确处理返回的checkedIn值
-          const isCheckedIn = data.checkedIn === true
-          setCheckedIn(isCheckedIn)
-          console.log('Check-in status:', isCheckedIn, data)
-        } else {
-          console.error('Failed to fetch check-in status:', res.status)
-          setCheckedIn(false)
-        }
-      } catch (error) {
-        console.error('Error fetching check-in status:', error)
-        setCheckedIn(false)
-      } finally {
-        setCheckInStatusLoading(false)
-      }
-    }
-
-    // 如果session存在，立即检查；否则等待session加载
-    if (session?.user) {
-      fetchCheckInStatus()
-    } else if (session === null && !isPending) {
-      // session已确定不存在
+    if (!sessionUserId) {
       setCheckedIn(null)
+      return
     }
-  }, [session, isPending])
+
+    if (typeof summaryCheckedIn === 'boolean') {
+      setCheckedIn(summaryCheckedIn)
+    }
+  }, [sessionUserId, summaryCheckedIn])
 
   // 加载CDK配置和每日使用情况
   useEffect(() => {
@@ -297,7 +200,7 @@ export default function ProfilePage() {
     return null
   }
 
-  const user = session.user as ExtendedUser
+  const user = summary?.user ?? (session.user as ExtendedUser)
   const quotaProgress =
     quota?.maxDailyRequests && quota.maxDailyRequests > 0
       ? Math.min(100, Math.round((quota.todayCount / quota.maxDailyRequests) * 100))
@@ -471,6 +374,7 @@ export default function ProfilePage() {
       
       // 更新全局头像框ID
       setAvatarFrameId(previewFrameId)
+      await refreshSummary()
       
       setSuccess(t('success.profileUpdated'))
       setTimeout(() => {
@@ -572,19 +476,12 @@ export default function ProfilePage() {
         setCheckedIn(true)
         // 确保弹窗显示
         setShowCheckInModal(true)
-        await refreshPoints()
+        await refreshSummary()
       } else if (data.success === true && data.awarded === false) {
         // 今日已签到
         setError('今日已签到，请明天再来')
         setCheckedIn(true)
-        // 重新检查状态以确保UI同步
-        const statusRes = await fetch(`/api/points/check-status?t=${Date.now()}`, {
-          credentials: 'include',
-        })
-        if (statusRes.ok) {
-          const statusData = await statusRes.json()
-          setCheckedIn(statusData.checkedIn === true)
-        }
+        await refreshSummary()
       } else {
         throw new Error(data.error || '签到失败')
       }
@@ -642,28 +539,8 @@ export default function ProfilePage() {
         setShowCdkResultModal(true)
         setCdkCode('')
 
-        // 刷新积分和会员状态
-        await refreshPoints()
-
-        // 如果兑换的是会员，刷新订阅状态
-        if (data.data?.packageType === 'subscription_plan') {
-          // 重新获取订阅状态
-          try {
-            const res = await fetch(`/api/subscription/status?t=${Date.now()}`, {
-              credentials: 'include',
-            })
-            if (res.ok) {
-              const subData = await res.json()
-              setSubscription({
-                isSubscribed: Boolean(subData.isSubscribed),
-                planType: subData.subscription?.planType ?? null,
-                expiresAt: subData.expiresAt ?? null,
-              })
-            }
-          } catch (error) {
-            console.error('Error fetching subscription status:', error)
-          }
-        }
+        // 刷新积分、额度和会员状态
+        await refreshSummary()
 
         // 重新获取CDK剩余次数
         await loadCdkRemainingCount()
@@ -866,8 +743,7 @@ export default function ProfilePage() {
 
             {/* 更换头像框折叠框 - 仅当用户有可用头像框ID列表时显示 */}
             {(() => {
-              const user = session?.user as ExtendedUser | undefined
-              const hasAvailableFrames = user?.availableAvatarFrameIds && user.availableAvatarFrameIds.trim() !== ''
+              const hasAvailableFrames = summary?.user?.availableAvatarFrameIds && summary.user.availableAvatarFrameIds.trim() !== ''
               
               if (!hasAvailableFrames) {
                 return null

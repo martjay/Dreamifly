@@ -88,6 +88,16 @@
 - 预期效果：首屏不再因为列表已渲染而请求全部图片或全部 `.dat` 加密媒体；“查看更多/展开全部”后，未滚动到的作品先保留占位，不立即加载真实媒体资源。
 - 待复测：PC 和移动端访问 `/community`、`/my-works`，检查首屏网络瀑布中图片和 `.dat` 请求数量；滚动到底部确认图片逐步加载；点击详情、下载、收藏、取消收藏、删除和中风险确认流程正常。
 
+用户摘要聚合接口记录：
+- 状态：已实现，浏览器复测待补充
+- 数据库影响：无，不涉及表结构、索引或数据迁移
+- 触发原因：登录态主界面原先会分别请求 `/api/points/balance`、`/api/user/quota`、`/api/subscription/status`、`/api/points/check-status` 和 Navbar 的 `/api/admin/check`，每条链路都会独立触发会话校验和用户态查询。
+- 改动范围：`src/app/api/user/summary/route.ts`、`src/contexts/UserSummaryContext.tsx`、`src/contexts/PointsContext.tsx`、`src/contexts/AvatarContext.tsx`、`src/app/(main)/layout.tsx`、`src/components/Navbar.tsx`、`src/components/GenerateSection.tsx`、`src/components/CommunityMasonry.tsx`、`src/app/(main)/profile/page.tsx`
+- 实现方式：新增 `/api/user/summary`，一次动态 token 校验和一次 `getSession` 后返回用户信息、积分余额、今日额度、订阅状态和签到状态；主布局通过 `UserSummaryProvider` 共享结果，Navbar、资料页、生成页和社区瀑布流登录判断改读同一份 summary；生成、签到、CDK 兑换和资料保存后刷新 summary。
+- 旧接口处理：旧接口暂时保留，但当前主界面、资料页、生成页和 Navbar 不再主动调用上述旧用户态接口；这样可以降低回退风险，后续确认无隐藏调用后再考虑删除或收口。
+- 预期效果：登录态首屏用户态状态请求从多条接口降为 `/api/user/summary` 一条；`getSession` 和用户表查询次数从多次降为一次。线上收益主要体现在减少请求数量、减少数据库连接压力和缩短用户态网络瀑布。
+- 待复测：PC 和移动端登录态首屏 Network，确认不再出现 `/api/points/balance`、`/api/user/quota`、`/api/subscription/status`、`/api/points/check-status`、Navbar 初始化 `/api/admin/check`；确认 Navbar 积分和后台入口、资料页额度/会员/签到、生成页额度提示、生成后积分刷新、签到后积分刷新、CDK 兑换后会员和积分刷新正常。
+
 社区标签查询与筛选语义待确认：
 - 状态：待确认，未实现
 - 数据库影响：无

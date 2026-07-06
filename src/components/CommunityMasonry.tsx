@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import AvatarWithFrame from '@/components/AvatarWithFrame'
 import { isEncryptedImage, getImageDisplayUrl } from '@/utils/imageDisplay'
 import ReportDialog from '@/components/ReportDialog'
-import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 
 export type CommunityWork = {
   id: string | number
@@ -37,6 +37,11 @@ const aspectPresets = [
   'aspect-[2/3]',
 ] as const
 
+type LegacyMediaQueryList = MediaQueryList & {
+  addListener?: (listener: (event: MediaQueryListEvent) => void) => void
+  removeListener?: (listener: (event: MediaQueryListEvent) => void) => void
+}
+
 export default function CommunityMasonry({
   works,
   onGenerateSame,
@@ -57,7 +62,8 @@ export default function CommunityMasonry({
   // 举报相关状态
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportingImageId, setReportingImageId] = useState<string>('')
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { summary } = useUserSummary()
+  const isLoggedIn = Boolean(summary?.user)
 
   useEffect(() => {
     const hoverMql = window.matchMedia('(hover: hover) and (pointer: fine)')
@@ -78,27 +84,20 @@ export default function CommunityMasonry({
 
     apply()
 
-    // Safari < 14 fallback
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyHover = hoverMql as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyCoarse = coarseMql as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyNoHover = noHoverMql as any
-
-    const add = (mql: MediaQueryList, anyMql: any) => {
+    const add = (mql: MediaQueryList) => {
+      const legacyMql = mql as LegacyMediaQueryList
       if (typeof mql.addEventListener === 'function') {
         mql.addEventListener('change', apply)
         return () => mql.removeEventListener('change', apply)
       }
-      if (typeof anyMql.addListener === 'function') {
-        anyMql.addListener(apply)
-        return () => anyMql.removeListener(apply)
+      if (typeof legacyMql.addListener === 'function') {
+        legacyMql.addListener(apply)
+        return () => legacyMql.removeListener?.(apply)
       }
       return () => undefined
     }
 
-    const cleanups = [add(hoverMql, anyHover), add(coarseMql, anyCoarse), add(noHoverMql, anyNoHover)]
+    const cleanups = [add(hoverMql), add(coarseMql), add(noHoverMql)]
     return () => cleanups.forEach((fn) => fn())
   }, [])
 
@@ -106,32 +105,6 @@ export default function CommunityMasonry({
   useEffect(() => {
     if (interactionMode === 'hover') setActiveTapId(null)
   }, [interactionMode])
-
-  // 获取用户权限（所有登录用户都可以举报）
-  useEffect(() => {
-    const checkUserPermissions = async () => {
-      try {
-        const token = await generateDynamicTokenWithServerTime()
-        const response = await fetch('/api/admin/check', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          // 使用 API 返回的 isLoggedIn 字段
-          setIsLoggedIn(data.isLoggedIn || false)
-        }
-      } catch (error) {
-        console.error('Failed to check user permissions:', error)
-        // 权限检查失败时，设置为未登录
-        setIsLoggedIn(false)
-      }
-    }
-
-    checkUserPermissions()
-  }, [])
 
   // 解码加密图片的状态
   const [decodedImages, setDecodedImages] = useState<{ [key: string]: string }>({})
