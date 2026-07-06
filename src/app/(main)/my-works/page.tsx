@@ -41,6 +41,18 @@ interface StorageInfo {
   message?: string
 }
 
+interface MediaLibrarySection {
+  images: UserImage[]
+  totalCount: number
+}
+
+interface MediaLibraryResponse {
+  success: boolean
+  generated?: MediaLibrarySection
+  liked?: MediaLibrarySection
+  storageInfo?: StorageInfo
+}
+
 const DEFAULT_COLLAPSED_MEDIA_COUNT = 4
 
 export default function MyWorksPage() {
@@ -83,9 +95,48 @@ export default function MyWorksPage() {
       return
     }
     
-    fetchImages({ loadAll: false, showInitialLoading: true })
-    fetchLikedImages({ loadAll: false, showInitialLoading: true })
-    fetchStorageInfo()
+    let cancelled = false
+
+    const fetchInitialMediaLibrary = async () => {
+      try {
+        setLoading(true)
+        setLikedLoading(true)
+
+        const params = new URLSearchParams({
+          generatedLimit: String(DEFAULT_COLLAPSED_MEDIA_COUNT),
+          likedLimit: String(DEFAULT_COLLAPSED_MEDIA_COUNT),
+        })
+        const response = await fetch(`/api/user/media-library?${params.toString()}`)
+
+        if (!response.ok) {
+          throw new Error('获取作品失败')
+        }
+
+        const data = await response.json() as MediaLibraryResponse
+        if (cancelled) return
+
+        setImages(data.generated?.images || [])
+        setGeneratedTotalCount(data.generated?.totalCount || 0)
+        setLikedImages(data.liked?.images || [])
+        setLikedTotalCount(data.liked?.totalCount || 0)
+        setStorageInfo(data.storageInfo || null)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '获取作品失败')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          setLikedLoading(false)
+        }
+      }
+    }
+
+    void fetchInitialMediaLibrary()
+
+    return () => {
+      cancelled = true
+    }
   }, [session, isPending, router])
 
   // 检测页眉是否显示
@@ -252,6 +303,25 @@ export default function MyWorksPage() {
   const hasMoreGeneratedImages = generatedTotalCount > DEFAULT_COLLAPSED_MEDIA_COUNT
   const hasMoreLikedImages = likedTotalCount > DEFAULT_COLLAPSED_MEDIA_COUNT
 
+  const buildMediaLibraryUrl = (options?: {
+    includeGenerated?: boolean
+    includeLiked?: boolean
+    includeStorage?: boolean
+    generatedLimit?: number
+    likedLimit?: number
+  }) => {
+    const params = new URLSearchParams()
+
+    if (options?.includeGenerated === false) params.set('includeGenerated', 'false')
+    if (options?.includeLiked === false) params.set('includeLiked', 'false')
+    if (options?.includeStorage === false) params.set('includeStorage', 'false')
+    if (options?.generatedLimit) params.set('generatedLimit', String(options.generatedLimit))
+    if (options?.likedLimit) params.set('likedLimit', String(options.likedLimit))
+
+    const query = params.toString()
+    return query ? `/api/user/media-library?${query}` : '/api/user/media-library'
+  }
+
   const fetchImages = async (options?: { loadAll?: boolean; showInitialLoading?: boolean }) => {
     const loadAll = options?.loadAll ?? false
     const showInitialLoading = options?.showInitialLoading ?? false
@@ -262,14 +332,17 @@ export default function MyWorksPage() {
         setLoadingMoreGenerated(true)
       }
 
-      const query = loadAll ? '' : `?limit=${DEFAULT_COLLAPSED_MEDIA_COUNT}`
-      const response = await fetch(`/api/user/images${query}`)
+      const response = await fetch(buildMediaLibraryUrl({
+        includeLiked: false,
+        includeStorage: false,
+        generatedLimit: loadAll ? undefined : DEFAULT_COLLAPSED_MEDIA_COUNT,
+      }))
       if (!response.ok) {
         throw new Error('获取图片失败')
       }
-      const data = await response.json()
-      setImages(data.images || [])
-      setGeneratedTotalCount(data.totalCount || 0)
+      const data = await response.json() as MediaLibraryResponse
+      setImages(data.generated?.images || [])
+      setGeneratedTotalCount(data.generated?.totalCount || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取图片失败')
     } finally {
@@ -291,14 +364,17 @@ export default function MyWorksPage() {
         setLoadingMoreLiked(true)
       }
 
-      const query = loadAll ? '' : `?limit=${DEFAULT_COLLAPSED_MEDIA_COUNT}`
-      const response = await fetch(`/api/user/liked-images${query}`)
+      const response = await fetch(buildMediaLibraryUrl({
+        includeGenerated: false,
+        includeStorage: false,
+        likedLimit: loadAll ? undefined : DEFAULT_COLLAPSED_MEDIA_COUNT,
+      }))
       if (!response.ok) {
         throw new Error('获取点赞收藏失败')
       }
-      const data = await response.json()
-      setLikedImages(data.images || [])
-      setLikedTotalCount(data.totalCount || 0)
+      const data = await response.json() as MediaLibraryResponse
+      setLikedImages(data.liked?.images || [])
+      setLikedTotalCount(data.liked?.totalCount || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取点赞收藏失败')
     } finally {
@@ -312,10 +388,13 @@ export default function MyWorksPage() {
 
   const fetchStorageInfo = async () => {
     try {
-      const response = await fetch('/api/user/images/storage-info')
+      const response = await fetch(buildMediaLibraryUrl({
+        includeGenerated: false,
+        includeLiked: false,
+      }))
       if (response.ok) {
-        const data = await response.json()
-        setStorageInfo(data)
+        const data = await response.json() as MediaLibraryResponse
+        setStorageInfo(data.storageInfo || null)
       }
     } catch (err) {
       console.error('获取存储信息失败:', err)
@@ -967,4 +1046,3 @@ export default function MyWorksPage() {
     </div>
   )
 }
-

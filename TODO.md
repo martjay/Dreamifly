@@ -98,6 +98,16 @@
 - 预期效果：登录态首屏用户态状态请求从多条接口降为 `/api/user/summary` 一条；`getSession` 和用户表查询次数从多次降为一次。线上收益主要体现在减少请求数量、减少数据库连接压力和缩短用户态网络瀑布。
 - 待复测：PC 和移动端登录态首屏 Network，确认不再出现 `/api/points/balance`、`/api/user/quota`、`/api/subscription/status`、`/api/points/check-status`、Navbar 初始化 `/api/admin/check`；确认 Navbar 积分和后台入口、资料页额度/会员/签到、生成页额度提示、生成后积分刷新、签到后积分刷新、CDK 兑换后会员和积分刷新正常。
 
+我的作品聚合接口记录：
+- 状态：已实现，浏览器复测待补充
+- 数据库影响：无，不涉及表结构、索引或数据迁移
+- 触发原因：我的作品页首屏原先会并发请求 `/api/user/images?limit=4`、`/api/user/liked-images?limit=4`、`/api/user/images/storage-info`，每个接口都会独立执行会话查询。
+- 改动范围：`src/app/api/user/media-library/route.ts`、`src/app/(main)/my-works/page.tsx`
+- 实现方式：新增 `/api/user/media-library`，一次 `getSession` 后按需返回生成作品、收藏作品和存储信息；首屏改为一次请求获取三组数据；展开生成作品、展开收藏作品和刷新存储信息也改走该聚合接口的按需参数。
+- 旧接口处理：`/api/user/images`、`/api/user/liked-images`、`/api/user/images/storage-info` 暂时保留，删除作品、审核查看确认等动作接口保持不变，降低回退风险。
+- 预期效果：我的作品页登录态首屏用户态请求从 3 条降为 1 条；首屏 `getSession` 次数从 3 次降为 1 次。数据库查询数量暂未做结构性合并，后续如需减少数据库查询，需要单独设计查询聚合或索引方案。
+- 待复测：PC 和移动端访问 `/my-works`，确认首屏 Network 不再出现 `/api/user/images?limit=4`、`/api/user/liked-images?limit=4`、`/api/user/images/storage-info`；确认生成作品、收藏作品、存储卡片、展开全部、折叠、删除作品、取消收藏、中风险查看确认和下载流程正常。
+
 社区标签查询与筛选语义待确认：
 - 状态：待确认，未实现
 - 数据库影响：无
