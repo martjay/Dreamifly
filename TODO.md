@@ -71,6 +71,15 @@
 - 已完成代码级验证：动态 token 聚焦测试覆盖 30 秒复用、并发合并、TTL 过期刷新和 `resetServerTimeOffset()`；全仓精确搜索确认 `127.0.0.1:7243/ingest`、`#region agent log`、`#endregion` 无残留。
 - 待复测：PC 和移动端登录态首屏网络瀑布，重点对比 `/api/time` 请求数；CDK 删除流程确认不再出现 `127.0.0.1:7243` 请求；图片生成、视频生成、工作流修复/放大、用户额度、管理员检查、登录注册和邮箱域名校验确认动态 token 仍通过校验。
 
+Tekton 构建兼容性修复记录：
+- 状态：已实现，本地 Next 构建已通过，Tekton 待复测
+- 数据库影响：无
+- 触发原因：Next.js 15 在预渲染阶段要求使用 `useSearchParams()` 的客户端内容必须位于 `Suspense` 边界内；Tekton 构建失败页为 `/workflows`、`/reset-password`，同类风险页还有 `/verify-email`。
+- 改动范围：`src/app/(main)/workflows/page.tsx`、`src/app/(main)/reset-password/page.tsx`、`src/app/(main)/verify-email/page.tsx`
+- 实现方式：按项目内支付结果页的现有模式拆出外层页面和内层内容组件，外层提供 `Suspense` fallback，内层保留原有查询参数读取和业务逻辑。
+- 已验证：目标页面 ESLint 通过；清理 `.next` 后直接执行 `node_modules/.bin/next build` 通过，`/workflows`、`/reset-password`、`/verify-email` 均完成静态生成。
+- 待复测：Tekton 镜像构建；PC 和移动端验证工作流 tab 参数、重置密码 token、邮箱验证 token 仍按原逻辑生效。
+
 线上参考基线：
 
 | 接口 | 状态 | 样本 | p50 | p95 | avg | max | 说明 |
