@@ -872,7 +872,7 @@ export const QwenImageEditWorkflow = {
   },
   "37": {
     "inputs": {
-      "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+      "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -983,6 +983,7 @@ export const QwenImageEditWorkflow = {
     "inputs": {
       "upscale_method": "lanczos",
       "megapixels": 1,
+      "resolution_steps": 1,
       "image": [
         "78",
         0
