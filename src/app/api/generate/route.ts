@@ -11,7 +11,7 @@ import { headers } from 'next/headers'
 import { createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
 import { moderateGenerationInput } from '@/utils/moderationFlow'
-import { getModelBaseCost, calculateGenerationCost, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
+import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
 import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats'
@@ -93,13 +93,13 @@ export async function POST(request: Request) {
         .limit(1)
       
       if (blacklistedIP.length > 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: '您的IP地址已被加入黑名单，无法使用此服务',
           code: 'IP_BLACKLISTED'
         }, { status: 403 })
       }
     }
-    
+
     // 验证认证头
     const authHeader = request.headers.get('Authorization')
     
@@ -154,47 +154,6 @@ export async function POST(request: Request) {
     currentModelId = model
     // 第三方独立计费模型只走积分，不消耗免费额度
     const usesFreeQuota = model !== 'nano-banana-2' && !isGptImage2Model(model)
-
-    // 检查图改图模型的登录限制
-    // 如果用户未登录且使用图改图模型（有上传图片且模型支持I2I），返回401
-    if (!session?.user && images && images.length > 0) {
-      // 检查模型是否支持I2I（图改图）
-      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
-      if (i2iModels.includes(model) || isGptImage2Model(model)) {
-        return NextResponse.json({
-          error: '图改图功能仅限登录用户使用，请先登录后再使用',
-          code: 'LOGIN_REQUIRED_FOR_I2I'
-        }, { status: 401 })
-      }
-    }
-
-    // 检查仅限登录使用的模型（如 grok-imagine-1.0）
-    if (!session?.user && isLoginRequiredModel(model)) {
-      return NextResponse.json({
-        error: '该模型仅限登录使用，请先登录后再使用',
-        code: 'LOGIN_REQUIRED'
-      }, { status: 401 })
-    }
-
-    // 扣费前完成不依赖外部服务的请求校验，避免无效请求先扣积分再直接返回。
-    if (width < 64 || height < 64) {
-      return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
-    }
-    if (isGptImage2Model(model) && images && images.length > 3) {
-      return NextResponse.json({ error: 'GPT-image-2 supports up to 3 input images per edit request' }, { status: 400 })
-    }
-    if (model === 'nano-banana-2' && images && images.length > 3) {
-      return NextResponse.json({ error: 'nano-banana-2 supports up to 3 input images per edit request' }, { status: 400 })
-    }
-
-    const thresholds = getModelThresholds(model);
-    if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
-      if (generationSteps !== thresholds.normalSteps && generationSteps !== thresholds.highSteps) {
-        return NextResponse.json({
-          error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.`
-        }, { status: 400 })
-      }
-    }
     
     // 如果用户未登录，检查IP每日调用次数限制
     if (!session?.user && clientIP && usesFreeQuota) {
@@ -777,14 +736,13 @@ export async function POST(request: Request) {
           // 如果需要扣除积分（pointsCost > 0）
           if (pointsCost > 0) {
             // 检查积分是否足够
-            const currentBalance = await getPointsBalance(userId);
+            const hasEnoughPoints = await checkPointsSufficient(userId, pointsCost);
             
-            if (currentBalance < pointsCost) {
+            if (!hasEnoughPoints) {
               return NextResponse.json({
                 error: `积分不足。本次生成需要消耗 ${pointsCost} 积分，但您的积分余额不足。`,
                 code: 'INSUFFICIENT_POINTS',
-                requiredPoints: pointsCost,
-                currentBalance
+                requiredPoints: pointsCost
               }, { status: 402 }); // 402 Payment Required
             }
             
@@ -829,11 +787,55 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // 检查图改图模型的登录限制
+    // 如果用户未登录且使用图改图模型（有上传图片且模型支持I2I），返回401
+    if (!session?.user && images && images.length > 0) {
+      // 检查模型是否支持I2I（图改图）
+      const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
+      if (i2iModels.includes(model) || isGptImage2Model(model)) {
+        return NextResponse.json({
+          error: '图改图功能仅限登录用户使用，请先登录后再使用',
+          code: 'LOGIN_REQUIRED_FOR_I2I'
+        }, { status: 401 })
+      }
+    }
+
+    // 检查仅限登录使用的模型（如 grok-imagine-1.0）
+    if (!session?.user && isLoginRequiredModel(model)) {
+      return NextResponse.json({
+        error: '该模型仅限登录用户使用，请先登录后再使用',
+        code: 'LOGIN_REQUIRED'
+      }, { status: 401 })
+    }
+
     // 如果用户未登录，添加延迟（未登录用户不受用户并发限制）
     // 注意：未登录用户的IP并发计数已在前面增加，所以排队期间也算IP并发
     if (!session?.user) {
       const unauthDelay = parseInt(process.env.UNAUTHENTICATED_USER_DELAY || '20', 10)
       await new Promise(resolve => setTimeout(resolve, unauthDelay * 1000))
+    }
+
+    // 验证输入
+    // 只检查最小尺寸，不限制最大尺寸
+    if (width < 64 || height < 64) {
+      return NextResponse.json({ error: 'Invalid image dimensions' }, { status: 400 })
+    }
+    if (isGptImage2Model(model) && images && images.length > 3) {
+      return NextResponse.json({ error: 'GPT-image-2 supports up to 3 input images per edit request' }, { status: 400 })
+    }
+    if (model === 'nano-banana-2' && images && images.length > 3) {
+      return NextResponse.json({ error: 'nano-banana-2 supports up to 3 input images per edit request' }, { status: 400 })
+    }
+    // 验证步数：根据模型配置验证
+    const thresholds = getModelThresholds(model);
+    if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
+      // 如果模型支持步数修改，验证步数是否在允许范围内
+      if (generationSteps !== thresholds.normalSteps && generationSteps !== thresholds.highSteps) {
+        return NextResponse.json({
+          error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.`
+        }, { status: 400 })
+      }
     }
 
     // 调用图片生成 API（grok/nano-banana-2 使用独立 API，其他模型使用 ComfyUI）
