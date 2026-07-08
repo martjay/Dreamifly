@@ -359,7 +359,7 @@ export default function CreateClient() {
         </div>
       )}
 
-      <main className="transition-all duration-300 mx-auto lg:pl-40 pt-10 sm:pt-8 lg:pt-2 lg:mt-0">
+      <main className="transition-all duration-300 pt-10 sm:pt-8 lg:ml-48 lg:mt-0 lg:pt-2">
         {promptRestoreMessage && (
           <div className="mx-auto mb-4 max-w-[1260px] px-3 sm:px-5">
             <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800 shadow-sm">

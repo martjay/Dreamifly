@@ -349,7 +349,7 @@ export default function HomeClient() {
 
       {/* 主要内容区域 - 使用 Tailwind CSS 控制布局 */}
       <main 
-        className="relative z-10 transition-all duration-300 mx-auto lg:pl-40 pt-24 lg:pt-0 pt-4"
+        className="relative z-10 transition-all duration-300 pt-4 lg:ml-48 lg:pt-0"
       >
         {/* Hero Section - 改进响应式设计 */}
         <section className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 lg:px-40 overflow-hidden lg:pt-24">
