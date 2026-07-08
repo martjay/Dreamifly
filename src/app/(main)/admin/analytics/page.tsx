@@ -14,11 +14,8 @@ import {
   Line,
   BarChart,
   Bar,
-  ScatterChart,
-  Scatter,
   XAxis,
   YAxis,
-  ZAxis,
   CartesianGrid,
   Tooltip,
   Legend,
@@ -26,7 +23,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LabelList,
 } from 'recharts'
 
 type TimeRange = 'hour' | 'today' | 'yesterday' | 'week' | 'month' | 'all'
@@ -117,52 +113,9 @@ const FALLBACK_COLORS = [
   '#9a3412', // orange-800
 ]
 
-const FAILURE_RATE_COLOR = '#22c55e'
-const MODEL_SUCCESS_RATE_AXIS_WIDTH = 380
-
-type AxisTickPayload = {
-  value?: string | number
-}
-
-type ModelNameAxisTickProps = {
-  y?: number
-  payload?: AxisTickPayload
-}
-
-const renderModelNameAxisTick = ({ y = 0, payload }: ModelNameAxisTickProps) => (
-  <foreignObject x={0} y={y - 12} width={MODEL_SUCCESS_RATE_AXIS_WIDTH - 20} height={24}>
-    <div
-      style={{
-        alignItems: 'center',
-        color: '#6b7280',
-        display: 'flex',
-        fontSize: 12,
-        height: 24,
-        justifyContent: 'flex-end',
-        lineHeight: '24px',
-        overflow: 'visible',
-        paddingRight: 16,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {String(payload?.value ?? '')}
-    </div>
-  </foreignObject>
-)
-
 // 获取模型颜色
 const getModelColor = (modelName: string, index: number = 0): string => {
   return MODEL_COLORS[modelName] || FALLBACK_COLORS[index % FALLBACK_COLORS.length]
-}
-
-const getCompressedSuccessRatePosition = (successRate: number): number => {
-  if (successRate <= 50) return (successRate / 50) * 12
-  return 12 + ((successRate - 50) / 50) * 88
-}
-
-const formatCompressedSuccessRateTick = (value: number): string => {
-  if (value <= 12) return `${Math.round((value / 12) * 50)}%`
-  return `${Math.round(50 + ((value - 12) / 88) * 50)}%`
 }
 
 export default function AnalyticsPage() {
@@ -402,31 +355,6 @@ export default function AnalyticsPage() {
     value: stat.totalCalls,
     color: stat.color,
   }))
-
-  const successRateChartData = modelStatsChartData.map((stat) => ({
-    ...stat,
-    failureRate: stat.totalCalls > 0 ? Math.max(0, Number((100 - stat.successRate).toFixed(2))) : 0,
-    successRateLabel: stat.totalCalls > 0 ? `${stat.successRate.toFixed(2)}%` : '-',
-  }))
-
-  const successRateBubbleData = modelStatsChartData.map((stat) => {
-    const authenticatedWeight = stat.avgResponseTimeAuthenticated !== null ? stat.authenticatedCalls : 0
-    const unauthenticatedWeight = stat.avgResponseTimeUnauthenticated !== null ? stat.unauthenticatedCalls : 0
-    const responseTimeWeight = authenticatedWeight + unauthenticatedWeight
-    const avgResponseTime = responseTimeWeight > 0
-      ? (
-        ((stat.avgResponseTimeAuthenticated ?? 0) * authenticatedWeight) +
-        ((stat.avgResponseTimeUnauthenticated ?? 0) * unauthenticatedWeight)
-      ) / responseTimeWeight
-      : null
-
-    return {
-      ...stat,
-      successRatePosition: getCompressedSuccessRatePosition(stat.successRate),
-      avgResponseTimeForChart: avgResponseTime ?? 0,
-      avgResponseTimeLabel: avgResponseTime !== null ? `${avgResponseTime.toFixed(2)} 秒` : '-',
-    }
-  }).filter((stat) => stat.avgResponseTimeLabel !== '-') || []
 
   // 加载中或权限检查
   if (sessionLoading || checkingAdmin || !isAdmin) {
@@ -1099,203 +1027,6 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* 模型成功率柱状图 */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">模型成功率统计</h2>
-                  <ResponsiveContainer width="100%" height={Math.max(320, successRateChartData.length * 42)}>
-                    <BarChart
-                      data={successRateChartData}
-                      layout="vertical"
-                      margin={{ top: 8, right: 120, left: 0, bottom: 8 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                      <XAxis
-                        type="number"
-                        domain={[0, 100]}
-                        stroke="#6b7280"
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
-                        tickFormatter={(value) => `${value}%`}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="modelName"
-                        width={MODEL_SUCCESS_RATE_AXIS_WIDTH}
-                        stroke="#6b7280"
-                        tick={renderModelNameAxisTick}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          padding: '8px 12px'
-                        }}
-                        labelStyle={{ color: '#111827', fontWeight: 600 }}
-                        formatter={(value: number, name: string, item: any) => {
-                          const payload = item?.payload as (ModelStat & { failureRate?: number }) | undefined
-                          if (!payload) return [`${Number(value).toFixed(2)}%`, name]
-                          if (item?.dataKey === 'failureRate') {
-                            return [
-                              `${Number(value).toFixed(2)}%（失败 ${payload.failedCalls.toLocaleString()} / 总计 ${payload.totalCalls.toLocaleString()}）`,
-                              '失败占比',
-                            ]
-                          }
-                          return [
-                            `${Number(value).toFixed(2)}%（成功 ${payload.successfulCalls.toLocaleString()} / 失败 ${payload.failedCalls.toLocaleString()} / 总计 ${payload.totalCalls.toLocaleString()}）`,
-                            '成功占比',
-                          ]
-                        }}
-                      />
-                      <Bar
-                        dataKey="successRate"
-                        fill="#f97316"
-                        name="成功占比"
-                        stackId="success-rate"
-                        radius={[0, 6, 6, 0]}
-                      >
-                        {successRateChartData.map((entry) => (
-                          <Cell key={`success-rate-${entry.modelName}`} fill={entry.color} />
-                        ))}
-                        <LabelList
-                          dataKey="successRateLabel"
-                          position="right"
-                          fill="#374151"
-                          fontSize={12}
-                        />
-                      </Bar>
-                      <Bar
-                        dataKey="failureRate"
-                        fill={FAILURE_RATE_COLOR}
-                        name="失败占比"
-                        stackId="success-rate"
-                        radius={[0, 6, 6, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-600">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-sm bg-orange-500" />
-                      成功占比
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: FAILURE_RATE_COLOR }} />
-                      失败占比
-                    </span>
-                  </div>
-                </div>
-
-                {/* 模型成功率与响应时间气泡散点图 */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">模型成功率与响应时间分布</h2>
-                  {successRateBubbleData.length > 0 ? (
-                    <>
-                      <ResponsiveContainer width="100%" height={420}>
-                        <ScatterChart margin={{ top: 16, right: 32, left: 24, bottom: 40 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis
-                            type="number"
-                            dataKey="successRatePosition"
-                            name="成功率"
-                            domain={[0, 100]}
-                            ticks={[0, 12, 56, 100]}
-                            stroke="#6b7280"
-                            tick={{ fill: '#6b7280', fontSize: 12 }}
-                            tickFormatter={(value) => formatCompressedSuccessRateTick(Number(value))}
-                            label={{
-                              value: '成功率',
-                              position: 'insideBottom',
-                              offset: -24,
-                              fill: '#6b7280',
-                              fontSize: 12,
-                            }}
-                          />
-                          <YAxis
-                            type="number"
-                            dataKey="avgResponseTimeForChart"
-                            name="平均响应时间"
-                            stroke="#6b7280"
-                            tick={{ fill: '#6b7280', fontSize: 12 }}
-                            tickFormatter={(value) => `${Number(value).toFixed(1)}秒`}
-                            label={{
-                              value: '平均响应时间（秒）',
-                              angle: -90,
-                              position: 'insideLeft',
-                              fill: '#6b7280',
-                              fontSize: 12,
-                            }}
-                          />
-                          <ZAxis
-                            type="number"
-                            dataKey="totalCalls"
-                            name="总调用次数"
-                            range={[80, 900]}
-                          />
-                          <Tooltip
-                            cursor={{ strokeDasharray: '3 3', stroke: '#9ca3af' }}
-                            content={({ active, payload }: any) => {
-                              const data = payload?.[0]?.payload as (ModelStat & {
-                                avgResponseTimeLabel: string
-                                color: string
-                              }) | undefined
-                              if (!active || !data) return null
-
-                              return (
-                                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md">
-                                  <div className="mb-2 flex items-center gap-2">
-                                    <span
-                                      className="h-2.5 w-2.5 rounded-full"
-                                      style={{ backgroundColor: data.color }}
-                                    />
-                                    <p className="text-sm font-semibold text-gray-900">{data.modelName}</p>
-                                  </div>
-                                  <div className="space-y-1 text-xs text-gray-600">
-                                    <p>成功率：{data.successRate.toFixed(2)}%</p>
-                                    <p>平均响应时间：{data.avgResponseTimeLabel}</p>
-                                    <p>总调用次数：{data.totalCalls.toLocaleString()}</p>
-                                    <p>成功次数：{data.successfulCalls.toLocaleString()}</p>
-                                    <p>失败次数：{data.failedCalls.toLocaleString()}</p>
-                                  </div>
-                                </div>
-                              )
-                            }}
-                          />
-                          <Scatter data={successRateBubbleData} name="模型">
-                            {successRateBubbleData.map((entry) => (
-                              <Cell
-                                key={entry.modelName}
-                                fill={entry.color}
-                                fillOpacity={0.78}
-                                stroke={entry.color}
-                              />
-                            ))}
-                          </Scatter>
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm">
-                        {successRateBubbleData.map((entry) => (
-                          <span
-                            key={`bubble-legend-${entry.modelName}`}
-                            className="inline-flex items-center gap-2"
-                            style={{ color: entry.color }}
-                          >
-                            <span
-                              className="h-3.5 w-3.5 rounded-full"
-                              style={{ backgroundColor: entry.color }}
-                            />
-                            {entry.modelName}
-                          </span>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
-                      <p className="text-sm text-gray-500">暂无可展示的响应时间数据</p>
-                    </div>
-                  )}
-                </div>
-
                 {/* 模型调用趋势折线图 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">模型调用趋势</h2>
@@ -1441,29 +1172,6 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* 模型颜色说明 */}
-                {stats.modelStats.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">模型颜色说明</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {modelStatsChartData.map((stat) => {
-                        const color = stat.color
-                        return (
-                          <div key={stat.modelName} className="flex items-center gap-2">
-                            <div 
-                              className="w-4 h-4 rounded-sm flex-shrink-0" 
-                              style={{ backgroundColor: color }}
-                            />
-                            <span className="text-sm text-gray-700 truncate" title={stat.modelName}>
-                              {stat.modelName}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {/* 模型成功率与响应时间统计表 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">模型成功率与响应时间</h2>
@@ -1514,6 +1222,29 @@ export default function AnalyticsPage() {
                     </table>
               </div>
             </div>
+
+                {/* 模型颜色说明 */}
+                {stats.modelStats.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">模型颜色说明</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {modelStatsChartData.map((stat) => {
+                        const color = stat.color
+                        return (
+                          <div key={stat.modelName} className="flex items-center gap-2">
+                            <div
+                              className="w-4 h-4 rounded-sm flex-shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-sm text-gray-700 truncate" title={stat.modelName}>
+                              {stat.modelName}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
