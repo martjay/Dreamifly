@@ -49,6 +49,13 @@ type ComfyPromptResult = {
   attempts: number;
 }
 
+type ComfyFailureInfo = {
+  failureCode: string;
+  failureReason: string;
+  likelyCause: string;
+  suggestedAction: string;
+}
+
 const IMAGE_GENERATION_TIMEOUT_MS = 4 * 60 * 1000;
 const QWEN_IMAGE_EDIT_INPUT_MAX_PIXELS = 1280 * 1280;
 const QWEN_IMAGE_EDIT_INPUT_MAX_BYTES = 3 * 1024 * 1024;
@@ -211,6 +218,101 @@ function shouldRetryComfyResponse(status: number, text: string): boolean {
   return /upstream|disconnect|reset|timeout|temporarily unavailable|no healthy/i.test(text);
 }
 
+function truncateLogText(text: string, maxLength: number): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function getComfyFailureInfo(status: number, text: string): ComfyFailureInfo {
+  const normalizedText = text.toLowerCase();
+
+  if (
+    status === 503 &&
+    normalizedText.includes("upstream connect error") &&
+    normalizedText.includes("before headers")
+  ) {
+    return {
+      failureCode: "upstream_connection_terminated",
+      failureReason: "上游代理连接后端失败，或连接在返回响应头前被终止",
+      likelyCause: "部署实例未就绪、服务进程被回收、网关等待上游超时，或 ComfyUI 后端主动断开连接",
+      suggestedAction: "检查部署实例健康状态、网关超时限制、ComfyUI 进程日志和 GPU 队列状态",
+    };
+  }
+
+  if (status === 503 && normalizedText.includes("no healthy upstream")) {
+    return {
+      failureCode: "no_healthy_upstream",
+      failureReason: "上游没有可用健康实例",
+      likelyCause: "服务实例未启动、健康检查失败，或全部实例处于不可用状态",
+      suggestedAction: "检查部署平台实例健康检查、服务启动日志和实例数量",
+    };
+  }
+
+  if (status === 504 || normalizedText.includes("timeout")) {
+    return {
+      failureCode: "upstream_timeout",
+      failureReason: "上游服务响应超时",
+      likelyCause: "生成任务耗时超过网关或服务超时限制，或上游队列阻塞",
+      suggestedAction: "检查网关超时配置、ComfyUI 队列长度和模型推理耗时",
+    };
+  }
+
+  if (status === 404) {
+    return {
+      failureCode: "endpoint_not_found",
+      failureReason: "上游接口地址不存在",
+      likelyCause: "服务地址或路径配置错误",
+      suggestedAction: "检查模型 URL 环境变量是否指向 ComfyUI 服务根地址",
+    };
+  }
+
+  if (status === 429) {
+    return {
+      failureCode: "upstream_rate_limited",
+      failureReason: "上游服务限流或请求过多",
+      likelyCause: "短时间请求过多，或上游服务设置了并发限制",
+      suggestedAction: "检查调用频率、并发限制和上游限流配置",
+    };
+  }
+
+  if (status >= 500) {
+    return {
+      failureCode: "upstream_server_error",
+      failureReason: "上游服务内部错误",
+      likelyCause: "ComfyUI 或部署平台内部异常",
+      suggestedAction: "检查上游服务错误日志和部署平台事件",
+    };
+  }
+
+  return {
+    failureCode: "upstream_request_failed",
+    failureReason: "上游请求失败",
+    likelyCause: "请求参数、鉴权、服务配置或上游状态异常",
+    suggestedAction: "结合状态码、上游返回内容和 requestId 排查",
+  };
+}
+
+function buildComfyFailureMessage(params: {
+  model: string;
+  status: number;
+  statusText: string;
+  text: string;
+  durationMs: number;
+  attempt: number;
+  attempts: number;
+  requestId: string;
+}) {
+  const failureInfo = getComfyFailureInfo(params.status, params.text);
+  const statusText = params.statusText ? ` ${params.statusText}` : "";
+  return [
+    `${params.model} 上游请求失败：${params.status}${statusText}`,
+    `原因：${failureInfo.failureReason}`,
+    `单次耗时：${(params.durationMs / 1000).toFixed(2)}秒`,
+    `尝试：${params.attempt}/${params.attempts}`,
+    `requestId=${params.requestId}`,
+    `上游返回：${truncateLogText(params.text || "无响应内容", 300)}`,
+  ].join("；");
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -261,6 +363,7 @@ async function postComfyPrompt(
       }
 
       if (attempt < attempts && shouldRetryComfyResponse(response.status, text)) {
+        const failureInfo = getComfyFailureInfo(response.status, text);
         console.warn(`[${params.model}] ComfyUI请求失败，准备重试:`, {
           requestId,
           attempt,
@@ -268,7 +371,11 @@ async function postComfyPrompt(
           status: response.status,
           statusText: response.statusText,
           durationMs,
-          errorPreview: text.substring(0, 500),
+          failureCode: failureInfo.failureCode,
+          failureReason: failureInfo.failureReason,
+          likelyCause: failureInfo.likelyCause,
+          suggestedAction: failureInfo.suggestedAction,
+          upstreamPreview: truncateLogText(text, 500),
         });
         await delay(1200 * attempt);
         continue;
@@ -416,6 +523,7 @@ export async function generateImage(params: GenerateParams): Promise<string> {
 
     if (result.status < 200 || result.status >= 300) {
       const errorText = result.text;
+      const failureInfo = getComfyFailureInfo(result.status, errorText);
       console.error(`[${params.model}] API 错误响应:`, {
         requestId,
         status: result.status,
@@ -425,21 +533,52 @@ export async function generateImage(params: GenerateParams): Promise<string> {
         durationMs: result.durationMs,
         attempt: result.attempt,
         attempts: result.attempts,
+        failureCode: failureInfo.failureCode,
+        failureReason: failureInfo.failureReason,
+        likelyCause: failureInfo.likelyCause,
+        suggestedAction: failureInfo.suggestedAction,
         diagnostics,
-        error: errorText
+        upstreamResponse: truncateLogText(errorText, 1000)
       });
       
       // 如果是 404 错误，提供更详细的提示
       if (result.status === 404) {
-        throw new Error(`API 端点不存在 (404): ${apiEndpoint}。请检查 ${params.model} 的服务URL配置是否正确，确保环境变量 ${envVarName} 指向正确的 ComfyUI 服务地址`);
+        throw new Error(buildComfyFailureMessage({
+          model: params.model,
+          status: result.status,
+          statusText: result.statusText,
+          text: errorText,
+          durationMs: result.durationMs,
+          attempt: result.attempt,
+          attempts: result.attempts,
+          requestId,
+        }));
       }
       
       // 如果是 503 错误，提供连接相关的提示
       if (result.status === 503) {
-        throw new Error(`ComfyUI服务不可用 (503): ${errorText || '无法连接到服务'}。请检查 ${params.model} 的服务是否正在运行，以及环境变量 ${envVarName} 配置是否正确。requestId=${requestId}`);
+        throw new Error(buildComfyFailureMessage({
+          model: params.model,
+          status: result.status,
+          statusText: result.statusText,
+          text: errorText,
+          durationMs: result.durationMs,
+          attempt: result.attempt,
+          attempts: result.attempts,
+          requestId,
+        }));
       }
       
-      throw new Error(`ComfyUI服务错误 (${result.status}): ${errorText || '未知错误'}。requestId=${requestId}`);
+      throw new Error(buildComfyFailureMessage({
+        model: params.model,
+        status: result.status,
+        statusText: result.statusText,
+        text: errorText,
+        durationMs: result.durationMs,
+        attempt: result.attempt,
+        attempts: result.attempts,
+        requestId,
+      }));
     }
 
     let base64Image: string = '';
@@ -476,14 +615,17 @@ export async function generateImage(params: GenerateParams): Promise<string> {
 
     return base64Image;
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[${params.model}] Error generating image:`, {
       requestId,
       envVarName,
       baseUrl,
-      error,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      errorMessage,
+      errorStack: error instanceof Error ? error.stack : undefined,
     });
     if (axios.isAxiosError(error)) {
-      throw new Error(`无法连接到ComfyUI服务 (${baseUrl})。请检查服务是否正常运行，或检查环境变量 ${envVarName}。requestId=${requestId}`);
+      throw new Error(`${params.model} 上游连接异常：${errorMessage}；requestId=${requestId}；url=${baseUrl}`);
     }
     throw error;
   }
