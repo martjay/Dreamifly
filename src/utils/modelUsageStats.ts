@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { db } from '@/db'
 import { modelUsageStats } from '@/db/schema'
+import { evaluateModelAlertRules } from '@/utils/modelAlerts'
 
 export type ModelUsageType = 'image_generation' | 'video_generation' | 'moderation' | 'prompt_optimization'
 
@@ -28,6 +29,12 @@ export async function recordModelUsage(params: RecordModelUsageParams): Promise<
       modelType: params.modelType,
       ipAddress: params.ipAddress || null,
       createdAt: new Date(),
+    })
+
+    await evaluateModelAlertRules({
+      modelName: params.modelName,
+      modelType: params.modelType,
+      isSuccess: params.isSuccess,
     })
   } catch (error) {
     console.error('Failed to record model usage stats:', error)

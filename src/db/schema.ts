@@ -92,6 +92,26 @@ export const modelUsageStats = pgTable("model_usage_stats", {
   createdAt: timestamp("created_at").defaultNow().notNull(), // 调用时间
 });
 
+// 模型预警规则表
+export const modelAlertRules = pgTable("model_alert_rules", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  modelNames: jsonb("model_names").$type<string[]>().default([]).notNull(),
+  modelTypes: jsonb("model_types").$type<string[]>().default([]).notNull(),
+  failureRateThreshold: integer("failure_rate_threshold").notNull(),
+  sampleSize: integer("sample_size").default(20).notNull(),
+  minCalls: integer("min_calls").default(10).notNull(),
+  cooldownMinutes: integer("cooldown_minutes").default(30).notNull(),
+  emails: jsonb("emails").$type<string[]>().default([]).notNull(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  enabledIndex: index("idx_model_alert_rules_enabled").on(table.isEnabled),
+  lastTriggeredIndex: index("idx_model_alert_rules_last_triggered").on(table.lastTriggeredAt),
+}));
+
 // 用户限额配置表
 export const userLimitConfig = pgTable("user_limit_config", {
   id: integer("id").primaryKey().default(1), // 单例配置，id固定为1
