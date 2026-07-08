@@ -17,7 +17,7 @@ import {
   type VideoModelConfig,
   type VideoModelMode,
 } from '@/utils/videoModelConfig'
-import { getModelBaseCost, checkPointsSufficient, deductPoints, refundPoints, getPointsBalance } from '@/utils/points'
+import { getModelBaseCost, deductPoints, refundPoints, getPointsBalance } from '@/utils/points'
 import { saveUserGeneratedVideo } from '@/utils/userVideoStorage'
 import { callGrokImagineVideo, downloadMp4AsDataUrl } from '@/utils/grokVideoApi'
 import {
@@ -368,9 +368,8 @@ export async function POST(request: Request) {
       pointsCostForResponse = pointsCost
       chargedPointsCost = pointsCost
 
-      const hasEnoughPoints = await checkPointsSufficient(userId, pointsCost)
-      if (!hasEnoughPoints) {
-        const currentBalance = await getPointsBalance(userId)
+      const currentBalance = await getPointsBalance(userId)
+      if (currentBalance < pointsCost) {
         return buildInsufficientPointsResponse(pointsCost, currentBalance)
       }
 

@@ -487,54 +487,84 @@ export async function refundPoints(
   reason: string = '服务调用失败，积分返还'
 ): Promise<boolean> {
   try {
-    // 首先验证消费记录存在
-    const spentRecord = await db
-      .select()
-      .from(userPoints)
-      .where(eq(userPoints.id, spentRecordId))
-      .limit(1);
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${spentRecordId}))`);
 
-    if (spentRecord.length === 0) {
-      console.error('返还积分失败：消费记录不存在', { spentRecordId });
-      return false;
-    }
+      // 首先验证消费记录存在
+      const spentRecord = await tx
+        .select()
+        .from(userPoints)
+        .where(eq(userPoints.id, spentRecordId))
+        .limit(1);
 
-    const record = spentRecord[0];
+      if (spentRecord.length === 0) {
+        console.error('返还积分失败：消费记录不存在', { spentRecordId });
+        return false;
+      }
 
-    // 确保这是消费记录（负数积分）
-    if (record.points >= 0 || record.type !== 'spent') {
-      console.error('返还积分失败：记录不是有效的消费记录', {
-        spentRecordId,
-        points: record.points,
-        type: record.type
+      const record = spentRecord[0];
+
+      // 确保这是消费记录（负数积分）
+      if (record.points >= 0 || record.type !== 'spent') {
+        console.error('返还积分失败：记录不是有效的消费记录', {
+          spentRecordId,
+          points: record.points,
+          type: record.type
+        });
+        return false;
+      }
+
+      const refundMarker = `[refund_for:${spentRecordId}]`;
+      const refundPointsValue = Math.abs(record.points);
+      const existingRefund = await tx
+        .select({ id: userPoints.id })
+        .from(userPoints)
+        .where(
+          and(
+            eq(userPoints.userId, record.userId),
+            eq(userPoints.type, 'earned'),
+            eq(userPoints.sourceType, 'refund'),
+            eq(userPoints.points, refundPointsValue),
+            sql`${userPoints.description} LIKE ${`%${refundMarker}%`}`
+          )
+        )
+        .limit(1);
+
+      if (existingRefund.length > 0) {
+        console.log('积分已返还，跳过重复返还', {
+          spentRecordId,
+          refundRecordId: existingRefund[0].id,
+          userId: record.userId,
+          refundedPoints: refundPointsValue,
+        });
+        return true;
+      }
+
+      // 创建返还记录（正数积分）
+      // 返还的积分设置为一个月后过期
+      const refundExpiryDate = new Date();
+      refundExpiryDate.setMonth(refundExpiryDate.getMonth() + 1);
+
+      await tx.insert(userPoints).values({
+        id: randomUUID(),
+        userId: record.userId,
+        points: refundPointsValue, // 转为正数
+        type: 'earned',
+        sourceType: 'refund',
+        description: `${record.description} - ${reason} ${refundMarker}`,
+        earnedAt: new Date(),
+        expiresAt: refundExpiryDate, // 返还的积分一个月后过期
       });
-      return false;
-    }
 
-    // 创建返还记录（正数积分）
-    // 返还的积分设置为一个月后过期
-    const refundExpiryDate = new Date();
-    refundExpiryDate.setMonth(refundExpiryDate.getMonth() + 1);
+      console.log('积分返还成功', {
+        spentRecordId,
+        userId: record.userId,
+        refundedPoints: refundPointsValue,
+        reason
+      });
 
-    await db.insert(userPoints).values({
-      id: randomUUID(),
-      userId: record.userId,
-      points: Math.abs(record.points), // 转为正数
-      type: 'earned',
-      sourceType: 'refund',
-      description: `${record.description} - ${reason}`,
-      earnedAt: new Date(),
-      expiresAt: refundExpiryDate, // 返还的积分一个月后过期
+      return true;
     });
-
-    console.log('积分返还成功', {
-      spentRecordId,
-      userId: record.userId,
-      refundedPoints: Math.abs(record.points),
-      reason
-    });
-
-    return true;
   } catch (error) {
     console.error('返还积分失败：', error);
     return false;
