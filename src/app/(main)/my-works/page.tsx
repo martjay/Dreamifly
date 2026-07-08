@@ -747,10 +747,10 @@ export default function MyWorksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white">
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white lg:ml-48">
       {/* 页眉占位符 - 当页眉显示时需要占位 */}
       {showHeaderSpacer && <div className="h-16"></div>}
-      <div className="max-w-7xl mx-auto px-4 pb-16 pt-10 lg:pl-48">
+      <div className="max-w-7xl mx-auto px-4 pb-16 pt-10">
         {/* 页面标题和统计 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{t('title')}</h1>
