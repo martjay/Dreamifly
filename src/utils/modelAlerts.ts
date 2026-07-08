@@ -1,7 +1,7 @@
 import { db } from '@/db'
 import { modelAlertRules, modelUsageStats } from '@/db/schema'
 import { sendEmail } from '@/lib/email'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import type { ModelUsageType } from '@/utils/modelUsageStats'
 import {
   MODERATION_ALERT_MODEL_NAME,
@@ -15,6 +15,24 @@ type EvaluateModelAlertParams = {
 }
 
 type AlertRule = typeof modelAlertRules.$inferSelect
+
+type LatestFailureCall = {
+  createdAt: Date
+  responseTime: number
+  errorCode: string | null
+  errorStage: string | null
+  errorStatusCode: number | null
+  errorMessage: string | null
+  errorDetail: string | null
+}
+
+const ERROR_STAGE_LABELS: Record<string, string> = {
+  generation: '模型生成',
+  request: '请求上游服务',
+  response_parse: '解析上游响应',
+  upload: '上传文件',
+  save_work: '保存作品',
+}
 
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
@@ -36,6 +54,29 @@ function formatDate(value: Date | string | null | undefined): string {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+function formatErrorSummary(latestFailure: LatestFailureCall | null | undefined): string {
+  if (!latestFailure) return '-'
+  const message = latestFailure.errorMessage || '模型调用失败'
+  return latestFailure.errorStatusCode
+    ? `${latestFailure.errorStatusCode} ${message}`
+    : message
+}
+
+function formatErrorStage(stage: string | null | undefined): string {
+  if (!stage) return '-'
+  return ERROR_STAGE_LABELS[stage] || stage
+}
+
+function formatErrorDetail(detail: string | null | undefined): string {
+  if (!detail) return '-'
+  return detail.length > 300 ? `${detail.slice(0, 300)}...` : detail
+}
+
+function formatResponseTime(seconds: number | null | undefined): string {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '-'
+  return `${seconds.toFixed(2)} 秒`
+}
+
 function matchesRule(rule: AlertRule, params: EvaluateModelAlertParams): boolean {
   const modelNames = toStringArray(rule.modelNames)
   const modelTypes = toStringArray(rule.modelTypes)
@@ -53,7 +94,14 @@ function buildAlertEmailHtml(params: {
   modelType: ModelUsageType
   consecutiveFailureCount: number
   latestFailureAt: Date | string | null
+  latestFailure: LatestFailureCall | null
 }): string {
+  const errorSummary = formatErrorSummary(params.latestFailure)
+  const errorStage = formatErrorStage(params.latestFailure?.errorStage)
+  const errorCode = params.latestFailure?.errorCode || '-'
+  const errorDetail = formatErrorDetail(params.latestFailure?.errorDetail)
+  const responseTime = formatResponseTime(params.latestFailure?.responseTime)
+
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -96,6 +144,26 @@ function buildAlertEmailHtml(params: {
                   <td style="padding:10px 0;color:#6b7280;font-size:14px;">最近失败时间</td>
                   <td style="padding:10px 0;color:#111827;font-size:14px;">${formatDate(params.latestFailureAt)}</td>
                 </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#6b7280;font-size:14px;">最近失败耗时</td>
+                  <td style="padding:10px 0;color:#111827;font-size:14px;">${escapeHtml(responseTime)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#6b7280;font-size:14px;">最近失败原因</td>
+                  <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(errorSummary)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#6b7280;font-size:14px;">失败阶段</td>
+                  <td style="padding:10px 0;color:#111827;font-size:14px;">${escapeHtml(errorStage)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#6b7280;font-size:14px;">错误类型</td>
+                  <td style="padding:10px 0;color:#111827;font-size:14px;">${escapeHtml(errorCode)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#6b7280;font-size:14px;vertical-align:top;">原始信息</td>
+                  <td style="padding:10px 0;color:#374151;font-size:13px;line-height:1.6;">${escapeHtml(errorDetail)}</td>
+                </tr>
               </table>
             </td>
           </tr>
@@ -123,18 +191,52 @@ function buildUsageWhere(params: EvaluateModelAlertParams, isSuccess?: boolean) 
   return and(...conditions)
 }
 
-async function wasTriggeredSinceLastSuccess(rule: AlertRule, params: EvaluateModelAlertParams): Promise<boolean> {
-  if (!rule.lastTriggeredAt) return false
+function buildSuccessAfterLastTriggerCondition(params: EvaluateModelAlertParams) {
+  const targetCondition = params.modelType === 'moderation'
+    ? sql`${modelUsageStats.modelType} = ${params.modelType}`
+    : sql`${modelUsageStats.modelName} = ${params.modelName}
+        and ${modelUsageStats.modelType} = ${params.modelType}`
 
-  const [latestSuccess] = await db
-    .select({ createdAt: modelUsageStats.createdAt })
-    .from(modelUsageStats)
-    .where(buildUsageWhere(params, true))
-    .orderBy(desc(modelUsageStats.createdAt))
-    .limit(1)
+  return sql`exists (
+    select 1
+    from ${modelUsageStats}
+    where ${targetCondition}
+      and ${modelUsageStats.isSuccess} = true
+      and timezone('UTC', ${modelUsageStats.createdAt}) > ${modelAlertRules.lastTriggeredAt}
+    limit 1
+  )`
+}
 
-  if (!latestSuccess) return true
-  return rule.lastTriggeredAt.getTime() >= latestSuccess.createdAt.getTime()
+async function reserveAlertTrigger(rule: AlertRule, params: EvaluateModelAlertParams, reservedAt: Date): Promise<boolean> {
+  const [reservedRule] = await db
+    .update(modelAlertRules)
+    .set({
+      lastTriggeredAt: reservedAt,
+      updatedAt: reservedAt,
+    })
+    .where(and(
+      eq(modelAlertRules.id, rule.id),
+      sql`(
+        ${modelAlertRules.lastTriggeredAt} is null
+        or ${buildSuccessAfterLastTriggerCondition(params)}
+      )`
+    ))
+    .returning({ id: modelAlertRules.id })
+
+  return Boolean(reservedRule)
+}
+
+async function restoreAlertTrigger(rule: AlertRule, reservedAt: Date): Promise<void> {
+  await db
+    .update(modelAlertRules)
+    .set({
+      lastTriggeredAt: rule.lastTriggeredAt,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(modelAlertRules.id, rule.id),
+      eq(modelAlertRules.lastTriggeredAt, reservedAt)
+    ))
 }
 
 function getEmailFailureReason(reason: unknown): string {
@@ -228,8 +330,6 @@ export async function evaluateModelAlertRules(params: EvaluateModelAlertParams):
 
     if (rules.length === 0) return
 
-    const now = new Date()
-
     for (const rule of rules) {
       if (!matchesRule(rule, params)) continue
 
@@ -242,6 +342,12 @@ export async function evaluateModelAlertRules(params: EvaluateModelAlertParams):
         .select({
           isSuccess: modelUsageStats.isSuccess,
           createdAt: modelUsageStats.createdAt,
+          responseTime: modelUsageStats.responseTime,
+          errorCode: modelUsageStats.errorCode,
+          errorStage: modelUsageStats.errorStage,
+          errorStatusCode: modelUsageStats.errorStatusCode,
+          errorMessage: modelUsageStats.errorMessage,
+          errorDetail: modelUsageStats.errorDetail,
         })
         .from(modelUsageStats)
         .where(buildUsageWhere(params))
@@ -250,11 +356,13 @@ export async function evaluateModelAlertRules(params: EvaluateModelAlertParams):
 
       if (latestCalls.length < consecutiveFailureCount) continue
       if (latestCalls.some((call) => call.isSuccess)) continue
-      if (await wasTriggeredSinceLastSuccess(rule, params)) continue
 
       const displayModelName = params.modelType === 'moderation'
         ? MODERATION_ALERT_MODEL_NAME
         : params.modelName
+      const reservedAt = new Date()
+      const reserved = await reserveAlertTrigger(rule, params, reservedAt)
+      if (!reserved) continue
 
       const html = buildAlertEmailHtml({
         rule,
@@ -262,6 +370,7 @@ export async function evaluateModelAlertRules(params: EvaluateModelAlertParams):
         modelType: params.modelType,
         consecutiveFailureCount,
         latestFailureAt: latestCalls[0]?.createdAt ?? null,
+        latestFailure: latestCalls[0] ?? null,
       })
 
       const emailSent = await sendAlertEmails({
@@ -277,16 +386,9 @@ export async function evaluateModelAlertRules(params: EvaluateModelAlertParams):
           ruleId: rule.id,
           modelName: displayModelName,
         })
+        await restoreAlertTrigger(rule, reservedAt)
         continue
       }
-
-      await db
-        .update(modelAlertRules)
-        .set({
-          lastTriggeredAt: now,
-          updatedAt: now,
-        })
-        .where(eq(modelAlertRules.id, rule.id))
     }
   } catch (error) {
     console.error('Failed to evaluate model alert rules:', error)

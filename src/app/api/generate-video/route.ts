@@ -552,6 +552,7 @@ export async function POST(request: Request) {
         userId: currentUserId,
         isAuthenticated: Boolean(currentUserId),
         ipAddress: clientIP,
+        error,
       })
       generationStatsRecorded = true
     }

@@ -88,6 +88,11 @@ export const modelUsageStats = pgTable("model_usage_stats", {
   isAuthenticated: boolean("is_authenticated").default(false).notNull(), // 是否已登录
   isSuccess: boolean("is_success").default(true).notNull(), // 模型调用是否成功
   modelType: text("model_type").default("image_generation").notNull(), // 模型调用类型
+  errorCode: text("error_code"), // 失败类型
+  errorStage: text("error_stage"), // 失败阶段
+  errorStatusCode: integer("error_status_code"), // 上游状态码
+  errorMessage: text("error_message"), // 用户可读失败原因
+  errorDetail: text("error_detail"), // 原始失败信息
   ipAddress: text("ip_address"), // IP地址，用于爬虫分析
   createdAt: timestamp("created_at").defaultNow().notNull(), // 调用时间
 });
