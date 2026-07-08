@@ -190,9 +190,9 @@ export function isValid163Email(email: string): boolean {
 /**
  * 验证邮箱本地部分的点号数量，拦截低门槛临时邮箱常见的多点号格式
  * @param email 邮箱地址
- * @param maxDots @ 前允许的最大点号数量，默认 5
+ * @param maxDots @ 前允许的最大点号数量，默认 2
  */
-export function isEmailDotCountAllowed(email: string, maxDots = 5): boolean {
+export function isEmailDotCountAllowed(email: string, maxDots = 2): boolean {
   const parts = email.split('@');
   if (parts.length !== 2) {
     return false;
