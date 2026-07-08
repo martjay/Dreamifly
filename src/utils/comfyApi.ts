@@ -50,7 +50,6 @@ type ComfyPromptResult = {
 }
 
 const IMAGE_GENERATION_TIMEOUT_MS = 4 * 60 * 1000;
-const QWEN_IMAGE_EDIT_OUTPUT_MAX_PIXELS = 896 * 896;
 const QWEN_IMAGE_EDIT_INPUT_MAX_PIXELS = 1280 * 1280;
 const QWEN_IMAGE_EDIT_INPUT_MAX_BYTES = 3 * 1024 * 1024;
 const QWEN_IMAGE_EDIT_JPEG_QUALITY = 90;
@@ -608,13 +607,8 @@ function setQwenImageEditorkflowParams(workflow: any, params: GenerateParams) {
   }
   workflow["111"].inputs.prompt = params.prompt;
   workflow["3"].inputs.steps = 4
-  const outputSize = constrainDimensions(
-    params.width,
-    params.height,
-    getEnvNumber("QWEN_IMAGE_EDIT_OUTPUT_MAX_PIXELS", QWEN_IMAGE_EDIT_OUTPUT_MAX_PIXELS),
-  );
-  workflow["112"].inputs.width = outputSize.width;
-  workflow["112"].inputs.height = outputSize.height;
+  workflow["112"].inputs.width = params.width;
+  workflow["112"].inputs.height = params.height;
   if (params.seed) {
     workflow["3"].inputs.seed = params.seed;
   }

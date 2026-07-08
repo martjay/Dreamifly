@@ -81,6 +81,7 @@ interface UserTrend {
 interface StatsResponse {
   timeRange: TimeRange
   modelStats: ModelStat[]
+  moderationStats: ModelStat[]
   dailyData: DailyData[]
   totalStats: TotalStats
   dailyTrend: DailyTrend[]
@@ -391,6 +392,10 @@ export default function AnalyticsPage() {
     ...stat,
     color: getModelColor(stat.modelName, index),
   })) || []
+  const modelStatsTableData = [
+    ...(stats?.modelStats ?? []),
+    ...(stats?.moderationStats ?? []),
+  ]
 
   const pieChartData = modelStatsChartData.map((stat) => ({
     name: stat.modelName,
@@ -548,7 +553,7 @@ export default function AnalyticsPage() {
                   <p className="text-gray-600">加载中...</p>
                 </div>
               </div>
-            ) : !stats || stats.modelStats.length === 0 ? (
+            ) : !stats || (stats.modelStats.length === 0 && stats.moderationStats.length === 0) ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
               <div className="text-center text-gray-500">
                   <p className="text-lg font-medium">暂无数据</p>
@@ -1476,7 +1481,7 @@ export default function AnalyticsPage() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {stats.modelStats.map((stat) => (
+                        {modelStatsTableData.map((stat) => (
                           <tr key={stat.modelName} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {stat.modelName}
