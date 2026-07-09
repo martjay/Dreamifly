@@ -188,11 +188,16 @@ export function isValid163Email(email: string): boolean {
 }
 
 /**
- * 验证邮箱本地部分的点号数量，拦截低门槛临时邮箱常见的多点号格式
+ * 验证 Google 邮箱本地部分的点号数量，拦截 3 个及以上点号
  * @param email 邮箱地址
  * @param maxDots @ 前允许的最大点号数量，默认 2
  */
 export function isEmailDotCountAllowed(email: string, maxDots = 2): boolean {
+  const domain = extractDomainFromEmail(email);
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+    return true;
+  }
+
   const parts = email.split('@');
   if (parts.length !== 2) {
     return false;
@@ -204,12 +209,12 @@ export function isEmailDotCountAllowed(email: string, maxDots = 2): boolean {
 }
 
 /**
- * 验证 Gmail 长别名邮箱，拦截本地部分超过 20 个字符且包含 + 的地址
+ * 验证 Gmail 别名邮箱，拦截本地部分包含 + 的地址
  * @param email 邮箱地址
  */
-export function isGmailLongAliasEmail(email: string): boolean {
+export function isGmailPlusAliasEmail(email: string): boolean {
   const domain = extractDomainFromEmail(email);
-  if (domain !== 'gmail.com') {
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
     return false;
   }
 
@@ -219,7 +224,7 @@ export function isGmailLongAliasEmail(email: string): boolean {
   }
 
   const localPart = parts[0];
-  return localPart.includes('+') && localPart.length > 20;
+  return localPart.includes('+');
 }
 
 /**

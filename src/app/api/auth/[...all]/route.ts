@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailLongAliasEmail, isValid163Email } from "@/utils/email-domain-validator";
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailPlusAliasEmail, isValid163Email } from "@/utils/email-domain-validator";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from 'crypto';
@@ -98,7 +98,7 @@ async function ensureAllowedEmailDomain(request: NextRequest) {
     return jsonError("EMAIL_DOT_COUNT_NOT_ALLOWED", "EMAIL_DOT_COUNT_NOT_ALLOWED");
   }
 
-  if (isGmailLongAliasEmail(payload.email)) {
+  if (isGmailPlusAliasEmail(payload.email)) {
     return jsonError("GMAIL_ALIAS_NOT_ALLOWED", "GMAIL_ALIAS_NOT_ALLOWED");
   }
 

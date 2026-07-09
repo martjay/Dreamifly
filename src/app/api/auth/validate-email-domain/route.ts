@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailLongAliasEmail, isValid163Email } from '@/utils/email-domain-validator';
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailPlusAliasEmail, isValid163Email } from '@/utils/email-domain-validator';
 import { createHash } from 'crypto';
 
 /**
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (isGmailLongAliasEmail(email)) {
+    if (isGmailPlusAliasEmail(email)) {
       return NextResponse.json({
         isValid: false,
         email,
