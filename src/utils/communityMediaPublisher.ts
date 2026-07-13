@@ -11,6 +11,13 @@ import {
 import { decodeMediaFromStorage, encodeMediaForStorage } from '@/utils/mediaStorage'
 import { uploadToOSS } from '@/utils/oss'
 
+export class CommunityMediaReferenceImageError extends Error {
+  constructor() {
+    super('带参考图的作品不能发布到社区')
+    this.name = 'CommunityMediaReferenceImageError'
+  }
+}
+
 async function fetchMediaBufferFromUrl(mediaUrl: string): Promise<Buffer> {
   const response = await fetch(mediaUrl)
   if (!response.ok) {
@@ -37,6 +44,20 @@ function buildCommunityMediaFolder(mediaType: string | null): string {
   return `community-media/${mediaFolder}/${year}/${month}/${day}`
 }
 
+function buildCommunityMediaUpload(mediaBuffer: Buffer, mediaType: string | null) {
+  if (mediaType === 'video') {
+    return {
+      fileBuffer: encodeMediaForStorage(mediaBuffer),
+      fileName: `${randomUUID()}.dat`,
+    }
+  }
+
+  return {
+    fileBuffer: mediaBuffer,
+    fileName: `${randomUUID()}.png`,
+  }
+}
+
 async function copyPublishedTags(sourceMediaId: string, communityMediaId: string) {
   const oldRelations = await db
     .select({
@@ -61,23 +82,14 @@ async function copyPublishedTags(sourceMediaId: string, communityMediaId: string
     .onConflictDoNothing()
 }
 
+function hasReferenceImages(referenceImages: unknown): boolean {
+  return Array.isArray(referenceImages) && referenceImages.length > 0
+}
+
 export async function publishCommunityMediaFromGeneratedImage(params: {
   sourceMediaId: string
   approvedBy: string
 }) {
-  const existing = await db
-    .select({
-      id: communityMedia.id,
-    })
-    .from(communityMedia)
-    .where(eq(communityMedia.sourceMediaId, params.sourceMediaId))
-    .limit(1)
-
-  if (existing[0]) {
-    await copyPublishedTags(params.sourceMediaId, existing[0].id)
-    return existing[0].id
-  }
-
   const sourceRows = await db
     .select({
       id: userGeneratedImages.id,
@@ -95,6 +107,7 @@ export async function publishCommunityMediaFromGeneratedImage(params: {
       userAvatar: userGeneratedImages.userAvatar,
       userNickname: userGeneratedImages.userNickname,
       avatarFrameId: userGeneratedImages.avatarFrameId,
+      referenceImages: userGeneratedImages.referenceImages,
       moderationLevel: userGeneratedImages.moderationLevel,
       nsfw: userGeneratedImages.nsfw,
       manualReviewedAt: userGeneratedImages.manualReviewedAt,
@@ -109,10 +122,37 @@ export async function publishCommunityMediaFromGeneratedImage(params: {
     throw new Error('来源作品不存在')
   }
 
+  if (hasReferenceImages(source.referenceImages)) {
+    throw new CommunityMediaReferenceImageError()
+  }
+
+  const existing = await db
+    .select({
+      id: communityMedia.id,
+    })
+    .from(communityMedia)
+    .where(eq(communityMedia.sourceMediaId, params.sourceMediaId))
+    .limit(1)
+
+  if (existing[0]) {
+    await db
+      .update(communityMedia)
+      .set({
+        moderationLevel: 'low',
+        nsfw: false,
+        approvedAt: new Date(),
+        approvedBy: params.approvedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(communityMedia.id, existing[0].id))
+
+    await copyPublishedTags(params.sourceMediaId, existing[0].id)
+    return existing[0].id
+  }
+
   const mediaBuffer = await fetchMediaBufferFromUrl(source.imageUrl)
-  const encodedBuffer = encodeMediaForStorage(mediaBuffer)
-  const fileName = `${randomUUID()}.dat`
-  const mediaUrl = await uploadToOSS(encodedBuffer, fileName, buildCommunityMediaFolder(source.mediaType))
+  const { fileBuffer, fileName } = buildCommunityMediaUpload(mediaBuffer, source.mediaType)
+  const mediaUrl = await uploadToOSS(fileBuffer, fileName, buildCommunityMediaFolder(source.mediaType))
   const communityMediaId = randomUUID()
   const now = new Date()
 

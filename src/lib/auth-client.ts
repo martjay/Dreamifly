@@ -1,7 +1,12 @@
 import { createAuthClient } from "better-auth/react";
 
+const authBaseURL =
+  typeof window !== 'undefined'
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_BASE_URL || "https://dreamifly.com";
+
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL || "https://dreamifly.com",
+  baseURL: authBaseURL,
   fetchOptions: {
     cache: 'no-store', // 禁用缓存
     headers: {

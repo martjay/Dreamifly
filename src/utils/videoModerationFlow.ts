@@ -3,6 +3,7 @@ import { DEFAULT_PROMPT_MODERATION_PROMPT } from './moderationFlow'
 import { moderateAvatar } from './avatarModeration'
 import OpenAI from 'openai'
 import type { VisualRiskLevel } from './visualModeration'
+import { getElapsedSeconds, recordModelUsage } from './modelUsageStats'
 
 export type VideoModerationFailureReason = 'prompt' | 'image' | 'video' | 'service_error'
 
@@ -67,12 +68,18 @@ async function moderatePromptOnly(promptText: string, env: ModerationEnv): Promi
 }
 
 function normalizeBase64Media(value: string): { buffer: Buffer; mimeType: string } {
-  const match = value.match(/^data:([^;]+);base64,(.+)$/)
-  if (match) {
-    return { buffer: Buffer.from(match[2], 'base64'), mimeType: match[1] }
+  if (value.startsWith('data:')) {
+    const commaIndex = value.indexOf(',')
+    if (commaIndex > 0) {
+      const header = value.slice(5, commaIndex)
+      const mimeType = header.split(';')[0] || 'image/jpeg'
+      return { buffer: Buffer.from(value.slice(commaIndex + 1), 'base64'), mimeType }
+    }
   }
 
-  return { buffer: Buffer.from(value.includes(',') ? value.split(',')[1] : value, 'base64'), mimeType: 'image/jpeg' }
+  const commaIndex = value.indexOf(',')
+  const base64Value = commaIndex >= 0 ? value.slice(commaIndex + 1) : value
+  return { buffer: Buffer.from(base64Value, 'base64'), mimeType: 'image/jpeg' }
 }
 
 function extensionFromMimeType(mimeType: string, kind: 'image' | 'video'): string {
@@ -106,38 +113,56 @@ async function moderateVideoDataUrl(
   mimeType: string,
   env: ModerationEnv
 ): Promise<boolean> {
+  const startTime = Date.now()
   const client = new OpenAI({
     baseURL: env.baseUrl,
     apiKey: env.apiKey || 'dummy-key',
   })
 
-  const response = await client.chat.completions.create({
-    model: env.model,
-    temperature: 0,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: env.mediaModerationPrompt },
-          {
-            type: 'video_url',
-            video_url: {
-              url: `data:${mimeType};base64,${videoBuffer.toString('base64')}`,
+  try {
+    const response = await client.chat.completions.create({
+      model: env.model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: env.mediaModerationPrompt },
+            {
+              type: 'video_url',
+              video_url: {
+                url: `data:${mimeType};base64,${videoBuffer.toString('base64')}`,
+              },
             },
-          },
-        ],
-      },
-    ],
-    stream: false,
-    chat_template_kwargs: { enable_thinking: false },
-  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
+          ],
+        },
+      ],
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
 
-  const approved = isApprovedModerationAnswer(response.choices[0]?.message?.content)
-  if (approved === null) {
-    throw new Error('Video moderation result is unclear')
+    const approved = isApprovedModerationAnswer(response.choices[0]?.message?.content)
+    if (approved === null) {
+      throw new Error('Video moderation result is unclear')
+    }
+
+    await recordModelUsage({
+      modelName: env.model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    })
+
+    return approved
+  } catch (error) {
+    await recordModelUsage({
+      modelName: env.model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
+    throw error
   }
-
-  return approved
 }
 
 async function moderateMediaInput(

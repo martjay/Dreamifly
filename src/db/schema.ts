@@ -86,9 +86,36 @@ export const modelUsageStats = pgTable("model_usage_stats", {
   userId: text("user_id"), // 用户ID，可以为null（未登录用户）
   responseTime: real("response_time").notNull(), // 响应时间（秒）
   isAuthenticated: boolean("is_authenticated").default(false).notNull(), // 是否已登录
+  isSuccess: boolean("is_success").default(true).notNull(), // 模型调用是否成功
+  modelType: text("model_type").default("image_generation").notNull(), // 模型调用类型
+  errorCode: text("error_code"), // 失败类型
+  errorStage: text("error_stage"), // 失败阶段
+  errorStatusCode: integer("error_status_code"), // 上游状态码
+  errorMessage: text("error_message"), // 用户可读失败原因
+  errorDetail: text("error_detail"), // 原始失败信息
   ipAddress: text("ip_address"), // IP地址，用于爬虫分析
   createdAt: timestamp("created_at").defaultNow().notNull(), // 调用时间
 });
+
+// 模型预警规则表
+export const modelAlertRules = pgTable("model_alert_rules", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  modelNames: jsonb("model_names").$type<string[]>().default([]).notNull(),
+  modelTypes: jsonb("model_types").$type<string[]>().default([]).notNull(),
+  failureRateThreshold: integer("failure_rate_threshold").notNull(),
+  sampleSize: integer("sample_size").default(20).notNull(),
+  minCalls: integer("min_calls").default(10).notNull(),
+  cooldownMinutes: integer("cooldown_minutes").default(30).notNull(),
+  emails: jsonb("emails").$type<string[]>().default([]).notNull(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  enabledIndex: index("idx_model_alert_rules_enabled").on(table.isEnabled),
+  lastTriggeredIndex: index("idx_model_alert_rules_last_triggered").on(table.lastTriggeredAt),
+}));
 
 // 用户限额配置表
 export const userLimitConfig = pgTable("user_limit_config", {

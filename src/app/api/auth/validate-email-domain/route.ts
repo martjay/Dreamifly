@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isValid163Email } from '@/utils/email-domain-validator';
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailPlusAliasEmail, isValid163Email } from '@/utils/email-domain-validator';
 import { createHash } from 'crypto';
 
 /**
@@ -98,6 +98,14 @@ export async function GET(request: NextRequest) {
         isValid: false,
         email,
         error: 'EMAIL_DOT_COUNT_NOT_ALLOWED',
+      });
+    }
+
+    if (isGmailPlusAliasEmail(email)) {
+      return NextResponse.json({
+        isValid: false,
+        email,
+        error: 'GMAIL_ALIAS_NOT_ALLOWED',
       });
     }
 

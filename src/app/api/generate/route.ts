@@ -4,21 +4,23 @@ import { generateGrokImage } from '@/utils/grokApi'
 import { generateGptImage2 } from '@/utils/gptImage2Api'
 import { generateNanoBananaImage } from '@/utils/nanoBananaApi'
 import { db } from '@/db'
-import { siteStats, modelUsageStats, user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
+import { user, userLimitConfig, ipBlacklist, ipDailyUsage } from '@/db/schema'
 import { eq, sql, and, lt } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { randomUUID, createHash } from 'crypto'
+import { createHash } from 'crypto'
 import { addWatermark } from '@/utils/watermark'
 import { moderateGenerationInput } from '@/utils/moderationFlow'
 import { getModelBaseCost, calculateGenerationCost, checkPointsSufficient, deductPoints, getPointsBalance, refundPoints } from '@/utils/points'
 import { getModelThresholds, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
 import { getClientIP } from '@/utils/clientIp'
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats'
 import {
   OFFICIAL_MODEL_MODERATION_FAILED_CODE,
   OFFICIAL_MODEL_MODERATION_FAILED_MESSAGE,
   isOfficialModelModerationError,
 } from '@/utils/officialModelModeration'
+import { incrementSiteGenerationStats } from '@/utils/siteStats'
 
 export const maxDuration = 650
 
@@ -68,19 +70,21 @@ function validateDynamicToken(providedToken: string): boolean {
 
 export async function POST(request: Request) {
   const clientIP = getClientIP(request)
+  const totalStartTime = Date.now()
   
   // 在 try 块外声明，以便在 catch 块中也能访问
   let isAdmin = false
-  // 当前请求使用的模型ID（用于在 catch 中判断是否为 nano-banana-2）
+  // 当前请求使用的模型ID（用于在 catch 中记录失败和返还积分）
   let currentModelId: string | null = null
+  let currentUserId: string | null = null
+  let currentIsAuthenticated = false
+  let generationModelCallStarted = false
+  let generationStatsRecorded = false
   // 如果本次请求已成功扣除积分，则记录消费记录ID，方便失败时返还
   let spentRecordId: string | null = null
   let consumedDailyQuota = false
   
   try {
-    // 记录总开始时间（包含排队延迟）
-    const totalStartTime = Date.now()
-    
     // 首先检查IP黑名单（在所有其他检查之前）
     if (clientIP) {
       const blacklistedIP = await db.select()
@@ -89,13 +93,13 @@ export async function POST(request: Request) {
         .limit(1)
       
       if (blacklistedIP.length > 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: '您的IP地址已被加入黑名单，无法使用此服务',
           code: 'IP_BLACKLISTED'
         }, { status: 403 })
       }
     }
-    
+
     // 验证认证头
     const authHeader = request.headers.get('Authorization')
     
@@ -117,10 +121,9 @@ export async function POST(request: Request) {
     
     // 获取用户信息（用于IP并发控制）
     let isPremium = false
-    let currentUserId: string | null = null
-    
     if (session?.user) {
       currentUserId = session.user.id
+      currentIsAuthenticated = true
       const currentUser = await db.select({
         isAdmin: user.isAdmin,
         isPremium: user.isPremium,
@@ -138,7 +141,7 @@ export async function POST(request: Request) {
     // 先解析请求体，后续额度逻辑需要根据模型判断是否允许使用免费额度抵扣
     const body = await request.json()
     let prompt: string
-    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt } = body
+    const { prompt: originalPrompt, width, height, steps, seed, batch_size, model, images, negative_prompt, aspectRatio } = body
     let generationSteps = Number(steps)
     if (model === 'Wai-SDXL-V170') {
       generationSteps = generationSteps >= 30 ? 30 : 20
@@ -147,7 +150,7 @@ export async function POST(request: Request) {
     if (!prompt?.trim()) {
       return NextResponse.json({ error: '请输入提示词' }, { status: 400 })
     }
-    // 记录当前模型ID，供 catch 中使用（例如仅对 nano-banana-2 做积分返还）
+    // 记录当前模型ID，供 catch 中记录失败和返还积分
     currentModelId = model
     // 第三方独立计费模型只走积分，不消耗免费额度
     const usesFreeQuota = model !== 'nano-banana-2' && !isGptImage2Model(model)
@@ -770,10 +773,8 @@ export async function POST(request: Request) {
               }
             }
 
-            // 仅对第三方独立计费模型记录消费记录ID，方便后续失败时返还积分
-            if (model === 'nano-banana-2' || isGptImage2Model(model)) {
-              spentRecordId = deductResult
-            }
+            // 记录所有已成功扣费的消费记录ID，方便后续失败时返还积分
+            spentRecordId = deductResult
           }
         } else if (!hasQuota) {
           // 模型未配置积分消耗，且用户已超出额度
@@ -786,14 +787,14 @@ export async function POST(request: Request) {
         }
       }
     }
-    
+
     // 检查图改图模型的登录限制
     // 如果用户未登录且使用图改图模型（有上传图片且模型支持I2I），返回401
     if (!session?.user && images && images.length > 0) {
       // 检查模型是否支持I2I（图改图）
       const i2iModels = ['Qwen-Image-Edit', 'Flux-Dev', 'Flux-Kontext']
       if (i2iModels.includes(model) || isGptImage2Model(model)) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: '图改图功能仅限登录用户使用，请先登录后再使用',
           code: 'LOGIN_REQUIRED_FOR_I2I'
         }, { status: 401 })
@@ -807,7 +808,7 @@ export async function POST(request: Request) {
         code: 'LOGIN_REQUIRED'
       }, { status: 401 })
     }
-    
+
     // 如果用户未登录，添加延迟（未登录用户不受用户并发限制）
     // 注意：未登录用户的IP并发计数已在前面增加，所以排队期间也算IP并发
     if (!session?.user) {
@@ -831,18 +832,19 @@ export async function POST(request: Request) {
     if (thresholds.normalSteps !== null && thresholds.highSteps !== null) {
       // 如果模型支持步数修改，验证步数是否在允许范围内
       if (generationSteps !== thresholds.normalSteps && generationSteps !== thresholds.highSteps) {
-        return NextResponse.json({ 
-          error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.` 
+        return NextResponse.json({
+          error: `Invalid steps value. Only ${thresholds.normalSteps} or ${thresholds.highSteps} steps are allowed for this model.`
         }, { status: 400 })
       }
     }
 
     // 调用图片生成 API（grok/nano-banana-2 使用独立 API，其他模型使用 ComfyUI）
     let imageUrl: string
+    generationModelCallStarted = true
     if (model === 'grok-imagine-1.0') {
       imageUrl = await generateGrokImage({ prompt, width, height })
     } else if (isGptImage2Model(model)) {
-      imageUrl = await generateGptImage2({ prompt, width, height, images })
+      imageUrl = await generateGptImage2({ prompt, width, height, images, aspectRatio })
     } else if (model === 'nano-banana-2') {
       imageUrl = await generateNanoBananaImage({ prompt, width, height, negative_prompt, seed: seed ? parseInt(seed) : undefined, images })
     } else {
@@ -873,36 +875,25 @@ export async function POST(request: Request) {
     }
 
     // 计算总响应时间（秒），包含排队延迟
-    const responseTime = (Date.now() - totalStartTime) / 1000
+    const responseTime = getElapsedSeconds(totalStartTime)
 
-    // 更新统计数据
-    await db.update(siteStats)
-      .set({
-        totalGenerations: sql`${siteStats.totalGenerations} + 1`,
-        dailyGenerations: sql`${siteStats.dailyGenerations} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(siteStats.id, 1))
+    try {
+      await incrementSiteGenerationStats(1)
+    } catch (error) {
+      console.error('Failed to update site generation stats:', error)
+    }
 
     // 记录模型使用统计
-    try {
-      // 创建当前时间的Date对象（JavaScript Date内部存储为UTC时间戳）
-      // PostgreSQL的timestamptz会自动处理时区转换
-      const now = new Date()
-      
-      await db.insert(modelUsageStats).values({
-        id: randomUUID(),
-        modelName: model,
-        userId: session?.user?.id || null,
-        responseTime,
-        isAuthenticated: !!session?.user,
-        ipAddress: clientIP,
-        createdAt: now,
-      })
-    } catch (error) {
-      // 记录统计失败不应该影响主流程
-      console.error('Failed to record model usage stats:', error)
-    }
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'image_generation',
+      responseTime,
+      isSuccess: true,
+      userId: session?.user?.id || null,
+      isAuthenticated: !!session?.user,
+      ipAddress: clientIP,
+    })
+    generationStatsRecorded = true
 
     // 如果用户已登录，同步保存生成的图片（输入审核已通过，可跳过保存内二次审核）
     if (session?.user) {
@@ -936,8 +927,27 @@ export async function POST(request: Request) {
           : undefined,
     })
   } catch (error) {
-    // 如果已经扣除了积分且当前模型为 nano-banana-2，但图像生成流程失败（包括第三方服务调用失败），则尝试返还积分
-    if (spentRecordId && (currentModelId === 'nano-banana-2' || isGptImage2Model(currentModelId))) {
+    const shouldRecordGenerationFailure =
+      generationModelCallStarted &&
+      !generationStatsRecorded &&
+      !isOfficialModelModerationError(error)
+
+    if (shouldRecordGenerationFailure && currentModelId) {
+      await recordModelUsage({
+        modelName: currentModelId,
+        modelType: 'image_generation',
+        responseTime: getElapsedSeconds(totalStartTime),
+        isSuccess: false,
+        userId: currentUserId,
+        isAuthenticated: currentIsAuthenticated,
+        ipAddress: clientIP,
+        error,
+      })
+      generationStatsRecorded = true
+    }
+
+    // 如果已经扣除了积分，但图像生成流程失败，则尝试返还积分
+    if (spentRecordId) {
       console.log('[图像生成API] 图像生成失败，开始返还积分', { spentRecordId })
       try {
         const refundSuccess = await refundPoints(

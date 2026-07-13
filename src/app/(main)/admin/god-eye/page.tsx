@@ -18,6 +18,11 @@ import { filterProfanity } from '@/utils/profanityFilter'
 type TabType = 'approved' | 'rejected' | 'profanity'
 type RoleFilter = 'all' | 'subscribed' | 'premium' | 'oldUser' | 'regular'
 type ManualReviewStatus = 'pending' | 'approved' | 'rejected'
+type ReferenceImageFilter = 'all' | 'with' | 'without'
+const DEFAULT_REVIEW_IMAGE_MODEL = 'gpt-image-2.0'
+const normalizeGodEyeModelFilter = (model: string) => (
+  model === 'gpt-image-2' ? DEFAULT_REVIEW_IMAGE_MODEL : model
+)
 
 interface ImageItem {
   id: string
@@ -64,6 +69,9 @@ export default function GodEyePage() {
   const [totalPages, setTotalPages] = useState(0)
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | ManualReviewStatus>('pending')
+  const [reviewModelFilter, setReviewModelFilter] = useState<string>(DEFAULT_REVIEW_IMAGE_MODEL)
+  const [referenceImageFilter, setReferenceImageFilter] = useState<ReferenceImageFilter>('all')
+  const [reviewAvailableModels, setReviewAvailableModels] = useState<string[]>([DEFAULT_REVIEW_IMAGE_MODEL])
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -265,6 +273,12 @@ export default function GodEyePage() {
         if (reviewStatusFilter !== 'all') {
           params.set('reviewStatus', reviewStatusFilter)
         }
+        if (reviewModelFilter !== 'all') {
+          params.set('model', reviewModelFilter)
+        }
+        if (referenceImageFilter !== 'all' && reviewStatusFilter !== 'approved') {
+          params.set('referenceImages', referenceImageFilter)
+        }
         if (searchTerm.trim()) {
           params.set('search', searchTerm.trim())
         }
@@ -291,7 +305,30 @@ export default function GodEyePage() {
     }
 
     fetchImages()
-  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, searchTerm, startDate, endDate])
+  }, [activeTab, isAdmin, page, roleFilter, reviewStatusFilter, reviewModelFilter, referenceImageFilter, searchTerm, startDate, endDate])
+
+  // 获取人工审核图片可用模型列表
+  useEffect(() => {
+    if (activeTab !== 'approved' || !isAdmin) return
+
+    const fetchReviewModels = async () => {
+      try {
+        const response = await fetch('/api/admin/god-eye/images/models')
+        if (!response.ok) {
+          throw new Error('Failed to fetch review image models')
+        }
+        const data = await response.json()
+        const models = Array.from(
+          new Set([DEFAULT_REVIEW_IMAGE_MODEL, ...(data.models || [])].map(normalizeGodEyeModelFilter))
+        ) as string[]
+        setReviewAvailableModels(models)
+      } catch (error) {
+        console.error('Error fetching review image models:', error)
+      }
+    }
+
+    fetchReviewModels()
+  }, [activeTab, isAdmin])
 
   // 获取未通过审核图片列表
   useEffect(() => {
@@ -372,7 +409,8 @@ export default function GodEyePage() {
           throw new Error('Failed to fetch models')
         }
         const data = await response.json()
-        setAvailableModels(data.models || [])
+        const models = (data.models || []).map(normalizeGodEyeModelFilter)
+        setAvailableModels(Array.from(new Set(models)) as string[])
       } catch (error) {
         console.error('Error fetching models:', error)
       }
@@ -681,7 +719,7 @@ export default function GodEyePage() {
         return { ...prev, [imageId]: decodedUrl }
       })
     } catch (error) {
-      console.error('前端解码未通过图片失败:', error)
+      console.warn('前端解码未通过图片失败:', error)
     }
   }
 
@@ -710,7 +748,7 @@ export default function GodEyePage() {
 
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, runWorker)
     Promise.all(workers).catch((err) => {
-      console.error('批量解码未通过图片失败:', err)
+      console.warn('批量解码未通过图片失败:', err)
     })
 
     return () => {
@@ -787,7 +825,7 @@ export default function GodEyePage() {
             }))
           }
         } catch (error) {
-          console.error('解码媒体失败:', error)
+          console.warn('解码媒体失败:', error)
         } finally {
           setDecodingApprovedImages(prev => {
             const newSet = new Set(prev)
@@ -800,7 +838,7 @@ export default function GodEyePage() {
 
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, runWorker)
     Promise.all(workers).catch(err => {
-      console.error('批量解码图片失败:', err)
+      console.warn('批量解码图片失败:', err)
     })
 
     return () => {
@@ -828,7 +866,7 @@ export default function GodEyePage() {
             setDecodedReferenceImages(prev => ({ ...prev, [refUrl]: decodedUrl }))
             setZoomedImage(decodedUrl)
           } catch (error) {
-            console.error('解码参考图失败:', error)
+            console.warn('解码参考图失败:', error)
             setZoomedImage(refUrl)
           } finally {
             setDecodingReferenceImages(prev => {
@@ -862,7 +900,7 @@ export default function GodEyePage() {
             setZoomedImage(decodedUrl)
             setZoomedMediaType(mediaType || 'image')
           } catch (error) {
-            console.error('解码媒体失败:', error)
+            console.warn('解码媒体失败:', error)
             setZoomedImage(imageUrl)
             setZoomedMediaType(mediaType || 'image')
           }
@@ -888,7 +926,7 @@ export default function GodEyePage() {
             setZoomedImage(decodedUrl)
             setZoomedMediaType((image.mediaType as 'image' | 'video') || 'image')
           } catch (error) {
-            console.error('解码媒体失败:', error)
+            console.warn('解码媒体失败:', error)
             setZoomedImage(imageUrl)
             setZoomedMediaType((image.mediaType as 'image' | 'video') || 'image')
           }
@@ -1154,12 +1192,13 @@ export default function GodEyePage() {
               <div className="space-y-4">
                 {/* 筛选区域 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex flex-wrap gap-4 items-end">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
                     {/* 用户角色筛选 */}
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">用户角色：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={roleFilter}
                         onChange={(e) => {
                           setRoleFilter(e.target.value as RoleFilter)
@@ -1177,7 +1216,7 @@ export default function GodEyePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 whitespace-nowrap">人工状态：</span>
                       <select
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-[130px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={reviewStatusFilter}
                         onChange={(e) => {
                           setReviewStatusFilter(e.target.value as 'all' | ManualReviewStatus)
@@ -1191,8 +1230,47 @@ export default function GodEyePage() {
                       </select>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 whitespace-nowrap">所用模型：</span>
+                      <select
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={reviewModelFilter}
+                        onChange={(e) => {
+                          setReviewModelFilter(e.target.value)
+                          setPage(1)
+                        }}
+                      >
+                        <option value="all">全部</option>
+                        {reviewAvailableModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 whitespace-nowrap">参考图：</span>
+                      <select
+                        className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={referenceImageFilter}
+                        onChange={(e) => {
+                          setReferenceImageFilter(e.target.value as ReferenceImageFilter)
+                          setPage(1)
+                        }}
+                        disabled={reviewStatusFilter === 'approved'}
+                        title={reviewStatusFilter === 'approved' ? '已发布社区作品不保存参考图筛选信息' : undefined}
+                      >
+                        <option value="all">全部</option>
+                        <option value="with">有参考图</option>
+                        <option value="without">无参考图</option>
+                      </select>
+                    </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(260px,1fr)_minmax(360px,1.2fr)] gap-4">
                     {/* 搜索 */}
-                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 min-w-0">
                       <input
                         type="text"
                         placeholder="搜索用户昵称"
@@ -1214,10 +1292,10 @@ export default function GodEyePage() {
                     </div>
 
                     {/* 日期范围 */}
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] gap-2 items-center min-w-0">
                       <input
                         type="date"
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={startDate}
                         onChange={(e) => {
                           setStartDate(e.target.value)
@@ -1227,7 +1305,7 @@ export default function GodEyePage() {
                       <span className="text-sm text-gray-500">至</span>
                       <input
                         type="date"
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        className="min-w-0 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                         value={endDate}
                         onChange={(e) => {
                           setEndDate(e.target.value)
@@ -1246,6 +1324,7 @@ export default function GodEyePage() {
                           清除
                         </button>
                       )}
+                    </div>
                     </div>
                   </div>
                 </div>

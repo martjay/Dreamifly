@@ -2,7 +2,6 @@ import { createRequire } from 'module';
 
 // 使用 createRequire 以 CJS 方式加载，避免打包器对 default 的处理差异
 const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const alipaySdkPkg = require('alipay-sdk');
 
 // alipay-sdk 的导出在 CJS/ESM 场景下形态不同，这里做兼容处理

@@ -941,7 +941,8 @@ export const QwenImageEditWorkflow = {
   },
   "78": {
     "inputs": {
-      "image": "source.jpg"
+      "image": "source.jpg",
+      "upload": "image"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -982,6 +983,7 @@ export const QwenImageEditWorkflow = {
     "inputs": {
       "upscale_method": "lanczos",
       "megapixels": 1,
+      "resolution_steps": 1,
       "image": [
         "78",
         0

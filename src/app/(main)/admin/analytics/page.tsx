@@ -32,6 +32,9 @@ interface ModelStat {
   totalCalls: number
   authenticatedCalls: number
   unauthenticatedCalls: number
+  successfulCalls: number
+  failedCalls: number
+  successRate: number
   avgResponseTimeAuthenticated: number | null
   avgResponseTimeUnauthenticated: number | null
 }
@@ -46,6 +49,9 @@ interface TotalStats {
   totalCalls: number
   authenticatedCalls: number
   unauthenticatedCalls: number
+  successfulCalls: number
+  failedCalls: number
+  successRate: number
   activeUsers: number
   authenticatedIPs: number
   unauthenticatedIPs: number
@@ -71,6 +77,7 @@ interface UserTrend {
 interface StatsResponse {
   timeRange: TimeRange
   modelStats: ModelStat[]
+  moderationStats: ModelStat[]
   dailyData: DailyData[]
   totalStats: TotalStats
   dailyTrend: DailyTrend[]
@@ -88,6 +95,10 @@ const MODEL_COLORS: { [key: string]: string } = {
   'Qwen-Image-Edit': '#f59e0b',       // 暖琥珀色 (amber-500)
   'Wai-SDXL-V150': '#ea580c',          // 橙红色 (orange-600)
   'Wai-SDXL-V170': '#f97316',          // 主橙色 (orange-500)
+  'Z-Image': '#fbbf24',                // 琥珀色 (amber-400)
+  'Z-Image-Turbo': '#fbbf24',          // 琥珀色 (amber-400)
+  'gpt-image-2': '#f97316',            // 主橙色 (orange-500)
+  'nano-banana-2': '#fb923c',          // 亮橙色 (orange-400)
 }
 
 // 备用颜色列表（暖色系，用于未知模型）
@@ -330,11 +341,20 @@ export default function AnalyticsPage() {
   }
 
   // 准备饼图数据
-  const pieChartData = stats?.modelStats.map((stat, index) => ({
-    name: stat.modelName,
-    value: stat.totalCalls,
+  const modelStatsChartData = stats?.modelStats.map((stat, index) => ({
+    ...stat,
     color: getModelColor(stat.modelName, index),
   })) || []
+  const modelStatsTableData = [
+    ...(stats?.modelStats ?? []),
+    ...(stats?.moderationStats ?? []),
+  ]
+
+  const pieChartData = modelStatsChartData.map((stat) => ({
+    name: stat.modelName,
+    value: stat.totalCalls,
+    color: stat.color,
+  }))
 
   // 加载中或权限检查
   if (sessionLoading || checkingAdmin || !isAdmin) {
@@ -461,7 +481,7 @@ export default function AnalyticsPage() {
                   <p className="text-gray-600">加载中...</p>
                 </div>
               </div>
-            ) : !stats || stats.modelStats.length === 0 ? (
+            ) : !stats || (stats.modelStats.length === 0 && stats.moderationStats.length === 0) ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
               <div className="text-center text-gray-500">
                   <p className="text-lg font-medium">暂无数据</p>
@@ -972,7 +992,7 @@ export default function AnalyticsPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">模型调用次数统计</h2>
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={stats.modelStats} barCategoryGap="20%">
+                    <BarChart data={modelStatsChartData} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis 
                         dataKey="modelName" 
@@ -1081,8 +1101,8 @@ export default function AnalyticsPage() {
                           <span style={{ color: '#374151', fontSize: '13px' }}>{value}</span>
                         )}
                       />
-                      {stats.modelStats.map((stat, index) => {
-                        const color = getModelColor(stat.modelName, index)
+                      {modelStatsChartData.map((stat) => {
+                        const color = stat.color
                         return (
                           <Line
                             key={stat.modelName}
@@ -1152,47 +1172,39 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* 模型颜色说明 */}
-                {stats.modelStats.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">模型颜色说明</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {stats.modelStats.map((stat, index) => {
-                        const color = getModelColor(stat.modelName, index)
-                        return (
-                          <div key={stat.modelName} className="flex items-center gap-2">
-                            <div 
-                              className="w-4 h-4 rounded-sm flex-shrink-0" 
-                              style={{ backgroundColor: color }}
-                            />
-                            <span className="text-sm text-gray-700 truncate" title={stat.modelName}>
-                              {stat.modelName}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 平均响应时间统计表 */}
+                {/* 模型成功率与响应时间统计表 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">模型平均响应时间（秒）</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">模型成功率与响应时间</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">模型名称</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总调用次数</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成功次数</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">失败次数</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成功率</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">已登录用户平均响应时间</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">未登录用户平均响应时间</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总调用次数</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {stats.modelStats.map((stat) => (
+                        {modelStatsTableData.map((stat) => (
                           <tr key={stat.modelName} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {stat.modelName}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {stat.totalCalls.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-emerald-600">
+                              {stat.successfulCalls.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-rose-600">
+                              {stat.failedCalls.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {stat.totalCalls > 0 ? `${stat.successRate.toFixed(2)}%` : '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {stat.avgResponseTimeAuthenticated !== null
@@ -1204,15 +1216,35 @@ export default function AnalyticsPage() {
                                 ? `${stat.avgResponseTimeUnauthenticated.toFixed(2)} 秒`
                                 : '-'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {stat.totalCalls}
-                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
               </div>
             </div>
+
+                {/* 模型颜色说明 */}
+                {stats.modelStats.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">模型颜色说明</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {modelStatsChartData.map((stat) => {
+                        const color = stat.color
+                        return (
+                          <div key={stat.modelName} className="flex items-center gap-2">
+                            <div
+                              className="w-4 h-4 rounded-sm flex-shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-sm text-gray-700 truncate" title={stat.modelName}>
+                              {stat.modelName}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

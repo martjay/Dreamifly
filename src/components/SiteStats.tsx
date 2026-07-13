@@ -21,6 +21,16 @@ interface Stats {
   };
 }
 
+const DEFAULT_STATS: Stats = {
+  totalGenerations: 0,
+  dailyGenerations: 0,
+  uptime: {
+    days: 0,
+    hours: 0,
+    minutes: 0,
+  },
+};
+
 type Accent = 'orange' | 'emerald' | 'blue';
 
 const accentStyles: Record<
@@ -174,10 +184,38 @@ function QrModal({
   );
 }
 
-function formatNumber(num: number): string {
+function formatNumber(value: number | null | undefined): string {
+  const num = typeof value === 'number' && Number.isFinite(value) ? value : 0;
   if (num >= 10000) return (num / 10000).toFixed(1) + '万';
   if (num >= 1000) return (num / 1000).toFixed(1) + '千';
   return num.toLocaleString();
+}
+
+function normalizeStats(data: Partial<Stats> | null | undefined): Stats {
+  return {
+    totalGenerations:
+      typeof data?.totalGenerations === 'number' && Number.isFinite(data.totalGenerations)
+        ? data.totalGenerations
+        : DEFAULT_STATS.totalGenerations,
+    dailyGenerations:
+      typeof data?.dailyGenerations === 'number' && Number.isFinite(data.dailyGenerations)
+        ? data.dailyGenerations
+        : DEFAULT_STATS.dailyGenerations,
+    uptime: {
+      days:
+        typeof data?.uptime?.days === 'number' && Number.isFinite(data.uptime.days)
+          ? data.uptime.days
+          : DEFAULT_STATS.uptime.days,
+      hours:
+        typeof data?.uptime?.hours === 'number' && Number.isFinite(data.uptime.hours)
+          ? data.uptime.hours
+          : DEFAULT_STATS.uptime.hours,
+      minutes:
+        typeof data?.uptime?.minutes === 'number' && Number.isFinite(data.uptime.minutes)
+          ? data.uptime.minutes
+          : DEFAULT_STATS.uptime.minutes,
+    },
+  };
 }
 
 export default function SiteStats() {
@@ -188,13 +226,26 @@ export default function SiteStats() {
 
   useEffect(() => {
     const fetchStats = async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
       try {
-        const response = await fetch('/api/stats');
+        const response = await fetch('/api/stats', {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setStats(DEFAULT_STATS);
+          return;
+        }
+
         const data = await response.json();
-        setStats(data);
+        setStats(normalizeStats(data));
       } catch (error) {
         console.error('Error fetching stats:', error);
+        setStats(DEFAULT_STATS);
       } finally {
+        window.clearTimeout(timeoutId);
         setLoading(false);
       }
     };

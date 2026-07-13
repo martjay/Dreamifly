@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { VideoModelMode } from '@/utils/videoModelConfig'
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats'
 
 type MediaContent =
   | { type: 'text'; text: string }
@@ -104,6 +105,11 @@ function getUserText(mode: VideoModelMode, prompt: string, hasPrompt: boolean): 
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  const optimizationModel = process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8'
+  let modelCallStarted = false
+  let statsRecorded = false
+
   try {
     const body = await request.json()
     const prompt = typeof body.prompt === 'string' ? body.prompt : ''
@@ -147,11 +153,14 @@ export async function POST(request: NextRequest) {
     }
     if (mode === 'video-edit') {
       content.push({ type: 'video_url', video_url: { url: normalizeDataUrl(video, 'video/mp4') } })
+      images.slice(0, 9).forEach(ref => {
+        content.push({ type: 'image_url', image_url: { url: normalizeDataUrl(ref, 'image/jpeg') } })
+      })
     }
     content.push({ type: 'text', text: getUserText(mode, prompt, hasPrompt) })
 
     const requestBody: ChatCompletionRequest = {
-      model: process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8',
+      model: optimizationModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content },
@@ -167,6 +176,7 @@ export async function POST(request: NextRequest) {
     const fullApiUrl = apiUrl.endsWith('/chat/completions') ? apiUrl : `${apiUrl}/chat/completions`
     const apiKey = process.env.PROMPT_OPTIMIZATION_API_KEY || 'ollama'
 
+    modelCallStarted = true
     const response = await fetch(fullApiUrl, {
       method: 'POST',
       headers: {
@@ -189,12 +199,30 @@ export async function POST(request: NextRequest) {
       throw new Error('No response content received from LLM service')
     }
 
+    await recordModelUsage({
+      modelName: optimizationModel,
+      modelType: 'prompt_optimization',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    })
+    statsRecorded = true
+
     return NextResponse.json({
       success: true,
       originalPrompt: prompt,
       optimizedPrompt: optimizedPrompt.trim(),
     })
   } catch (error) {
+    if (modelCallStarted && !statsRecorded) {
+      await recordModelUsage({
+        modelName: optimizationModel,
+        modelType: 'prompt_optimization',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: false,
+      })
+      statsRecorded = true
+    }
+
     console.error('Error in optimize-video-prompt API:', error)
     return NextResponse.json(
       {

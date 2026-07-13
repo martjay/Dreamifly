@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation'
 import { createScopedT } from '@/lib/strings'
 import CommunityFeedGrid, { type CommunityFeedItem } from '@/components/community/CommunityFeedGrid'
 import { transferUrl } from '@/utils/locale'
+import { buildCreatePromptParams } from '@/utils/createPromptTransfer'
 
 type TagRecommendation = {
   id: number | string
   name: string
   usageCount: number
 }
+
+const RECOMMENDED_TAG_LIMIT = 4
 
 export default function CommunityPageClient() {
   const t = createScopedT('communityPage')
@@ -61,7 +64,7 @@ export default function CommunityPageClient() {
   const fetchTags = useCallback(async () => {
     setLoadingTags(true)
     try {
-      const response = await fetch('/api/community/tags?mode=random&limit=4')
+      const response = await fetch(`/api/community/tags?mode=random&limit=${RECOMMENDED_TAG_LIMIT}`)
       const data = await response.json()
       if (!response.ok || !data.success) {
         throw new Error(data.error || '加载推荐标签失败')
@@ -101,14 +104,12 @@ export default function CommunityPageClient() {
 
   const handleGenerateSame = useCallback(
     (item: CommunityFeedItem) => {
-      const params = new URLSearchParams()
-      const prompt = item.prompt.trim()
-      const model = item.model.trim()
-
-      if (prompt) params.set('prompt', prompt)
-      if (model) params.set('model', model)
-      if (item.mediaType === 'video') params.set('tab', 'video')
-
+      const params = buildCreatePromptParams({
+        communityMediaId: item.id,
+        prompt: item.prompt,
+        model: item.model,
+        mediaType: item.mediaType,
+      })
       const query = params.toString()
       router.push(transferUrl(`/create${query ? `?${query}` : ''}`))
     },
@@ -121,7 +122,7 @@ export default function CommunityPageClient() {
       : tagRecommendations
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fffaf5_38%,#ffffff_100%)] px-5 pb-16 pt-24 sm:px-8 sm:pt-12 lg:px-12 xl:px-16 2xl:px-20">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fffaf5_38%,#ffffff_100%)] px-5 pb-16 pt-24 sm:px-8 sm:pt-12 lg:ml-48 lg:px-12 xl:px-16 2xl:px-20">
       <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-8 px-1 sm:px-6">
         <section className="space-y-5 sm:space-y-6">
           <div className="flex flex-col gap-3 rounded-[32px] border border-orange-100 bg-white/80 p-3.5 shadow-sm backdrop-blur sm:gap-5 sm:p-6">
@@ -151,7 +152,7 @@ export default function CommunityPageClient() {
               <span className="text-[11px] font-medium text-gray-600 sm:text-sm">{t('recommendTitle')}</span>
               <div className="flex min-h-7 flex-wrap gap-1.5 sm:min-h-11 sm:gap-3">
                 {loadingTags ? (
-                  Array.from({ length: 4 }).map((_, index) => (
+                  Array.from({ length: RECOMMENDED_TAG_LIMIT }).map((_, index) => (
                     <div key={index} className="h-6 w-14 animate-pulse rounded-full bg-orange-100 sm:h-10 sm:w-24" />
                   ))
                 ) : (

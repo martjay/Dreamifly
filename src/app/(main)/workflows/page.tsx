@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { Suspense, useRef, useState, useEffect } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -11,7 +11,11 @@ import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
 
 type TabKey = 'repair' | 'upscale'
 
-export default function WorkflowsPage() {
+function WorkflowsFallback() {
+  return <div className="min-h-screen bg-gray-50 pt-20 lg:pt-24 lg:pl-48" />
+}
+
+function WorkflowsContent() {
   const { refreshPoints } = usePoints()
   const { checkAndDownload, DownloadTermsModalWrapper } = useDownloadWithTerms()
   const searchParams = useSearchParams()
@@ -1139,6 +1143,14 @@ export default function WorkflowsPage() {
       {/* 下载协议弹窗 */}
       <DownloadTermsModalWrapper />
     </div>
+  )
+}
+
+export default function WorkflowsPage() {
+  return (
+    <Suspense fallback={<WorkflowsFallback />}>
+      <WorkflowsContent />
+    </Suspense>
   )
 }
 

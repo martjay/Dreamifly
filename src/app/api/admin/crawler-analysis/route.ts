@@ -190,8 +190,10 @@ export async function GET(request: Request) {
         authenticatedCount: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = true)::int`,
         unauthenticatedCount: sql<number>`count(*) filter (where ${modelUsageStats.isAuthenticated} = false)::int`,
         userCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.isAuthenticated} = true and ${modelUsageStats.userId} is not null)::int`,
+        activeUserCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.isAuthenticated} = true and ${modelUsageStats.userId} is not null and ${user.isActive} = true)::int`,
       })
       .from(modelUsageStats)
+      .leftJoin(user, eq(modelUsageStats.userId, user.id))
       .where(and(...allIPRankingWhereConditions))
       .groupBy(modelUsageStats.ipAddress)
       .orderBy(sql`count(*) DESC`)
@@ -212,8 +214,10 @@ export async function GET(request: Request) {
         ipAddress: modelUsageStats.ipAddress,
         callCount: sql<number>`count(*)::int`,
         userCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.userId} is not null)::int`,
+        activeUserCount: sql<number>`count(distinct ${modelUsageStats.userId}) filter (where ${modelUsageStats.userId} is not null and ${user.isActive} = true)::int`,
       })
       .from(modelUsageStats)
+      .leftJoin(user, eq(modelUsageStats.userId, user.id))
       .where(and(...authenticatedIPRankingWhereConditions))
       .groupBy(modelUsageStats.ipAddress)
       .orderBy(sql`count(*) DESC`)
@@ -351,11 +355,13 @@ export async function GET(request: Request) {
           authenticatedCount: Number(item.authenticatedCount),
           unauthenticatedCount: Number(item.unauthenticatedCount),
           userCount: Number(item.userCount),
+          activeUserCount: Number(item.activeUserCount),
         })),
         authenticatedIPRanking: authenticatedIPRanking.map((item) => ({
           ipAddress: item.ipAddress,
           callCount: Number(item.callCount),
           userCount: Number(item.userCount),
+          activeUserCount: Number(item.activeUserCount),
         })),
         unauthenticatedIPRanking: unauthenticatedIPRanking.map((item) => ({
           ipAddress: item.ipAddress,

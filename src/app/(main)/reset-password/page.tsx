@@ -1,10 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { resetPassword } from '@/lib/auth-client'
 
-export default function ResetPasswordPage() {
+function ResetPasswordFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 lg:pl-48">
+      <div className="max-w-md w-full">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-400 mx-auto mb-4"></div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">加载中...</h2>
+            <p className="text-gray-600">正在验证重置链接</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [status, setStatus] = useState<'loading' | 'form' | 'success' | 'error'>('loading')
@@ -85,19 +101,7 @@ export default function ResetPasswordPage() {
   }
 
   if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 lg:pl-48">
-        <div className="max-w-md w-full">
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-400 mx-auto mb-4"></div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">加载中...</h2>
-              <p className="text-gray-600">正在验证重置链接</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return <ResetPasswordFallback />
   }
 
   if (status === 'success') {
@@ -246,6 +250,14 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }
 

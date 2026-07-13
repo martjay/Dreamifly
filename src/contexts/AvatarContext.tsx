@@ -1,8 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { useSession } from '@/lib/auth-client'
-import { ExtendedUser } from '@/types/auth'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 
 interface AvatarContextType {
   avatar: string
@@ -19,20 +18,28 @@ interface AvatarContextType {
 const AvatarContext = createContext<AvatarContextType | undefined>(undefined)
 
 export function AvatarProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession()
+  const { summary, isLoading } = useUserSummary()
+  const summaryUser = summary?.user
   const [avatar, setAvatar] = useState('/images/default-avatar.svg')
   const [nickname, setNickname] = useState('')
   const [avatarFrameId, setAvatarFrameId] = useState<number | null>(null)
 
-  // 监听session变化，更新头像、昵称和头像框
   useEffect(() => {
-    if (session?.user) {
-      const user = session.user as ExtendedUser
-      setAvatar(user.avatar || '/images/default-avatar.svg')
-      setNickname(user.nickname || user.name || '')
-      setAvatarFrameId(user.avatarFrameId ?? null)
+    if (isLoading) return
+
+    if (summaryUser) {
+      setAvatar(summaryUser.avatar || '/images/default-avatar.svg')
+      setNickname(summaryUser.nickname || summaryUser.name || '')
+      setAvatarFrameId(summaryUser.avatarFrameId ?? null)
+    } else {
+      setAvatar('/images/default-avatar.svg')
+      setNickname('')
+      setAvatarFrameId(null)
     }
-  }, [session?.user])
+  }, [
+    isLoading,
+    summaryUser,
+  ])
 
   // 更新头像的方法
   const updateAvatar = (newAvatar: string) => {

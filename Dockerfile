@@ -12,7 +12,9 @@ ENV DATABASE_URL=''
 FROM base  AS builder
 
 # 安装 pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG PNPM_VERSION=10.33.0
+RUN npm install -g pnpm@${PNPM_VERSION} --registry=${NPM_REGISTRY}
 
 # 复制配置文件（这些文件变化较少，利于缓存）
 COPY next.config.js ./
@@ -32,10 +34,6 @@ COPY .env ./
 COPY fonts ./fonts
 COPY scripts ./scripts
 
-# 配置 pnpm 使用国内镜像（淘宝镜像）
-# 可以通过构建参数 --build-arg NPM_REGISTRY=xxx 来指定其他镜像
-# 例如：docker build --build-arg NPM_REGISTRY=https://registry.npmjs.org .
-ARG NPM_REGISTRY=https://registry.npmmirror.com
 RUN echo "registry=${NPM_REGISTRY}" > .npmrc
 
 # 安装依赖
@@ -48,7 +46,9 @@ RUN pnpm run build
 FROM base AS runner
 
 # 安装 pnpm（运行时也需要）
-RUN corepack enable && corepack prepare pnpm@latest --activate
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG PNPM_VERSION=10.33.0
+RUN npm install -g pnpm@${PNPM_VERSION} --registry=${NPM_REGISTRY}
 
 # 安装必要的系统工具和字体管理工具
 RUN apk add --no-cache curl fontconfig ttf-dejavu

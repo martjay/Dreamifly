@@ -69,7 +69,7 @@ export async function decodeImageForDisplay(imageUrl: string): Promise<string> {
     const base64 = decodeObfuscatedBase64(obfuscated)
     return `data:image/png;base64,${base64}`
   } catch (error) {
-    console.error('解码图片失败:', error)
+    console.warn('解码图片失败:', error)
     throw error
   }
 }
@@ -90,7 +90,7 @@ export async function decodeVideoForDisplay(videoUrl: string): Promise<string> {
     const base64 = decodeObfuscatedBase64(obfuscated)
     return `data:video/mp4;base64,${base64}`
   } catch (error) {
-    console.error('解码视频失败:', error)
+    console.warn('解码视频失败:', error)
     throw error
   }
 }

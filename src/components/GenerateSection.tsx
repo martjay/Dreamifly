@@ -1,5 +1,5 @@
 import { createScopedT } from '@/lib/strings'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import GenerateForm from './GenerateForm'
@@ -13,15 +13,22 @@ import { optimizePrompt } from '../utils/promptOptimizer'
 import { useSession } from '@/lib/auth-client'
 import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 import { getModelThresholds, getAllModels, GROK_RATIO_SIZES, GROK_ALLOWED_RATIOS, GPT_IMAGE_2_ALLOWED_RATIOS, GPT_IMAGE_2_RATIO_SIZES, NANO_BANANA_ALLOWED_RATIOS, NANO_BANANA_RATIO_SIZES, isGptImage2Model, isLoginRequiredModel } from '@/utils/modelConfig'
-import { usePoints } from '@/contexts/PointsContext'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 import { calculateEstimatedCost } from '@/utils/pointsClient'
 import { transferUrl } from '@/utils/locale'
-import { calculateVideoLayoutForAspectRatio, getVideoModelById } from '@/utils/videoModelConfig'
+import { saveCreatePageDraft } from '@/utils/createPromptTransfer'
+import {
+  calculateVideoLayoutForAspectRatio,
+  getVideoModelById,
+  HAPPYHORSE_AGGREGATE_MODEL_ID,
+  isHappyHorseChildModel,
+} from '@/utils/videoModelConfig'
 import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
 
 interface GenerateSectionProps {
   communityWorks: { prompt: string }[];
   initialPrompt?: string;
+  initialPromptKey?: string;
   initialModel?: string;
   activeTab?: 'generate' | 'video-generation';
   onTabChange?: (tab: 'generate' | 'video-generation') => void;
@@ -76,14 +83,18 @@ function getInputModerationFailureMessage(reason?: string, mediaType: 'image' | 
   return '内容未通过审核，请调整后重试'
 }
 
-const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
+const GenerateSection = ({ communityWorks, initialPrompt, initialPromptKey, initialModel, activeTab: externalActiveTab, onTabChange }: GenerateSectionProps) => {
   const t = createScopedT('home.generate')
   const tHome = createScopedT('home')
   const router = useRouter()
   const { data: session, isPending } = useSession()
-  const { refreshPoints } = usePoints()
+  const { summary, refreshSummary } = useUserSummary()
   const defaultImageModel = initialModel || 'Z-Image-Turbo';
   const [prompt, setPrompt] = useState(initialPrompt || '');
+  const promptValueRef = useRef(initialPrompt || '')
+  const promptEditedRef = useRef(false)
+  const initialPromptKeyRef = useRef(initialPromptKey || '')
+  const [pendingRestoredPrompt, setPendingRestoredPrompt] = useState<string | null>(null)
   const [negativePrompt, setNegativePrompt] = useState('');
   const [width, setWidth] = useState(DEFAULT_IMAGE_WIDTH);
   const [height, setHeight] = useState(DEFAULT_IMAGE_HEIGHT);
@@ -106,6 +117,31 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const activeTab = externalActiveTab || 'generate';
+  const markPromptEditedInUrl = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('promptEdited') === '1') return
+
+    params.set('promptEdited', '1')
+    const query = params.toString()
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+    )
+  }, [])
+  const savePromptDraft = useCallback((nextPrompt: string, nextModel = model) => {
+    if (!initialPromptKey) return
+
+    markPromptEditedInUrl()
+    saveCreatePageDraft(initialPromptKey, {
+      prompt: nextPrompt,
+      model: nextModel,
+      mediaType: activeTab === 'video-generation' ? 'video' : 'image',
+      tab: activeTab === 'video-generation' ? 'video' : 'generate',
+    })
+  }, [activeTab, initialPromptKey, markPromptEditedInUrl, model])
   // 视频生成相关状态
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoNegativePrompt, setVideoNegativePrompt] = useState('');
@@ -158,19 +194,38 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     if (activeTab !== 'video-generation') return
     if (!initialModel) return
 
-    const videoConfig = getVideoModelById(initialModel)
+    const normalizedInitialModel = isHappyHorseChildModel(initialModel) ? HAPPYHORSE_AGGREGATE_MODEL_ID : initialModel
+    const videoConfig = getVideoModelById(normalizedInitialModel)
     if (videoConfig) {
-      setVideoModel(initialModel)
+      setVideoModel(normalizedInitialModel)
     }
   }, [activeTab, initialModel])
 
   const handleVideoModelChange = (nextModel: string) => {
     setVideoModel(nextModel)
+    // 模型切换也标记为已编辑，并保存页面草稿
+    promptEditedRef.current = true
+    savePromptDraft(promptValueRef.current, nextModel)
 
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
     params.set('tab', 'video')
+    params.set('model', nextModel)
+    const query = params.toString()
+    router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
+  }
+
+  const handleImageModelChange = (nextModel: string) => {
+    setModel(nextModel)
+    // 模型切换也标记为已编辑，并保存页面草稿
+    promptEditedRef.current = true
+    savePromptDraft(promptValueRef.current, nextModel)
+
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.delete('tab')
     params.set('model', nextModel)
     const query = params.toString()
     router.replace(transferUrl(`/create${query ? `?${query}` : ''}`), { scroll: false })
@@ -274,6 +329,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   // 要设置为参考图片的生成图片 URL
   const [generatedImageToSetAsReference, setGeneratedImageToSetAsReference] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(false);
   
   // 用户认证状态
   const authStatus = (!hasMounted || isPending)
@@ -282,6 +338,20 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
 
   useEffect(() => {
     setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const updateLayout = () => {
+      setIsDesktopLayout(mediaQuery.matches);
+    };
+
+    updateLayout();
+    mediaQuery.addEventListener('change', updateLayout);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateLayout);
+    };
   }, []);
 
   useEffect(() => {
@@ -300,8 +370,57 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   }, [authStatus, batch_size]);
 
   useEffect(() => {
-    setPrompt(initialPrompt || '');
-  }, [initialPrompt]);
+    promptValueRef.current = prompt
+    if (promptEditedRef.current) {
+      savePromptDraft(prompt)
+    }
+  }, [prompt, savePromptDraft])
+
+  useEffect(() => {
+    const saveBeforeUnload = () => {
+      if (promptEditedRef.current) {
+        savePromptDraft(promptValueRef.current)
+      }
+    }
+
+    window.addEventListener('pagehide', saveBeforeUnload)
+
+    return () => {
+      window.removeEventListener('pagehide', saveBeforeUnload)
+    }
+  }, [savePromptDraft])
+
+  useEffect(() => {
+    const nextPromptKey = initialPromptKey || ''
+    if (initialPromptKeyRef.current !== nextPromptKey) {
+      initialPromptKeyRef.current = nextPromptKey
+      promptEditedRef.current = false
+      setPendingRestoredPrompt(null)
+    }
+
+    if (!promptEditedRef.current) {
+      setPrompt(initialPrompt || '')
+      setPendingRestoredPrompt(null)
+    } else if (initialPrompt?.trim() && promptValueRef.current.trim() !== initialPrompt.trim()) {
+      setPendingRestoredPrompt(initialPrompt)
+    }
+  }, [initialPrompt, initialPromptKey]);
+
+  useEffect(() => {
+    if (!pendingRestoredPrompt) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPendingRestoredPrompt(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [pendingRestoredPrompt])
 
   useEffect(() => {
     if (initialModel) {
@@ -385,25 +504,13 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const refreshPostGenerationState = async () => {
     if (!session?.user) return
 
-    refreshPoints().catch(err => {
-      console.error('Failed to refresh points:', err);
-    });
-
     try {
-      const token = await generateDynamicTokenWithServerTime();
-      const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-        setHasQuota(quota);
+      const nextSummary = await refreshSummary()
+      if (nextSummary?.quota) {
+        setHasQuota(nextSummary.quota.hasQuota)
       }
     } catch (error) {
-      console.error('Failed to refresh quota:', error);
+      console.error('Failed to refresh user summary:', error);
     }
   }
 
@@ -540,7 +647,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
         }
       }
     }
-    if (batch_size < 1 || batch_size > 2) {
+    if (batch_size < 1 || batch_size > 4) {
       setBatchSizeError(t('error.validation.batchSizeRange'));
       batchSizeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       hasError = true;
@@ -560,8 +667,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     if (isChinesePrompt && prompt.trim() && !supportsChinese) {
       setIsOptimizing(true);
       
-      finalPrompt = await optimizePrompt(prompt);
+      finalPrompt = await optimizePrompt(prompt, model, { images: uploadedImages });
+      promptEditedRef.current = true
       setPrompt(finalPrompt); // 更新UI显示优化后的prompt
+      savePromptDraft(finalPrompt)
       setIsOptimizing(false);
     } 
     
@@ -619,6 +728,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
               batch_size,
               model,
               images: uploadedImages,
+              aspectRatio,
             }),
           });
 
@@ -836,11 +946,14 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
   const handleRandomPrompt = () => {
     if (communityWorks.length === 0) return;
     const randomIndex = Math.floor(Math.random() * communityWorks.length);
-    setPrompt(communityWorks[randomIndex].prompt);
+    const nextPrompt = communityWorks[randomIndex].prompt
+    promptEditedRef.current = true
+    setPrompt(nextPrompt);
+    savePromptDraft(nextPrompt)
   };
 
   const handleOptimizePrompt = async () => {
-    if (!prompt.trim()) {
+    if (!prompt.trim() && uploadedImages.length === 0) {
       // 如果没有提示词，可以显示提示信息
       return;
     }
@@ -849,8 +962,10 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     // 这样用户可以多次优化，尝试不同的效果
     setIsOptimizing(true);
     try {
-      const optimizedPrompt = await optimizePrompt(prompt, model);
+      const optimizedPrompt = await optimizePrompt(prompt, model, { images: uploadedImages });
+      promptEditedRef.current = true
       setPrompt(optimizedPrompt);
+      savePromptDraft(optimizedPrompt)
     } catch (error) {
       console.error('Failed to optimize prompt:', error);
       // 可以在这里添加错误提示
@@ -859,6 +974,15 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     }
   };
 
+  const applyPendingRestoredPrompt = () => {
+    if (!pendingRestoredPrompt) return
+
+    promptEditedRef.current = true
+    setPrompt(pendingRestoredPrompt)
+    savePromptDraft(pendingRestoredPrompt)
+    setPromptError(null)
+    setPendingRestoredPrompt(null)
+  }
 
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
   const hideImageRatioSelector = false;
@@ -903,6 +1027,24 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
       setIsHighResolution(false);
     }
   }, [model, aspectRatio]);
+
+  useEffect(() => {
+    if (isGptImage2Model(model) || model === 'grok-imagine-1.0' || model === 'nano-banana-2' || aspectRatio !== '自适应') {
+      return;
+    }
+
+    const thresholds = getModelThresholds(model);
+    const area = isHighResolution
+      ? thresholds.highResolutionPixels || 1416 * 1416
+      : thresholds.normalResolutionPixels || 1024 * 1024;
+    const ratioNum = 16 / 9;
+    const nextWidth = Math.round(Math.sqrt(area * ratioNum) / 8) * 8;
+    const nextHeight = Math.round(nextWidth / ratioNum / 8) * 8;
+
+    setAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO);
+    setWidth(nextWidth);
+    setHeight(nextHeight);
+  }, [model, aspectRatio, isHighResolution]);
 
   const handleRatioChange = (ratio: string) => {
     setAspectRatio(ratio);
@@ -1031,46 +1173,14 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
     fetchModelBaseCost();
   }, [model, authStatus]);
   
-  // 获取用户额度信息（仅对已登录用户）
   useEffect(() => {
     if (authStatus !== 'authenticated') {
       setHasQuota(null);
       return;
     }
 
-    const fetchQuota = async () => {
-      try {
-        const token = await generateDynamicTokenWithServerTime();
-        const response = await fetch(`/api/user/quota?t=${Date.now()}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          // 管理员不限次，视为有额度
-          const quota = data.isAdmin ? true : (data.todayCount < (data.maxDailyRequests || 0));
-          setHasQuota(quota);
-        } else {
-          setHasQuota(null);
-        }
-      } catch (error) {
-        console.error('Failed to fetch quota:', error);
-        setHasQuota(null);
-      }
-    };
-
-    fetchQuota();
-    
-    // 定期刷新额度信息（每30秒）
-    const interval = setInterval(() => {
-      if (authStatus === 'authenticated') {
-        fetchQuota();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [authStatus]);
+    setHasQuota(summary?.quota?.hasQuota ?? null);
+  }, [authStatus, summary?.quota?.hasQuota]);
   
   // 计算预计消耗和额外消耗（仅对已登录用户）
   useEffect(() => {
@@ -1134,7 +1244,9 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 <PromptInput
                   prompt={prompt}
                   setPrompt={(value) => {
+                    promptEditedRef.current = true
                     setPrompt(value)
+                    savePromptDraft(value)
                     if (value.trim()) {
                       setPromptError(null)
                     }
@@ -1146,6 +1258,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                   onOptimizePrompt={handleOptimizePrompt}
                   isGenerating={isGenerating}
                   isOptimizing={isOptimizing}
+                  canOptimizePrompt={Boolean(prompt.trim()) || uploadedImages.length > 0}
                   communityWorks={communityWorks}
                   promptRef={promptRef}
                   aspectRatio={aspectRatio}
@@ -1171,7 +1284,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         batch_size={batch_size}
                         setBatchSize={setBatchSize}
                         model={model}
-                        setModel={setModel}
+                        setModel={handleImageModelChange}
                         status={authStatus}
                         promptRef={promptRef}
                         communityWorks={communityWorks}
@@ -1182,7 +1295,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                         batchSizeError={batchSizeError}
                         imageCountError={imageCountError}
                         batchSizeRef={batchSizeRef}
-                        generatedImageToSetAsReference={generatedImageToSetAsReference}
+                        generatedImageToSetAsReference={!isDesktopLayout ? generatedImageToSetAsReference : null}
                         setIsQueuing={setIsQueuing}
                         isHighResolution={isHighResolution}
                         setIsHighResolution={setIsHighResolution}
@@ -1215,7 +1328,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     batch_size={batch_size}
                     setBatchSize={setBatchSize}
                     model={model}
-                    setModel={setModel}
+                    setModel={handleImageModelChange}
                     status={authStatus}
                     promptRef={promptRef}
                     communityWorks={communityWorks}
@@ -1226,7 +1339,7 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                     batchSizeError={batchSizeError}
                     imageCountError={imageCountError}
                     batchSizeRef={batchSizeRef}
-                    generatedImageToSetAsReference={generatedImageToSetAsReference}
+                    generatedImageToSetAsReference={isDesktopLayout ? generatedImageToSetAsReference : null}
                     setIsQueuing={setIsQueuing}
                     isHighResolution={isHighResolution}
                     setIsHighResolution={setIsHighResolution}
@@ -1629,6 +1742,47 @@ const GenerateSection = ({ communityWorks, initialPrompt, initialModel, activeTa
                 我知道了
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {pendingRestoredPrompt && (
+        <div
+          className="pointer-events-none fixed left-0 right-0 top-4 z-[80] flex justify-center px-4 sm:top-6"
+        >
+          <div
+            role="dialog"
+            aria-labelledby="restored-prompt-title"
+            className="pointer-events-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-orange-100"
+            style={{ animation: 'slideDown 0.22s ease-out forwards' }}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 11h8M8 15h5m-7 5h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 id="restored-prompt-title" className="mb-3 text-lg font-semibold text-gray-900">
+              同款提示词已读取
+            </h3>
+            <p className="mb-6 text-sm leading-6 text-gray-600">
+              当前输入框已有内容，是否替换为刚读取到的同款提示词？
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setPendingRestoredPrompt(null)}
+                className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              >
+                保留当前输入
+              </button>
+              <button
+                type="button"
+                onClick={applyPendingRestoredPrompt}
+                className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:from-orange-600 hover:to-amber-600"
+              >
+                使用同款提示词
+              </button>
+            </div>
           </div>
         </div>
       )}

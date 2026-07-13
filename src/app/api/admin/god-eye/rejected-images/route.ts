@@ -5,6 +5,24 @@ import { rejectedImages, user } from '@/db/schema'
 import { eq, desc, and, or, like, gte, lte, sql, isNull, isNotNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
+const GPT_IMAGE_2_MODEL_ALIASES = ['gpt-image-2', 'gpt-image-2.0']
+
+function buildModelCondition(column: any, modelFilter: string) {
+  const normalizedModel = modelFilter.trim()
+  if (!normalizedModel || normalizedModel === 'all') {
+    return null
+  }
+
+  if (GPT_IMAGE_2_MODEL_ALIASES.includes(normalizedModel)) {
+    return or(
+      eq(column, 'gpt-image-2'),
+      eq(column, 'gpt-image-2.0')
+    )
+  }
+
+  return eq(column, normalizedModel)
+}
+
 /**
  * 获取未通过审核的图片列表（管理员专用）
  * 查询参数：
@@ -113,8 +131,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 模型筛选
-    if (modelFilter !== 'all' && modelFilter.trim()) {
-      conditions.push(eq(rejectedImages.model, modelFilter.trim()))
+    const modelCondition = buildModelCondition(rejectedImages.model, modelFilter)
+    if (modelCondition) {
+      conditions.push(modelCondition)
     }
 
     // 搜索筛选（支持用户名、昵称、邮箱）

@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { getElapsedSeconds, recordModelUsage } from './modelUsageStats'
 
 /**
  * 将图片Buffer编码为base64字符串
@@ -58,6 +59,7 @@ export async function moderateAvatar(
   model: string,
   prompt: string
 ): Promise<boolean> {
+  const startTime = Date.now()
   try {
     // 获取媒体类型和编码内容
     const mimeType = getMimeType(fileName)
@@ -107,23 +109,53 @@ export async function moderateAvatar(
     // 如果结果为空，默认不通过（安全起见）
     if (!result) {
       console.warn('审核结果为空')
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: false,
+      })
       return false
-    }
-    
-    // 判断是否通过审核（返回"是"或包含"通过"等关键词表示通过）
-    if (result === '是' || result === 'yes' || result.includes('通过') || result.includes('pass')) {
-      return true
     }
     
     // 返回"否"或包含"不通过"等关键词表示不通过
     if (result === '否' || result === 'no' || result.includes('不通过') || result.includes('fail')) {
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: true,
+      })
       return false
+    }
+
+    // 判断是否通过审核（返回"是"或包含"通过"等关键词表示通过）
+    if (result === '是' || result === 'yes' || result.includes('通过') || result.includes('pass')) {
+      await recordModelUsage({
+        modelName: model,
+        modelType: 'moderation',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: true,
+      })
+      return true
     }
 
     // 如果结果不明确，默认不通过（安全起见）
     console.warn('审核结果不明确:', result)
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
     return false
   } catch (error) {
+    await recordModelUsage({
+      modelName: model,
+      modelType: 'moderation',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: false,
+    })
     console.error('头像审核失败:', error)
     // 审核服务出错时，可以选择：
     // 1. 抛出错误阻止上传（更安全）

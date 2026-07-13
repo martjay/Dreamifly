@@ -14,19 +14,20 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useSession, signOut } from '@/lib/auth-client'
 import { useAvatar } from '@/contexts/AvatarContext'
 import { usePoints } from '@/contexts/PointsContext'
+import { useUserSummary } from '@/contexts/UserSummaryContext'
 import AvatarWithFrame from './AvatarWithFrame'
-import { generateDynamicTokenWithServerTime } from '@/utils/dynamicToken'
 
 export default function Navbar() {
   const t = createScopedT('nav')
   const tAuth = createScopedT('auth')
-  const { data: session } = useSession()
+  const { data: session, isPending: sessionLoading } = useSession()
   const { avatar: globalAvatar, nickname: globalNickname, avatarFrameId } = useAvatar()
   const { pointsBalance } = usePoints()
+  const { summary } = useUserSummary()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const isAdmin = Boolean(summary?.user.isAdmin)
   const headerUserMenuRef = useRef<HTMLDivElement>(null)
   const sidebarUserMenuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
@@ -35,34 +36,6 @@ export default function Navbar() {
   const isPricingActive = pathname === pricingPath || pathname?.startsWith(`${pricingPath}/`)
   const communityPath = transferUrl('/community')
   const isCommunityActive = pathname === communityPath || pathname?.startsWith(`${communityPath}/`)
-
-  // 检查管理员和优质用户状态
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      if (!session?.user) {
-        setIsAdmin(false)
-        return
-      }
-
-      try {
-        // 获取动态 token
-        const token = await generateDynamicTokenWithServerTime()
-        
-        const response = await fetch('/api/admin/check', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        const data = await response.json()
-        setIsAdmin(data.isAdmin || false)
-      } catch (error) {
-        console.error('Failed to check user status:', error)
-        setIsAdmin(false)
-      }
-    }
-
-    checkUserStatus()
-  }, [session?.user])
 
   useEffect(() => {
     if (!showUserMenu) return
@@ -184,7 +157,12 @@ export default function Navbar() {
         
         {/* 移动端积分和用户菜单 */}
         <div className="ml-auto flex items-center gap-2">
-          {session?.user ? (
+          {sessionLoading ? (
+            <div
+              className="h-8 w-16 rounded-lg bg-gray-200/60 animate-pulse"
+              aria-hidden="true"
+            />
+          ) : session?.user ? (
             <>
               {/* 积分显示 */}
               {pointsBalance !== null && (
@@ -440,7 +418,7 @@ export default function Navbar() {
               </div>
 
               {/* 登录按钮（移动至语言切换下方） */}
-              {!session?.user && (
+              {!sessionLoading && !session?.user && (
                 <button
                   onClick={() => setShowAuthModal(true)}
                   className="w-full bg-gradient-to-r from-orange-400 to-amber-400 text-white font-semibold py-2.5 rounded-xl hover:from-orange-500 hover:to-amber-500 transition-all"

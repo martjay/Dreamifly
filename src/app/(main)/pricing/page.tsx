@@ -4,6 +4,7 @@
 import { createScopedT } from '@/lib/strings'
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from '@/lib/auth-client'
+import AuthModal from '@/components/AuthModal'
 
 interface SubscriptionPlan {
   id: number
@@ -57,6 +58,8 @@ export default function PricingPage() {
   const [, setSelectedPackage] = useState<number | null>(null)
   const [payingPlanId, setPayingPlanId] = useState<number | null>(null)
   const [payingPackageId, setPayingPackageId] = useState<number | null>(null)
+  const [showLoginPromptModal, setShowLoginPromptModal] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isCreatingOrder = payingPlanId !== null || payingPackageId !== null
@@ -289,8 +292,7 @@ export default function PricingPage() {
 
   const handleSubscribe = async (planId: number) => {
     if (!session?.user) {
-      // 提示登录
-      console.warn(t('loginRequired'))
+      setShowLoginPromptModal(true)
       return
     }
 
@@ -300,7 +302,7 @@ export default function PricingPage() {
 
   const handleBuyPoints = async (packageId: number) => {
     if (!session?.user) {
-      console.warn(t('loginRequired'))
+      setShowLoginPromptModal(true)
       return
     }
 
@@ -336,14 +338,44 @@ export default function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="flex min-h-screen items-center justify-center bg-white lg:ml-48">
         <div className="h-12 w-12 animate-spin rounded-full border-2 border-orange-100 border-t-orange-400" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f] lg:ml-48">
+      {showLoginPromptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+            <h2 className="text-xl font-semibold text-[#1d1d1f]">请先登录</h2>
+            <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
+              登录后才能订阅会员或购买积分。
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLoginPromptModal(false)}
+                className="h-11 flex-1 rounded-full border border-orange-200 bg-white text-sm font-medium text-orange-700 transition hover:bg-orange-50"
+              >
+                稍后再说
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLoginPromptModal(false)
+                  setShowAuthModal(true)
+                }}
+                className="h-11 flex-1 rounded-full bg-orange-500 text-sm font-medium text-white transition hover:bg-orange-400"
+              >
+                去登录
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode="login" />
       <section className="bg-[#f5f5f7]">
         <div className="mx-auto max-w-[1200px] px-4 pb-12 pt-20 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
           <div className="mb-8 flex justify-center">

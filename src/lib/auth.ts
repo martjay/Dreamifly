@@ -1,14 +1,34 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
+import { user } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
-import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isValid163Email } from "@/utils/email-domain-validator";
+import { isBlockedEmailDomain, isEmailDomainAllowed, isEmailDotCountAllowed, isGmailPlusAliasEmail, isValid163Email } from "@/utils/email-domain-validator";
 
 export const auth = betterAuth({
   baseURL: process.env.NEXT_PUBLIC_BASE_URL || "https://dreamifly.com",
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          try {
+            await db
+              .update(user)
+              .set({
+                lastLoginAt: sql`(now() at time zone 'UTC')`,
+              })
+              .where(eq(user.id, session.userId));
+          } catch (error) {
+            console.error("Failed to update last login time:", error);
+          }
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true, // 启用邮箱验证要求
@@ -30,6 +50,10 @@ export const auth = betterAuth({
 
       if (!isEmailDotCountAllowed(user.email)) {
         throw new Error("EMAIL_DOT_COUNT_NOT_ALLOWED");
+      }
+
+      if (isGmailPlusAliasEmail(user.email)) {
+        throw new Error("GMAIL_ALIAS_NOT_ALLOWED");
       }
       
       const isAllowed = await isEmailDomainAllowed(user.email);

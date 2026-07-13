@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { isEncryptedImage, getImageDisplayUrl, getVideoDisplayUrl } from '@/utils/imageDisplay'
 import { useDownloadWithTerms } from '@/hooks/useDownloadWithTerms'
+import { useVisibleMediaKeys } from '@/hooks/useVisibleMediaKeys'
 import ModerationConsentModal from '@/components/ModerationConsentModal'
 import RestrictedMediaMask from '@/components/RestrictedMediaMask'
 import { MEDIUM_RISK_CONFIRM_MESSAGE, getModerationWarning, type VisualRiskLevel } from '@/utils/visualModeration'
@@ -38,6 +39,18 @@ interface StorageInfo {
   subscriptionExpiresAt: string | null
   canAddMore: boolean
   message?: string
+}
+
+interface MediaLibrarySection {
+  images: UserImage[]
+  totalCount: number
+}
+
+interface MediaLibraryResponse {
+  success: boolean
+  generated?: MediaLibrarySection
+  liked?: MediaLibrarySection
+  storageInfo?: StorageInfo
 }
 
 const DEFAULT_COLLAPSED_MEDIA_COUNT = 4
@@ -70,6 +83,9 @@ export default function MyWorksPage() {
   const [likedTotalCount, setLikedTotalCount] = useState(0)
   const [loadingMoreGenerated, setLoadingMoreGenerated] = useState(false)
   const [loadingMoreLiked, setLoadingMoreLiked] = useState(false)
+  const { visibleKeys: visibleMediaUrls, registerElement: registerMediaElement } = useVisibleMediaKeys(
+    [...images, ...likedImages].map((image) => image.imageUrl)
+  )
 
   useEffect(() => {
     if (isPending) return
@@ -79,9 +95,48 @@ export default function MyWorksPage() {
       return
     }
     
-    fetchImages({ loadAll: false, showInitialLoading: true })
-    fetchLikedImages({ loadAll: false, showInitialLoading: true })
-    fetchStorageInfo()
+    let cancelled = false
+
+    const fetchInitialMediaLibrary = async () => {
+      try {
+        setLoading(true)
+        setLikedLoading(true)
+
+        const params = new URLSearchParams({
+          generatedLimit: String(DEFAULT_COLLAPSED_MEDIA_COUNT),
+          likedLimit: String(DEFAULT_COLLAPSED_MEDIA_COUNT),
+        })
+        const response = await fetch(`/api/user/media-library?${params.toString()}`)
+
+        if (!response.ok) {
+          throw new Error('获取作品失败')
+        }
+
+        const data = await response.json() as MediaLibraryResponse
+        if (cancelled) return
+
+        setImages(data.generated?.images || [])
+        setGeneratedTotalCount(data.generated?.totalCount || 0)
+        setLikedImages(data.liked?.images || [])
+        setLikedTotalCount(data.liked?.totalCount || 0)
+        setStorageInfo(data.storageInfo || null)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '获取作品失败')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          setLikedLoading(false)
+        }
+      }
+    }
+
+    void fetchInitialMediaLibrary()
+
+    return () => {
+      cancelled = true
+    }
   }, [session, isPending, router])
 
   // 检测页眉是否显示
@@ -137,7 +192,7 @@ export default function MyWorksPage() {
 
   // 解码加密媒体（图片和视频，批量处理）
   useEffect(() => {
-    const mediaToDecode = [...images, ...likedImages]
+    const mediaToDecode = [...images, ...likedImages].filter((image) => visibleMediaUrls.has(image.imageUrl))
     if (!mediaToDecode.length) return
 
     const encryptedMedia = mediaToDecode.filter(
@@ -189,7 +244,7 @@ export default function MyWorksPage() {
     return () => {
       cancelled = true
     }
-  }, [images, likedImages, decodedImages, decodingImages])
+  }, [images, likedImages, visibleMediaUrls, decodedImages, decodingImages])
 
   // 获取媒体显示URL（支持图片和视频）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -248,6 +303,25 @@ export default function MyWorksPage() {
   const hasMoreGeneratedImages = generatedTotalCount > DEFAULT_COLLAPSED_MEDIA_COUNT
   const hasMoreLikedImages = likedTotalCount > DEFAULT_COLLAPSED_MEDIA_COUNT
 
+  const buildMediaLibraryUrl = (options?: {
+    includeGenerated?: boolean
+    includeLiked?: boolean
+    includeStorage?: boolean
+    generatedLimit?: number
+    likedLimit?: number
+  }) => {
+    const params = new URLSearchParams()
+
+    if (options?.includeGenerated === false) params.set('includeGenerated', 'false')
+    if (options?.includeLiked === false) params.set('includeLiked', 'false')
+    if (options?.includeStorage === false) params.set('includeStorage', 'false')
+    if (options?.generatedLimit) params.set('generatedLimit', String(options.generatedLimit))
+    if (options?.likedLimit) params.set('likedLimit', String(options.likedLimit))
+
+    const query = params.toString()
+    return query ? `/api/user/media-library?${query}` : '/api/user/media-library'
+  }
+
   const fetchImages = async (options?: { loadAll?: boolean; showInitialLoading?: boolean }) => {
     const loadAll = options?.loadAll ?? false
     const showInitialLoading = options?.showInitialLoading ?? false
@@ -258,14 +332,17 @@ export default function MyWorksPage() {
         setLoadingMoreGenerated(true)
       }
 
-      const query = loadAll ? '' : `?limit=${DEFAULT_COLLAPSED_MEDIA_COUNT}`
-      const response = await fetch(`/api/user/images${query}`)
+      const response = await fetch(buildMediaLibraryUrl({
+        includeLiked: false,
+        includeStorage: false,
+        generatedLimit: loadAll ? undefined : DEFAULT_COLLAPSED_MEDIA_COUNT,
+      }))
       if (!response.ok) {
         throw new Error('获取图片失败')
       }
-      const data = await response.json()
-      setImages(data.images || [])
-      setGeneratedTotalCount(data.totalCount || 0)
+      const data = await response.json() as MediaLibraryResponse
+      setImages(data.generated?.images || [])
+      setGeneratedTotalCount(data.generated?.totalCount || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取图片失败')
     } finally {
@@ -287,14 +364,17 @@ export default function MyWorksPage() {
         setLoadingMoreLiked(true)
       }
 
-      const query = loadAll ? '' : `?limit=${DEFAULT_COLLAPSED_MEDIA_COUNT}`
-      const response = await fetch(`/api/user/liked-images${query}`)
+      const response = await fetch(buildMediaLibraryUrl({
+        includeGenerated: false,
+        includeStorage: false,
+        likedLimit: loadAll ? undefined : DEFAULT_COLLAPSED_MEDIA_COUNT,
+      }))
       if (!response.ok) {
         throw new Error('获取点赞收藏失败')
       }
-      const data = await response.json()
-      setLikedImages(data.images || [])
-      setLikedTotalCount(data.totalCount || 0)
+      const data = await response.json() as MediaLibraryResponse
+      setLikedImages(data.liked?.images || [])
+      setLikedTotalCount(data.liked?.totalCount || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取点赞收藏失败')
     } finally {
@@ -308,10 +388,13 @@ export default function MyWorksPage() {
 
   const fetchStorageInfo = async () => {
     try {
-      const response = await fetch('/api/user/images/storage-info')
+      const response = await fetch(buildMediaLibraryUrl({
+        includeGenerated: false,
+        includeLiked: false,
+      }))
       if (response.ok) {
-        const data = await response.json()
-        setStorageInfo(data)
+        const data = await response.json() as MediaLibraryResponse
+        setStorageInfo(data.storageInfo || null)
       }
     } catch (err) {
       console.error('获取存储信息失败:', err)
@@ -479,7 +562,8 @@ export default function MyWorksPage() {
       {imageList.map((image) => {
         const mediaType = image.mediaType || 'image'
         const displayUrl = getDisplayUrl(image.imageUrl, mediaType)
-        const isDecoding = isEncryptedImage(image.imageUrl) && !decodedImages[image.imageUrl]
+        const shouldLoadMedia = visibleMediaUrls.has(image.imageUrl)
+        const isDecoding = shouldLoadMedia && isEncryptedImage(image.imageUrl) && !decodedImages[image.imageUrl]
         const isVideo = mediaType === 'video'
         const masked = shouldShowMask(image)
         const canView = canViewOriginal(image)
@@ -489,14 +573,19 @@ export default function MyWorksPage() {
         const infoDate = section === 'liked' && image.likedAt ? image.likedAt : image.createdAt
 
         return (
-          <div key={`${section}-${image.id}`} className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all hover:shadow-xl">
+          <div
+            key={`${section}-${image.id}`}
+            ref={registerMediaElement(image.imageUrl)}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all hover:shadow-xl"
+          >
             <div className="relative aspect-square overflow-hidden bg-gray-100">
-              {isDecoding && (
+              {!shouldLoadMedia ? (
+                <div className="absolute inset-0 bg-gray-100" />
+              ) : isDecoding ? (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-100">
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-orange-500"></div>
                 </div>
-              )}
-              {isVideo ? (
+              ) : isVideo ? (
                 <div
                   className={`absolute inset-0 group ${canView ? 'cursor-pointer' : 'cursor-default'}`}
                   onClick={(e) => {
@@ -658,10 +747,10 @@ export default function MyWorksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white">
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white lg:ml-48">
       {/* 页眉占位符 - 当页眉显示时需要占位 */}
       {showHeaderSpacer && <div className="h-16"></div>}
-      <div className="max-w-7xl mx-auto px-4 pb-16 pt-10 lg:pl-48">
+      <div className="max-w-7xl mx-auto px-4 pb-16 pt-10">
         {/* 页面标题和统计 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{t('title')}</h1>
@@ -957,4 +1046,3 @@ export default function MyWorksPage() {
     </div>
   )
 }
-

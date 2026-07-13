@@ -915,7 +915,7 @@ export default function GenerateForm({
                         onChange={(e) => setBatchSize(Number(e.target.value))}
                         className="w-full bg-transparent text-center text-gray-900 border-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         min="1"
-                        max="2"
+                        max="4"
                         disabled={isGenerating}
                         ref={batchSizeRef}
                       />
@@ -932,9 +932,9 @@ export default function GenerateForm({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setBatchSize(Math.min(2, batch_size + 1))}
+                          onClick={() => setBatchSize(Math.min(4, batch_size + 1))}
                           className="px-3 text-gray-700 hover:text-gray-900 disabled:opacity-50 h-full flex items-center justify-center transition-colors"
-                          disabled={isGenerating || batch_size >= 2}
+                          disabled={isGenerating || batch_size >= 4}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

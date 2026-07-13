@@ -13,6 +13,7 @@ interface PromptInputProps {
   onGenerate: () => void;
   onRandomPrompt: () => void;
   onOptimizePrompt: () => void;
+  canOptimizePrompt?: boolean;
   isGenerating: boolean;
   isOptimizing: boolean;
   communityWorks: { prompt: string }[];
@@ -39,6 +40,7 @@ const PromptInput = ({
   onGenerate,
   onRandomPrompt,
   onOptimizePrompt,
+  canOptimizePrompt = Boolean(prompt.trim()),
   isGenerating,
   isOptimizing,
   promptRef,
@@ -182,7 +184,7 @@ const PromptInput = ({
             type="button"
             onClick={onOptimizePrompt}
             className="min-h-9 px-3 py-2 text-[13px] rounded-lg bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 flex items-center justify-center"
-            disabled={isGenerating || isOptimizing || !prompt.trim()}
+            disabled={isGenerating || isOptimizing || !canOptimizePrompt}
           >
             <svg className="w-3.5 h-3.5 mr-1 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
@@ -294,7 +296,7 @@ const PromptInput = ({
               type="button"
               onClick={onOptimizePrompt}
               className="hidden md:flex px-3 py-2 text-sm rounded-xl bg-white/95 border border-amber-400/40 text-gray-900 hover:bg-amber-50/50 hover:border-amber-400/50 transition-all duration-300 shadow-md shadow-amber-400/10 hover:shadow-lg hover:shadow-amber-400/20 whitespace-nowrap items-center"
-              disabled={isGenerating || isOptimizing || !prompt.trim()}
+              disabled={isGenerating || isOptimizing || !canOptimizePrompt}
             >
               <svg className="w-3 h-3 mr-1 md:w-4 md:h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>

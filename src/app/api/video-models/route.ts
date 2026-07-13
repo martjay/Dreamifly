@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
-import { ALL_VIDEO_MODELS, type VideoModelConfig, withVideoModelOssAssets } from '@/utils/videoModelConfig'
+import {
+  ALL_VIDEO_MODELS,
+  HAPPYHORSE_AGGREGATE_MODEL_ID,
+  isHappyHorseChildModel,
+  type VideoModelConfig,
+  withVideoModelOssAssets,
+} from '@/utils/videoModelConfig'
 import { isHappyHorseConfigured } from '@/utils/happyHorseVideoApi'
 
 // 视频模型环境变量映射（与 videoModelConfig.ts 保持一致）
 const VIDEO_MODEL_ENV_MAP = {
   "Wan2.2-I2V-Lightning": "WAN_I2V_URL",
   "grok-imagine-1.0-video": "GROK_VIDEO_API_URL",
+  "happyhorse-1.0": "HAPPYHORSE_API_URL",
   "happyhorse-1.0-t2v": "HAPPYHORSE_API_URL",
   "happyhorse-1.0-i2v": "HAPPYHORSE_API_URL",
   "happyhorse-1.0-r2v": "HAPPYHORSE_API_URL",
@@ -17,7 +24,7 @@ const VIDEO_MODEL_ENV_MAP = {
  * 检查视频模型是否在环境变量中配置了URL
  */
 function isVideoModelConfigured(modelId: string): boolean {
-  if (modelId.startsWith('happyhorse-1.0-')) {
+  if (modelId === HAPPYHORSE_AGGREGATE_MODEL_ID || modelId.startsWith('happyhorse-1.0-')) {
     return isHappyHorseConfigured()
   }
 
@@ -35,6 +42,7 @@ function isVideoModelConfigured(modelId: string): boolean {
  */
 function getAvailableVideoModels(): VideoModelConfig[] {
   return ALL_VIDEO_MODELS.filter(model => {
+    if (isHappyHorseChildModel(model.id)) return false
     // 检查是否配置了环境变量
     return isVideoModelConfigured(model.id);
   }).map(withVideoModelOssAssets);

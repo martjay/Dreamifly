@@ -125,6 +125,7 @@ export default function ModelDropdown<T extends DropdownModelOption>({
               const optionSelectable = canSelect(modelOption)
               const description = getDescription(modelOption)
               const unavailableText = optionSelectable ? null : getUnavailableText(modelOption)
+              const hasManyTags = (modelOption.tags?.length || 0) >= 4
 
               return (
                 <button
@@ -144,8 +145,8 @@ export default function ModelDropdown<T extends DropdownModelOption>({
                       : 'opacity-50 cursor-not-allowed'
                   }`}
                 >
-                  <div className="flex items-start space-x-3">
-                    <div className="w-24 h-12 rounded overflow-hidden flex-shrink-0 bg-gray-100">
+                  <div className="flex items-start gap-3">
+                    <div className={`${hasManyTags ? 'w-32 h-20' : 'w-24 h-12'} rounded overflow-hidden flex-shrink-0 bg-gray-100`}>
                       <img
                         src={modelOption.image || fallbackImage}
                         alt={modelOption.name}
@@ -159,7 +160,7 @@ export default function ModelDropdown<T extends DropdownModelOption>({
                         }}
                       />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center gap-2">
                         <div className="truncate text-gray-900 font-medium">{modelOption.name}</div>
                         {modelOption.isRecommended && (
@@ -172,19 +173,19 @@ export default function ModelDropdown<T extends DropdownModelOption>({
                         )}
                       </div>
                       {renderTags && (
-                        <div className="flex flex-wrap gap-1 mt-2">
+                        <div className="flex flex-wrap gap-1.5 mt-2">
                           {renderTags(modelOption)}
                         </div>
                       )}
                     </div>
                   </div>
                   {description && (
-                    <div className="text-sm text-gray-600/80 line-clamp-2 pl-27">
+                    <div className={`text-sm text-gray-600/80 line-clamp-2 ${hasManyTags ? 'pl-35' : 'pl-27'}`}>
                       {description}
                     </div>
                   )}
                   {unavailableText && (
-                    <div className="text-sm text-red-500 pl-27">
+                    <div className={`text-sm text-red-500 ${hasManyTags ? 'pl-35' : 'pl-27'}`}>
                       {unavailableText}
                     </div>
                   )}

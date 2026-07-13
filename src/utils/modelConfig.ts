@@ -457,21 +457,57 @@ export const GROK_RATIO_SIZES: Record<string, { width: number; height: number }>
 /** grok-imagine-1.0 支持的比例列表 */
 export const GROK_ALLOWED_RATIOS = [ '16:9', '7:4','1:1', '4:7', '9:16'];
 
-export const GPT_IMAGE_2_ALLOWED_RATIOS = ['16:9', '1:1', '9:16'];
+export const GPT_IMAGE_2_ALLOWED_RATIOS = ['自适应', '16:9', '21:9', '4:3', '3:2', '5:4', '1:1', '4:5', '2:3', '3:4', '9:16', '9:21'];
 export const GPT_IMAGE_2_MODEL_IDS = ['gpt-image-2', 'gpt-image-2.0'] as const;
 
 export const GPT_IMAGE_2_RATIO_SIZES: Record<string, { normal: { width: number; height: number }; high: { width: number; height: number } }> = {
+  '自适应': {
+    normal: { width: 1536, height: 864 },
+    high: { width: 2736, height: 1536 },
+  },
   '1:1': {
     normal: { width: 1024, height: 1024 },
     high: { width: 2048, height: 2048 },
+  },
+  '21:9': {
+    normal: { width: 1792, height: 768 },
+    high: { width: 3024, height: 1296 },
   },
   '16:9': {
     normal: { width: 1536, height: 864 },
     high: { width: 2736, height: 1536 },
   },
+  '4:3': {
+    normal: { width: 1280, height: 960 },
+    high: { width: 2048, height: 1536 },
+  },
+  '3:2': {
+    normal: { width: 1344, height: 896 },
+    high: { width: 2304, height: 1536 },
+  },
+  '5:4': {
+    normal: { width: 1280, height: 1024 },
+    high: { width: 2048, height: 1632 },
+  },
+  '4:5': {
+    normal: { width: 1024, height: 1280 },
+    high: { width: 1632, height: 2048 },
+  },
+  '2:3': {
+    normal: { width: 896, height: 1344 },
+    high: { width: 1536, height: 2304 },
+  },
+  '3:4': {
+    normal: { width: 960, height: 1280 },
+    high: { width: 1536, height: 2048 },
+  },
   '9:16': {
     normal: { width: 864, height: 1536 },
     high: { width: 1536, height: 2736 },
+  },
+  '9:21': {
+    normal: { width: 768, height: 1792 },
+    high: { width: 1296, height: 3024 },
   },
 };
 
@@ -566,12 +602,10 @@ export function getGrokSizeString(width: number, height: number): string {
 
 export function getGptImage2SizeString(width: number, height: number): string {
   const pairs: Array<[number, number, string]> = [
-    [1024, 1024, '1024x1024'],
-    [1536, 864, '1536x864'],
-    [864, 1536, '864x1536'],
-    [2048, 2048, '2048x2048'],
-    [2736, 1536, '2736x1536'],
-    [1536, 2736, '1536x2736'],
+    ...Object.values(GPT_IMAGE_2_RATIO_SIZES).flatMap(({ normal, high }) => [
+      [normal.width, normal.height, `${normal.width}x${normal.height}`] as [number, number, string],
+      [high.width, high.height, `${high.width}x${high.height}`] as [number, number, string],
+    ]),
   ];
   for (const [w, h, size] of pairs) {
     if (width === w && height === h) return size;

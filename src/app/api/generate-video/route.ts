@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { createHash } from 'crypto'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { siteStats, user } from '@/db/schema'
+import { user } from '@/db/schema'
 import { generateVideo } from '@/utils/videoComfyApi'
 import {
   calculateVideoResolution,
   calculateVideoResolutionForModel,
   getVideoAspectRatioOptions,
   getVideoModelById,
+  resolveHappyHorseModelId,
   pickClosestAspectRatioLabel,
   type VideoAspectRatioLabel,
   type VideoModelConfig,
@@ -27,6 +28,9 @@ import {
   type HappyHorseResolution,
 } from '@/utils/happyHorseVideoApi'
 import { moderateHappyHorseInputMedia, moderateVideoGenerationInput } from '@/utils/videoModerationFlow'
+import { incrementSiteGenerationStats } from '@/utils/siteStats'
+import { getClientIP } from '@/utils/clientIp'
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats'
 
 export const maxDuration = 1500
 
@@ -158,8 +162,13 @@ function buildInsufficientPointsResponse(pointsCost: number, currentBalance: num
 export async function POST(request: Request) {
   const requestId = Math.random().toString(36).substring(7)
   const totalStartTime = Date.now()
+  const clientIP = getClientIP(request)
   let spentRecordId: string | null = null
   let chargedPointsCost = 0
+  let currentUserId: string | null = null
+  let currentModelId: string | null = null
+  let generationModelCallStarted = false
+  let generationStatsRecorded = false
 
   try {
     const authHeader = request.headers.get('Authorization')
@@ -177,6 +186,7 @@ export async function POST(request: Request) {
     }
 
     const userId = session.user.id
+    currentUserId = userId
     const currentUser = await db
       .select({ isAdmin: user.isAdmin })
       .from(user)
@@ -205,6 +215,7 @@ export async function POST(request: Request) {
       resolution,
       referenceImages,
       sourceVideo,
+      videoMode,
     } = body as {
       prompt?: string
       width?: number
@@ -229,7 +240,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    const modelConfig = getVideoModelById(model)
+    const resolvedModel = resolveHappyHorseModelId(model, videoMode)
+    currentModelId = resolvedModel
+    const modelConfig = getVideoModelById(resolvedModel)
     if (!modelConfig) {
       return NextResponse.json({ error: 'Unknown video model' }, { status: 400 })
     }
@@ -344,9 +357,9 @@ export async function POST(request: Request) {
 
     let pointsCostForResponse = 0
     if (!isAdmin) {
-      const baseCost = await getModelBaseCost(model, happyHorseResolution)
+      const baseCost = await getModelBaseCost(resolvedModel, happyHorseResolution)
       if (baseCost === null) {
-        return NextResponse.json({ error: `No points cost configured for video model ${model}` }, { status: 400 })
+        return NextResponse.json({ error: `No points cost configured for video model ${resolvedModel}` }, { status: 400 })
       }
 
       const pointsCost = modelConfig.provider === 'happyhorse'
@@ -362,8 +375,8 @@ export async function POST(request: Request) {
       }
 
       const spendDesc = modelConfig.provider === 'happyhorse'
-        ? `视频生成 - ${model} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
-        : `视频生成 - ${model} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
+        ? `视频生成 - ${resolvedModel} (${happyHorseResolution}, ${finalWidth}x${finalHeight}, ${billableSeconds}s, ${baseCost}/s)`
+        : `视频生成 - ${resolvedModel} (${finalWidth}x${finalHeight}, ${billableSeconds}s)`
 
       spentRecordId = await deductPoints(userId, pointsCost, spendDesc)
       if (!spentRecordId) {
@@ -389,6 +402,7 @@ export async function POST(request: Request) {
         imageUrl = `data:image/jpeg;base64,${imageUrl}`
       }
 
+      generationModelCallStarted = true
       const { mp4Url } = await callGrokImagineVideo({
         apiUrl,
         apiKey,
@@ -432,6 +446,7 @@ export async function POST(request: Request) {
             ? parseInt(seed, 10)
             : undefined
 
+      generationModelCallStarted = true
       const result = await callHappyHorseVideo({
         mode,
         media,
@@ -447,6 +462,7 @@ export async function POST(request: Request) {
       videoFps = 24
       videoFrameCount = Math.round(videoDurationSeconds * 24)
     } else {
+      generationModelCallStarted = true
       videoUrl = await generateVideo({
         prompt: promptText,
         width: finalWidth,
@@ -459,7 +475,7 @@ export async function POST(request: Request) {
             ? parseInt(seed, 10)
             : undefined,
         steps: steps || 4,
-        model,
+        model: resolvedModel,
         image,
         negative_prompt,
       })
@@ -481,7 +497,7 @@ export async function POST(request: Request) {
         videoUrl,
         {
           prompt: promptText,
-          model,
+          model: resolvedModel,
           width: finalWidth,
           height: finalHeight,
           duration: Math.round(videoDurationSeconds),
@@ -498,18 +514,23 @@ export async function POST(request: Request) {
     }
 
     try {
-      await db.update(siteStats)
-        .set({
-          totalGenerations: sql`${siteStats.totalGenerations} + 1`,
-          dailyGenerations: sql`${siteStats.dailyGenerations} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(siteStats.id, 1))
+      await incrementSiteGenerationStats(1)
     } catch (error) {
       console.error(`[generate-video] [${requestId}] Failed to update site stats:`, error)
     }
 
-    const responseTime = (Date.now() - totalStartTime) / 1000
+    const responseTime = getElapsedSeconds(totalStartTime)
+    await recordModelUsage({
+      modelName: resolvedModel,
+      modelType: 'video_generation',
+      responseTime,
+      isSuccess: true,
+      userId,
+      isAuthenticated: true,
+      ipAddress: clientIP,
+    })
+    generationStatsRecorded = true
+
     return NextResponse.json({
       videoUrl,
       moderation: inputModerationLevel === 'medium'
@@ -521,6 +542,20 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     const totalDuration = Date.now() - totalStartTime
+
+    if (generationModelCallStarted && !generationStatsRecorded && currentModelId) {
+      await recordModelUsage({
+        modelName: currentModelId,
+        modelType: 'video_generation',
+        responseTime: getElapsedSeconds(totalStartTime),
+        isSuccess: false,
+        userId: currentUserId,
+        isAuthenticated: Boolean(currentUserId),
+        ipAddress: clientIP,
+        error,
+      })
+      generationStatsRecorded = true
+    }
 
     if (spentRecordId) {
       const refundSuccess = await refundPoints(

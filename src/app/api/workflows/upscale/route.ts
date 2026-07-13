@@ -7,6 +7,7 @@ import { user } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { getPointsConfig, checkPointsSufficient, deductPoints, getPointsBalance } from '@/utils/points'
+import { incrementSiteGenerationStats } from '@/utils/siteStats'
 
 /**
  * 验证动态API token
@@ -257,6 +258,12 @@ export async function POST(request: Request) {
           // 获取扣除后的新积分余额
           newBalance = await getPointsBalance(session.user.id)
         }
+      }
+
+      try {
+        await incrementSiteGenerationStats(1)
+      } catch (error) {
+        console.error('Failed to update site generation stats after upscale workflow:', error)
       }
 
       return NextResponse.json({ 

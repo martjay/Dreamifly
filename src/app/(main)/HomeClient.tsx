@@ -19,6 +19,7 @@ import { ModelConfig } from '@/utils/modelConfig'
 import { WorkflowConfig } from '@/utils/workflowConfig'
 import { getVideoModelDescription, getVideoModelDisplayTags } from '@/utils/videoModelDisplay'
 import CommunityMasonry, { type CommunityWork } from '@/components/CommunityMasonry'
+import { buildCreatePromptParams } from '@/utils/createPromptTransfer'
 
 interface FAQItem {
   q: string;
@@ -37,6 +38,12 @@ const VIDEO_MODEL_DEMOS: Record<string, { videoSrc: string; videoFallbackSrc: st
     videoFallbackSrc: '/images/video-community/video-demo-10.mp4',
     thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-10.png'),
     thumbnailFallbackSrc: '/images/video-community/video-demo-10.png',
+  },
+  'happyhorse-1.0': {
+    videoSrc: getHomepageAsset('/images/video-community/video-demo-3.mp4'),
+    videoFallbackSrc: '/images/video-community/video-demo-3.mp4',
+    thumbnailSrc: getHomepageAsset('/images/video-community/video-demo-3.png'),
+    thumbnailFallbackSrc: '/images/video-community/video-demo-3.png',
   },
   'happyhorse-1.0-t2v': {
     videoSrc: getHomepageAsset('/images/video-community/video-demo-11.mp4'),
@@ -192,9 +199,12 @@ export default function HomeClient() {
             // 使用从数据库获取的图片，确保包含 userAvatar、userNickname、model 和 avatarFrameId
             const dbImages = data.images.map((img: any) => ({
               id: img.id,
+              communityMediaId: img.communityMediaId,
+              sourceMediaId: img.sourceMediaId,
               image: img.image,
               prompt: img.prompt,
               model: img.model || '',
+              mediaType: 'image' as const,
               userAvatar: img.userAvatar || '/images/default-avatar.svg',
               userNickname: img.userNickname || '',
               avatarFrameId: img.avatarFrameId || null,
@@ -218,6 +228,7 @@ export default function HomeClient() {
                   ...work,
                   id: `default-${work.id}-${index}`, // 确保ID唯一
                   model: '默认',
+                  mediaType: 'image' as const,
                   userNickname: '默认',
                 }))
               
@@ -267,21 +278,19 @@ export default function HomeClient() {
     fetchCommunityImages()
   }, [])
 
-  const navigateToCreate = (promptText?: string, modelId?: string) => {
-    const params = new URLSearchParams()
-    if (promptText) {
-      params.set('prompt', promptText)
-    }
-    // 只有当模型ID存在且不是"默认"时才传递模型参数
-    if (modelId && modelId.trim() !== '' && modelId !== '默认') {
-      params.set('model', modelId)
-    }
+  const navigateToCreate = (work: CommunityWork) => {
+    const params = buildCreatePromptParams({
+      communityMediaId: work.communityMediaId,
+      prompt: work.prompt,
+      model: work.model,
+      mediaType: work.mediaType || (work.video ? 'video' : 'image'),
+    })
     const query = params.toString()
     router.push(transferUrl(`/create${query ? `?${query}` : ''}`))
   }
 
-  const handleGenerateSame = (promptText: string, modelId?: string) => {
-    navigateToCreate(promptText, modelId)
+  const handleGenerateSame = (work: CommunityWork) => {
+    navigateToCreate(work)
   };
 
   const handleContactClick = () => {
@@ -340,7 +349,7 @@ export default function HomeClient() {
 
       {/* 主要内容区域 - 使用 Tailwind CSS 控制布局 */}
       <main 
-        className="relative z-10 transition-all duration-300 mx-auto lg:pl-40 pt-24 lg:pt-0 pt-4"
+        className="relative z-10 transition-all duration-300 pt-4 lg:ml-48 lg:pt-0"
       >
         {/* Hero Section - 改进响应式设计 */}
         <section className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 lg:px-40 overflow-hidden lg:pt-24">
@@ -362,7 +371,7 @@ export default function HomeClient() {
                   </div>
                   <div className="flex flex-col">
                     <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent">
-                      Dreamifly
+                      {t('hero.siteName')}
                     </h2>
                     <p className="text-sm text-gray-700 mt-1">
                       {t('hero.description')}
@@ -590,7 +599,7 @@ export default function HomeClient() {
             <div className="animate-fadeInUp animation-delay-300">
               <CommunityMasonry
                 works={communityWorks}
-                onGenerateSame={(prompt, model) => handleGenerateSame(prompt, model)}
+                onGenerateSame={(work) => handleGenerateSame(work)}
                 onPreview={(img) => setZoomedImage(img)}
                 generateSameText={t('community.generateSame')}
               />
@@ -670,10 +679,10 @@ export default function HomeClient() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {/* LoongXia 友链 */}
+              {/* Imagifly 友链 */}
               <div className="group animate-fadeInUp animation-delay-400">
                 <Link
-                  href="https://loongxia.cn"
+                  href="https://imagifly.net"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block bg-gray-200/50 backdrop-blur-sm p-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-orange-400/30 hover:border-orange-400/50"
@@ -681,8 +690,8 @@ export default function HomeClient() {
                                      <div className="flex items-center gap-4 mb-4">
                      <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden">
                        <Image
-                         src="/images/LoongXia.jpg"
-                         alt="LoongXia Logo"
+                         src="/images/Imagifly.png"
+                         alt="Imagifly Logo"
                          width={48}
                          height={48}
                          className="w-full h-full object-cover"
@@ -690,12 +699,12 @@ export default function HomeClient() {
                        />
                      </div>
                     <div>
-                                             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-800 transition-colors">{tFriends('loongxia.name')}</h3>
-                       <p className="text-sm text-gray-600">{tFriends('loongxia.url')}</p>
+                                             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-800 transition-colors">{tFriends('imagifly.name')}</h3>
+                       <p className="text-sm text-gray-600">{tFriends('imagifly.url')}</p>
                      </div>
                    </div>
                    <p className="text-gray-700 text-sm leading-relaxed">
-                     {tFriends('loongxia.description')}
+                     {tFriends('imagifly.description')}
                    </p>
                    <div className="mt-4 flex items-center text-orange-700 text-sm group-hover:text-orange-600 transition-colors">
                      <span>{tFriends('visitSite')}</span>

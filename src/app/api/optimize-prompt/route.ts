@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ALL_MODELS } from '@/utils/modelConfig';
+import { getElapsedSeconds, recordModelUsage } from '@/utils/modelUsageStats';
+
+type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+type ChatMessageContent = string | ChatContentPart[];
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: ChatMessageContent;
 }
 
 interface ChatCompletionRequest {
@@ -53,13 +60,94 @@ function modelSupportsChinese(modelId: string | undefined): boolean {
   return model?.tags?.includes('chineseSupport') || false;
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const { prompt, modelId } = await request.json();
+function normalizeImages(images: unknown): string[] {
+  if (!Array.isArray(images)) return [];
 
-    if (!prompt || typeof prompt !== 'string') {
+  return images
+    .filter((image): image is string => typeof image === 'string')
+    .map(image => image.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function getImageMimeType(base64Image: string): string {
+  if (base64Image.startsWith('data:')) {
+    const match = base64Image.match(/^data:([^;]+);base64,/);
+    if (match?.[1]) return match[1];
+  }
+
+  if (base64Image.startsWith('/9j/')) return 'image/jpeg';
+  if (base64Image.startsWith('iVBOR')) return 'image/png';
+  if (base64Image.startsWith('UklGR')) return 'image/webp';
+  if (base64Image.startsWith('R0lGOD')) return 'image/gif';
+  return 'image/jpeg';
+}
+
+function toImageDataUrl(base64Image: string): string {
+  if (base64Image.startsWith('data:')) return base64Image;
+  return `data:${getImageMimeType(base64Image)};base64,${base64Image}`;
+}
+
+function buildImageEditSystemPrompt(useChinese: boolean): string {
+  if (useChinese) {
+    return `你是一位专业的图像编辑提示词优化工程师。用户会提供一张或多张参考图，以及可能为空的原始提示词。你的任务是结合参考图内容和用户意图，生成可直接用于图生图或图像编辑模型的中文提示词。
+
+规则：
+1. 必须把参考图作为编辑基础，而不是写成独立文生图描述。
+2. 输出中应明确包含“以图1为基础”或“参考图1”等绑定表达；多图时使用“图1、图2、图3”说明各图作用。
+3. 如果用户提示词为空，根据参考图内容生成保守的编辑提示词，强调保留主体、构图、透视、姿态、关键细节和画面一致性。
+4. 如果用户提示词描述目标效果，请改写成“保留参考图哪些内容 + 修改成什么效果”的编辑指令。
+5. 不要编造参考图中不存在的具体身份、品牌、文字或地点。
+6. 不要输出解释、标题、编号、替代方案或负面提示词，只输出最终提示词。
+
+输出必须是一段可直接用于 Qwen-Image-Edit、Flux Kontext 等图像编辑模型的中文提示词。`;
+  }
+
+  return `You are an expert image editing prompt engineer. The user provides one or more reference images and an optional prompt. Generate an optimized English prompt for image-to-image or image editing models.
+
+Rules:
+1. Treat the reference image as the editing base, not as a loose inspiration image.
+2. Explicitly bind the instruction to the image with phrases such as "based on image 1" or "using image 1 as the base"; for multiple images, describe the role of image 1, image 2, and image 3.
+3. If the user's prompt is empty, infer a conservative edit instruction from the reference image and preserve subject, composition, perspective, pose, key details, and visual consistency.
+4. If the user describes a target result, rewrite it as an edit instruction: what to preserve from the reference image and what to change.
+5. Do not invent specific identities, brands, text, or locations that are not visible in the reference image.
+6. Return only the final prompt. Do not include explanations, titles, numbering, alternatives, or negative prompts.
+
+The output must be ready to use with image editing models such as Qwen-Image-Edit or Flux Kontext.`;
+}
+
+function buildUserContent(prompt: string, images: string[]): ChatMessageContent {
+  if (images.length === 0) return prompt;
+
+  const promptText = prompt.trim()
+    ? `当前提示词：${prompt.trim()}\n\n请结合参考图优化为图像编辑提示词。`
+    : '当前提示词为空。请根据参考图内容生成一段保守、清晰的图像编辑提示词。';
+
+  return [
+    { type: 'text', text: promptText },
+    ...images.map(image => ({
+      type: 'image_url' as const,
+      image_url: {
+        url: toImageDataUrl(image),
+      },
+    })),
+  ];
+}
+
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  const optimizationModel = process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8';
+  let modelCallStarted = false;
+  let statsRecorded = false;
+
+  try {
+    const { prompt: rawPrompt, modelId, images: rawImages } = await request.json();
+    const prompt = typeof rawPrompt === 'string' ? rawPrompt : '';
+    const images = normalizeImages(rawImages);
+
+    if (!prompt.trim() && images.length === 0) {
       return NextResponse.json(
-        { error: 'Prompt is required and must be a string' },
+        { error: 'Prompt or reference image is required' },
         { status: 400 }
       );
     }
@@ -84,7 +172,9 @@ export async function POST(request: NextRequest) {
     // 根据模型支持情况和用户输入语言，动态构建系统提示词
     let systemPrompt: string;
     
-    if (supportsChinese) {
+    if (images.length > 0) {
+      systemPrompt = buildImageEditSystemPrompt(supportsChinese || isChineseInput || !prompt.trim());
+    } else if (supportsChinese) {
       // 模型支持中文
       if (isChineseInput) {
         // 用户输入是中文，在中文基础上优化
@@ -183,7 +273,7 @@ You are now ready to optimize the user's text-to-image prompt.`;
 
     // 构建请求体
     const requestBody: ChatCompletionRequest = {
-      model: process.env.PROMPT_OPTIMIZATION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct-FP8',
+      model: optimizationModel,
       messages: [
         {
           role: "system",
@@ -191,7 +281,7 @@ You are now ready to optimize the user's text-to-image prompt.`;
         },
         {
           role: "user",
-          content: prompt
+          content: buildUserContent(prompt, images)
         }
       ],
       temperature: 0.7,
@@ -210,6 +300,7 @@ You are now ready to optimize the user's text-to-image prompt.`;
     // 使用新的 API Key 环境变量，如果没有则使用默认值
     const apiKey = process.env.PROMPT_OPTIMIZATION_API_KEY || 'ollama';
     
+    modelCallStarted = true;
     const response = await fetch(fullApiUrl, {
       method: 'POST',
       headers: {
@@ -236,6 +327,14 @@ You are now ready to optimize the user's text-to-image prompt.`;
       throw new Error('No response content received from LLM service');
     }
 
+    await recordModelUsage({
+      modelName: optimizationModel,
+      modelType: 'prompt_optimization',
+      responseTime: getElapsedSeconds(startTime),
+      isSuccess: true,
+    });
+    statsRecorded = true;
+
     return NextResponse.json({
       success: true,
       originalPrompt: prompt,
@@ -243,6 +342,16 @@ You are now ready to optimize the user's text-to-image prompt.`;
     });
 
   } catch (error) {
+    if (modelCallStarted && !statsRecorded) {
+      await recordModelUsage({
+        modelName: optimizationModel,
+        modelType: 'prompt_optimization',
+        responseTime: getElapsedSeconds(startTime),
+        isSuccess: false,
+      });
+      statsRecorded = true;
+    }
+
     console.error('Error in optimize-prompt API:', error);
     
     return NextResponse.json(

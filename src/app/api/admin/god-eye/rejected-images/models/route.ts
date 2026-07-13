@@ -5,6 +5,12 @@ import { rejectedImages, user } from '@/db/schema'
 import { eq, isNotNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 
+const DEFAULT_GPT_IMAGE_2_MODEL = 'gpt-image-2.0'
+
+function normalizeModel(model: string) {
+  return model === 'gpt-image-2' ? DEFAULT_GPT_IMAGE_2_MODEL : model
+}
+
 /**
  * 获取未通过审核图片中使用的所有模型列表（管理员专用）
  */
@@ -48,6 +54,8 @@ export async function GET() {
     const modelList = models
       .map(m => m.model)
       .filter((model): model is string => model !== null)
+      .map(normalizeModel)
+      .filter((model, index, array) => array.indexOf(model) === index)
       .sort()
 
     return NextResponse.json({

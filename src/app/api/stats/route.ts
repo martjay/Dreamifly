@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { siteStats } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getShanghaiDateKey } from '@/utils/siteStats';
 
 const SITE_START_DATE = '2025-05-20T00:10:17Z'; // 网站启动时间
+
+function normalizeGenerationCount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
 
 export async function GET() {
   try {
@@ -20,9 +25,7 @@ export async function GET() {
     // 检查上次重置时间是否为今天
     const lastResetDate = stats[0].lastResetDate ? new Date(stats[0].lastResetDate) : new Date();
     const today = new Date();
-    const isSameDay = lastResetDate.getDate() === today.getDate() &&
-                     lastResetDate.getMonth() === today.getMonth() &&
-                     lastResetDate.getFullYear() === today.getFullYear();
+    const isSameDay = getShanghaiDateKey(lastResetDate) === getShanghaiDateKey(today);
 
     // 如果不是今天，重置每日统计数据
     if (!isSameDay) {
@@ -38,15 +41,15 @@ export async function GET() {
       const updatedStats = await db.select().from(siteStats).where(eq(siteStats.id, 1)).limit(1);
       
       return NextResponse.json({
-        totalGenerations: updatedStats[0].totalGenerations,
-        dailyGenerations: updatedStats[0].dailyGenerations,
+        totalGenerations: normalizeGenerationCount(updatedStats[0]?.totalGenerations),
+        dailyGenerations: normalizeGenerationCount(updatedStats[0]?.dailyGenerations),
         uptime: calculateUptime(),
       });
     }
 
     return NextResponse.json({
-      totalGenerations: stats[0].totalGenerations,
-      dailyGenerations: stats[0].dailyGenerations,
+      totalGenerations: normalizeGenerationCount(stats[0].totalGenerations),
+      dailyGenerations: normalizeGenerationCount(stats[0].dailyGenerations),
       uptime: calculateUptime(),
     });
   } catch (error) {

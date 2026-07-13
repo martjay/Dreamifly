@@ -2,10 +2,20 @@
  * 调用LLM接口优化提示词
  * @param prompt 用户输入的原始提示词
  * @param modelId 当前选中的模型ID（可选）
+ * @param options 可选上下文，例如图生图参考图
  * @returns 优化后的提示词
  */
-export async function optimizePrompt(prompt: string, modelId?: string): Promise<string> {
+interface OptimizePromptOptions {
+  images?: string[];
+}
+
+export async function optimizePrompt(
+  prompt: string,
+  modelId?: string,
+  options: OptimizePromptOptions = {}
+): Promise<string> {
   try {
+    const images = options.images?.filter(image => image && image.trim()) || [];
     
     // 调用我们的本地API端点
     const response = await fetch('/api/optimize-prompt', {
@@ -13,7 +23,7 @@ export async function optimizePrompt(prompt: string, modelId?: string): Promise<
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt, modelId })
+      body: JSON.stringify({ prompt, modelId, images })
     });
 
     if (!response.ok) {
@@ -33,7 +43,7 @@ export async function optimizePrompt(prompt: string, modelId?: string): Promise<
     console.error('Error optimizing prompt:', error);
     
     // 如果API调用失败，返回原始提示词并添加一些基本优化
-    return fallbackOptimization(prompt);
+    return fallbackOptimization(prompt, options.images);
   }
 }
 
@@ -42,7 +52,14 @@ export async function optimizePrompt(prompt: string, modelId?: string): Promise<
  * @param prompt 原始提示词
  * @returns 基本优化后的提示词
  */
-function fallbackOptimization(prompt: string): string {
+function fallbackOptimization(prompt: string, images?: string[]): string {
+  if (images && images.length > 0) {
+    const trimmedPrompt = prompt.trim();
+    return trimmedPrompt
+      ? `以图1为基础，保留参考图的主体、构图、透视关系和关键细节，按照以下要求进行编辑：${trimmedPrompt}`
+      : '以图1为基础，保留参考图的主体、构图、透视关系和关键细节，提升画面质量，生成自然一致的图像编辑结果';
+  }
+
   // 简单的备用优化逻辑
   let optimized = prompt;
   
